@@ -148,9 +148,12 @@ def parse_targets(message: str) -> List[Target]:
 
     Через сервер-посредник дистанция приходит всегда; четвёртое поле (перепад высот) таймеру не нужно
     и пропускается. Недостижимые цели приходят как "---" или "NaNs": у них hold_time = None.
+    Строки без "|" — не цели (например, "weapon: <имя>" для Squad Ballistics) и пропускаются.
     """
     targets = []
     for line in message.splitlines():
+        if "|" not in line:
+            continue
         parts = [part.strip() for part in line.split("|")]
         # Только значение с "s" — время; у других орудий SquadCalc шлёт мил или градусы без суффикса
         hold_time = _to_float(parts[0][:-1]) if parts[0].endswith("s") else None
