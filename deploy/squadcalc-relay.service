@@ -1,0 +1,9 @@
+[Unit]
+Description=SquadCalc overlay relay (session codes)
+
+[Service]
+ExecStart=/usr/bin/python3 /home/seregatipich/agl/ags17_relay.py --host 127.0.0.1 --port 9911
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

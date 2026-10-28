@@ -1,0 +1,32 @@
+{
+	admin off
+	auto_https off
+	servers {
+		# The panel Caddy (docker bridge) terminates TLS for calc.<domain> and proxies here:
+		# trust its X-Forwarded-For so the relay limits connections per real client address.
+		# Docker bridge networks only (172.16.0.0/12): LAN clients connecting to :9910
+		# directly cannot spoof their address. The edge subnet is not pinned in compose,
+		# so the whole Docker range is trusted rather than its current /16.
+		trusted_proxies static 172.16.0.0/12
+	}
+}
+
+:9910 {
+	# Overlay link: SquadCalc pages and AGS-17 overlays meet through the relay (ags17_relay.py)
+	handle /relay/* {
+		reverse_proxy 127.0.0.1:9911
+	}
+
+	handle {
+		root * /home/seregatipich/apps/squadcalc/dist
+
+		# Entry points are revalidated on every load so a deploy is picked up at once;
+		# bundles carry a content hash in their name and never change.
+		@entry path / /index.html /sw.js /manifest.json /locales/*
+		header @entry Cache-Control "no-cache"
+		@hashed path /src/js/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+
+		file_server
+	}
+}

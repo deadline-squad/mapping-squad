@@ -1,0 +1,5 @@
+# The SquadCalc fork is its own repository (branch feature/ags17)
+SquadCalc/
+__pycache__/
+*.bak.*
+ags17_timer.session
