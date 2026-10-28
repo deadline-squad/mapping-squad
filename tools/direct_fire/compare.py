@@ -3,7 +3,8 @@
 Runs SquadCalc's real Weapon and SquadFiringSolution under Node (solve.mjs) and
 Squad Ballistics' solve() on the same distances and heights, for every SquadCalc
 weapon with a `ballistics` name. Direct-fire weapons are compared on the low arc
-(elevation and time of flight), the AGS-17 on both arcs and the hold time; the
+(elevation, angle over the line of sight shown for them, time of flight), the
+AGS-17 on both arcs and the hold time; the
 mortars and rockets keep their own SquadCalc data and are not compared.
 
     python3 compare.py <Squad-Ballistics checkout> <SquadCalc checkout>
@@ -35,6 +36,9 @@ for row in js:
             if mismatch <= 15:
                 print("MISMATCH", row["name"], arc, row["distance"], row["height"], sb, sc)
         if arc == "low" and not math.isnan(sb):
+            if abs(s.sight_angle - row["sight"]) > 1e-6:
+                mismatch += 1
+                print("SIGHT", row["name"], row["distance"], row["height"], s.sight_angle, row["sight"])
             sb_tof = s.time_of_flight
             if (row["type"] == "directFire" or w.g == 0) and abs(sb_tof - row["tofLow"]) > 1e-6:
                 mismatch += 1
