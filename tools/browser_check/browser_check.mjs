@@ -1,11 +1,11 @@
 // Checks the Deadline SquadCalc in a real browser (Chromium through Playwright): the console stays clean,
-// the precise heightmaps load, and the bugs fixed in 45.5.1 stay fixed.
+// the precise heightmaps load, the detailed map layer works, and the bugs fixed in 45.5.1 stay fixed.
 //
 //     node browser_check.mjs <site URL> [--maps]
 //
 // <site URL> is a served build with the precise heightmaps under /heightmaps/ (the stand, or Caddy over
-// a local `npm run build`). --maps also switches through every map and checks each loads its precise
-// heightmap. Environment: PLAYWRIGHT_CORE = path of the playwright-core package if it is not
+// a local `npm run build`). --maps also switches through every map on the detailed layer and checks each
+// loads its precise heightmap and its detailed tiles (tools/maptiles) without a failed request. Environment: PLAYWRIGHT_CORE = path of the playwright-core package if it is not
 // resolvable from here, CHROME = Chromium executable if Playwright's own is not installed.
 // Exits with 1 on any failure.
 //
@@ -172,9 +172,34 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     });
     check("damage zone above the map image after a layer change", stacking.zone && stacking.mapImages > 0 && stacking.above, JSON.stringify(stacking));
 
+    // Detailed layer (tools/maptiles): this deployment's tiles down to the finest zoom, two zoom levels deeper
+    // than those, and the upstream layers back at their zoom limit
+    const detailed = await page.evaluate(async () => {
+        const map = window.__App.minimap;
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const name = map.activeMap.mapURL.split("/").filter(Boolean).pop();
+        const meta = await (await fetch(`/maptiles/${name}/meta.json`)).json();
+        document.querySelector("#mapLayerMenu .btn-detailed").click();
+        await wait(2000);
+        const maxZoom = map.getMaxZoom();
+        map.setView([-map.pixelSize / 2, map.pixelSize / 2], meta.maxNativeZoom, { animate: false });
+        await wait(3000);
+        const finest = [...document.querySelectorAll("img.leaflet-tile-loaded")].filter((tile) => tile.src.includes(`/maptiles/${name}/${meta.maxNativeZoom}/`)).length;
+        map.setZoom(maxZoom, { animate: false });
+        await wait(1000);
+        const deepest = map.getZoom();
+        document.querySelector("#mapLayerMenu .btn-basemap").click();
+        await wait(1500);
+        return { map: name, maxNativeZoom: meta.maxNativeZoom, maxZoom, finest, deepest, zoomAfter: map.getZoom(), maxZoomAfter: map.getMaxZoom() };
+    });
+    check("detailed layer", detailed.finest > 0 && detailed.maxZoom === Math.max(8, detailed.maxNativeZoom + 2) && detailed.deepest === detailed.maxZoom
+        && detailed.maxZoomAfter === 8 && detailed.zoomAfter <= 8, JSON.stringify(detailed));
+
     check("desktop console and requests clean", problems.length === 0, problems.length ? problems.slice(0, 10).join(" | ") : "no errors");
 
     if (allMaps) {
+        // Every map on the detailed layer: a missing tile or meta.json shows up as a failed request or a warning
+        await page.evaluate(() => document.querySelector("#mapLayerMenu .btn-detailed").click());
         const maps = await page.evaluate(() => [...window.__App.MAP_SELECTOR[0].options].map((option) => option.value));
         for (const value of maps) {
             const before = problems.length;
@@ -188,12 +213,16 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
                 app.MAP_SELECTOR.val(value).trigger("change");
                 await new Promise((resolve) => { const timer = setInterval(() => { if (map.heightmap.precise) { clearInterval(timer); resolve(); } }, 20); setTimeout(() => { clearInterval(timer); resolve(); }, 120000); });
                 const ms = performance.now() - start;
-                await new Promise((resolve) => setTimeout(resolve, 300));
+                const folder = map.activeMap.mapURL.split("/").filter(Boolean).pop();
+                const detailed = () => map.activeLayer?._url?.startsWith(`/maptiles/${folder}/`);
+                await new Promise((resolve) => { const timer = setInterval(() => { if (detailed()) { clearInterval(timer); resolve(); } }, 50); setTimeout(() => { clearInterval(timer); resolve(); }, 10000); });
+                await new Promise((resolve) => setTimeout(resolve, 1500));
                 observer.disconnect();
-                return { name: map.activeMap.name, precise: map.heightmap.precise, ms: Math.round(ms), longest: Math.round(Math.max(0, ...longTasks)) };
+                return { name: map.activeMap.name, precise: map.heightmap.precise, detailed: detailed(), ms: Math.round(ms), longest: Math.round(Math.max(0, ...longTasks)) };
             }, value);
             const errors = problems.slice(before);
-            check(`map ${result.name}`, result.precise && errors.length === 0, `precise heightmap in ${result.ms} ms, longest task ${result.longest} ms${errors.length ? `; ${errors.join(" | ")}` : ""}`);
+            check(`map ${result.name}`, result.precise && result.detailed && errors.length === 0,
+                `precise heightmap in ${result.ms} ms, longest task ${result.longest} ms, detailed tiles ${result.detailed}${errors.length ? `; ${errors.join(" | ")}` : ""}`);
         }
     }
     await context.close();

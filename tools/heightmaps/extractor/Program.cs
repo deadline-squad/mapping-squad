@@ -106,19 +106,7 @@ else if (mode == "statics")
                 {
                     meshId = known.ToString();
                 }
-                var chain = new List<object>();
-                CUE4Parse.UE4.Assets.Exports.UObject? node = component;
-                for (var depth = 0; node != null && depth < 32; depth++)
-                {
-                    chain.Add(new
-                    {
-                        l = node.GetOrDefault("RelativeLocation", new FVector(0, 0, 0)),
-                        r = node.GetOrDefault("RelativeRotation", new FRotator(0, 0, 0)),
-                        s = node.GetOrDefault("RelativeScale3D", new FVector(1, 1, 1)),
-                    });
-                    var parent = node.GetOrDefault<FPackageIndex>("AttachParent");
-                    node = parent == null || parent.IsNull ? null : parent.Load();
-                }
+                var chain = AttachChain(component);
                 object[]? perInstance = null;
                 if (component is CUE4Parse.UE4.Assets.Exports.Component.StaticMesh.UInstancedStaticMeshComponent ism)
                     perInstance = (ism.PerInstanceSMData ?? []).Select(i => (object)new { q = i.TransformData.Rotation, t = i.TransformData.Translation, s = i.TransformData.Scale3D }).ToArray();
@@ -134,6 +122,102 @@ else if (mode == "statics")
         if (placed > 0) Console.Error.WriteLine($"{level}: {placed} components");
     }
     File.WriteAllText(Path.Combine(outDir, "meshes.json"), JsonConvert.SerializeObject(meshes, Formatting.Indented));
+}
+else if (mode == "features")
+{
+    // features <path filter> <outdir>: map features for tools/maptiles from the levels under the filter, one
+    // pass per level, as ndjson in <outdir>:
+    //   foliage.ndjson  one line per FoliageInstancedStaticMeshComponent: level, mesh path, the mesh's render
+    //                   bounds (cm, mesh space) and whether it has collision, the attach chain, the component's
+    //                   BodyInstance, and the instances as [x, y, z, yaw, scale] rows in component space;
+    //   splines.ndjson  one line per LandscapeSplineSegment: level, the splines component's attach chain, the
+    //                   segment's interpolated points (Center, Left, Right; component space, cm) and the meshes
+    //                   laid along it (roads, tracks, rivers, walls, hedges, fences);
+    //   water.ndjson    one line per component of an ocean or water actor (class name containing Ocean or
+    //                   Water): level, actor class, component name and type, static mesh and attach chain.
+    var outDir = args[3];
+    Directory.CreateDirectory(outDir);
+    var levels = provider.Files.Keys.Where(k => k.EndsWith(".umap") && k.Contains(args[2], StringComparison.OrdinalIgnoreCase) && !k.Contains("/Gameplay_Layers/")).Order().ToList();
+    var meshInfo = new Dictionary<string, object?>();
+    using var foliage = new StreamWriter(Path.Combine(outDir, "foliage.ndjson"));
+    using var splines = new StreamWriter(Path.Combine(outDir, "splines.ndjson"));
+    using var water = new StreamWriter(Path.Combine(outDir, "water.ndjson"));
+    var Vec = (FStructFallback p, string key) => { var v = p.GetOrDefault<FVector>(key); return new[] { Math.Round(v.X, 1), Math.Round(v.Y, 1), Math.Round(v.Z, 1) }; };
+    foreach (var level in levels)
+    {
+        int trees = 0, segments = 0, waters = 0;
+        try
+        {
+            var package = provider.LoadPackage(level);
+            foreach (var export in package.GetExports())
+            {
+                if (export is CUE4Parse.UE4.Assets.Exports.Component.StaticMesh.UFoliageInstancedStaticMeshComponent component)
+                {
+                    var meshPath = component.GetOrDefault<FPackageIndex>("StaticMesh")?.ResolvedObject?.GetPathName();
+                    if (meshPath == null) continue;
+                    if (!meshInfo.TryGetValue(meshPath, out var info))
+                    {
+                        try
+                        {
+                            var mesh = provider.LoadPackageObject<CUE4Parse.UE4.Assets.Exports.StaticMesh.UStaticMesh>(meshPath);
+                            var body = mesh.BodySetup?.Load<CUE4Parse.UE4.Objects.PhysicsEngine.UBodySetup>();
+                            info = new { bounds = mesh.RenderData?.Bounds, collision = body?.CookedFormatData?.Formats.Count > 0 || body?.GetOrDefault<FStructFallback>("AggGeom") != null };
+                        }
+                        catch (Exception e)
+                        {
+                            info = new { error = e.Message };
+                        }
+                        meshInfo[meshPath] = info;
+                    }
+                    var rows = (component.PerInstanceSMData ?? []).Select(i =>
+                    {
+                        var t = i.TransformData;
+                        return new[] { Math.Round(t.Translation.X, 1), Math.Round(t.Translation.Y, 1), Math.Round(t.Translation.Z, 1), Math.Round(t.Rotation.Rotator().Yaw, 1), Math.Round(t.Scale3D.X, 3) };
+                    }).ToArray();
+                    foliage.WriteLine(JsonConvert.SerializeObject(new { level, mesh = meshPath, info, chain = AttachChain(component), collision = component.Properties.FirstOrDefault(p => p.Name.Text == "BodyInstance")?.Tag?.GenericValue, instances = rows }));
+                    trees += rows.Length;
+                }
+                else if (export.ExportType == "LandscapeSplineSegment")
+                {
+                    var owner = export.Outer?.Load();
+                    var points = export.GetOrDefault<FStructFallback[]>("Points") ?? [];
+                    var meshes = (export.GetOrDefault<FPackageIndex[]>("LocalMeshComponents") ?? [])
+                        .Select(m => m.Load()?.GetOrDefault<FPackageIndex>("StaticMesh")?.ResolvedObject?.GetPathName())
+                        .Where(p => p != null).Distinct().ToArray();
+                    splines.WriteLine(JsonConvert.SerializeObject(new
+                    {
+                        level,
+                        chain = owner == null ? null : AttachChain(owner),
+                        center = points.Select(p => Vec(p, "Center")),
+                        left = points.Select(p => Vec(p, "Left")),
+                        right = points.Select(p => Vec(p, "Right")),
+                        meshes,
+                    }));
+                    segments++;
+                }
+                else if (export is CUE4Parse.UE4.Assets.Exports.Component.USceneComponent scene)
+                {
+                    var actorClass = scene.Outer?.Load()?.ExportType ?? "";
+                    if (!actorClass.Contains("Ocean", StringComparison.OrdinalIgnoreCase) && !actorClass.Contains("Water", StringComparison.OrdinalIgnoreCase)) continue;
+                    water.WriteLine(JsonConvert.SerializeObject(new
+                    {
+                        level,
+                        actor = actorClass,
+                        component = scene.Name,
+                        type = scene.ExportType,
+                        mesh = scene.GetOrDefault<FPackageIndex>("StaticMesh")?.ResolvedObject?.GetPathName(),
+                        chain = AttachChain(scene),
+                    }));
+                    waters++;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"{level}: FAILED {e.GetType().Name}: {e.Message}");
+        }
+        if (trees + segments + waters > 0) Console.Error.WriteLine($"{level}: {trees} foliage instances, {segments} spline segments, {waters} water components");
+    }
 }
 else if (mode == "landscape" || mode == "extractall")
 {
@@ -155,6 +239,25 @@ else if (mode == "landscape" || mode == "extractall")
             Console.Error.WriteLine($"{level}: FAILED {e.GetType().Name}: {e.Message}");
         }
     }
+}
+
+// Relative transforms of a component and its attach parents, component first, root last
+static List<object> AttachChain(CUE4Parse.UE4.Assets.Exports.UObject component)
+{
+    var chain = new List<object>();
+    CUE4Parse.UE4.Assets.Exports.UObject? node = component;
+    for (var depth = 0; node != null && depth < 32; depth++)
+    {
+        chain.Add(new
+        {
+            l = node.GetOrDefault("RelativeLocation", new FVector(0, 0, 0)),
+            r = node.GetOrDefault("RelativeRotation", new FRotator(0, 0, 0)),
+            s = node.GetOrDefault("RelativeScale3D", new FVector(1, 1, 1)),
+        });
+        var parent = node.GetOrDefault<FPackageIndex>("AttachParent");
+        node = parent == null || parent.IsNull ? null : parent.Load();
+    }
+    return chain;
 }
 
 static void DumpBody(DefaultFileProvider provider, string meshPath, string prefix, CUE4Parse.UE4.Objects.PhysicsEngine.UBodySetup? ownBody = null, FStructFallback? spline = null)
