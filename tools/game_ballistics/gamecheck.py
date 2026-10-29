@@ -3,7 +3,8 @@
 Reads resolved.json (collect.py: every weapon Blueprint with its WeaponConfig and projectile
 movement merged along the Blueprint inheritance chain) and writes:
     ballistics.json  per calculator weapon: game classes, raw game values, effective model values;
-    diff.md          game vs Squad Ballistics weapons.json vs SquadCalc weapons.js.
+    diff.md          game vs Squad Ballistics weapons.json vs SquadCalc weapons.js: ballistics of every
+                     weapon, spread, explosion and lifespan of SquadCalc's own weapons.
 
 Effective model (Squad Ballistics' v0 + constant acceleration for a time, gravity scale):
     v0       WeaponConfig.MuzzleVelocity (the launch speed: MK19 fires its 76 m/s UGL shell at
@@ -152,6 +153,75 @@ def effective(weapon):
     }
 
 
+# ASQProjectile explosion defaults: native (C++) values that no Blueprint in the paks shows. Inferred from
+# the projectiles that override only some fields, whose remaining values in SquadCalc (taken from the SDK)
+# all agree on these: the S-5 rocket overrides only the outer radius (SquadCalc 115, 5-18 m, falloff 1,
+# 0.2 m), the MK19 grenade only the inner radius and the height (115, 1-15 m, falloff 1, 0.08 m).
+NATIVE_EXPLOSION = {"ExplosiveBaseDamage": 115.0, "ExplosiveDamageInnerRadius": 500.0, "ExplosiveDamageOuterRadius": 1500.0,
+                    "ExplosiveDamageFalloff": 1.0, "ExplosiveDamageDistanceFromImpactNormal": 20.0,
+                    "bUseSecondaryExplosion": False}
+
+
+def blast(weapon):
+    """Spread and the explosion SquadCalc draws (the widest one that deals damage), in SquadCalc's units.
+
+    Returns {"moa", "explosionDamage", "explosionRadius" [inner, outer] m, "explosionDistanceFromImpact" m,
+    "damageFallOff", "lifespan_s", "native": [fields taken from NATIVE_EXPLOSION]}.
+    """
+    projectile = weapon.get("projectile") or {}
+    found = projectile.get("explosion") or {}
+    values = {**NATIVE_EXPLOSION, **found}
+    explosions = [(values["ExplosiveBaseDamage"], values["ExplosiveDamageInnerRadius"], values["ExplosiveDamageOuterRadius"],
+                   values["ExplosiveDamageDistanceFromImpactNormal"], values["ExplosiveDamageFalloff"], "primary")]
+    if values["bUseSecondaryExplosion"]:
+        explosions.append((values["SecondaryExplosionBaseDmg"], values["SecondaryExplosionInnerRadius"],
+                           values["SecondaryExplosionOuterRadius"], values["SecondaryExplosionDistanceFromImpact"],
+                           values["SecondaryExplosionDamageFalloff"], "secondary"))
+    damage, inner, outer, height, falloff, which = max((e for e in explosions if e[0] > 0), key=lambda e: e[2])
+    prefix = "Explosive" if which == "primary" else "SecondaryExplosion"
+    return {
+        "moa": weapon["config"].get("MOA"),
+        "explosionDamage": damage,
+        "explosionRadius": [inner / 100, outer / 100],
+        "explosionDistanceFromImpact": height / 100,
+        "damageFallOff": round(falloff, 4),
+        "lifespan_s": projectile.get("life") or None,
+        "explosion": which,
+        "native": sorted(k for k in NATIVE_EXPLOSION if k not in found and k.startswith(prefix)),
+    }
+
+
+def blast_rows(name, classes, resolved, calc_weapon):
+    """Markdown rows where SquadCalc's spread, explosion or lifespan differ from the game.
+
+    Shell i of the SquadCalc weapon is compared with game class i when both have as many entries
+    (M1064: impact and airburst), otherwise every shell with the first class and the other classes
+    are listed where they differ from it (MK19: the RHIB and open turret spread less than the RWS).
+    """
+    rows = []
+    shells = calc_weapon["shells"]
+    for i, shell in enumerate(shells):
+        cls = classes[i] if len(shells) == len(classes) else classes[0]
+        game = blast(resolved[cls])
+        native = f" (native default: {', '.join(game['native'])})" if game["native"] else ""
+        for field in ("moa", "explosionDamage", "explosionRadius", "explosionDistanceFromImpact", "damageFallOff"):
+            g, c = game[field], shell.get(field)
+            pairs = list(zip(g, c)) if isinstance(g, list) else [(g, c)]
+            if all(c is not None and abs(float(b) - float(a)) <= max(1e-3, abs(a) * 1e-3) for a, b in pairs):
+                continue
+            rows.append(f"| {name} | {shell['name']} | {field} | {g} ({game['explosion']}){native} | {c} |")
+        life = calc_weapon.get("projectileLifespan")
+        if i == 0 and game["lifespan_s"] and life != game["lifespan_s"]:
+            rows.append(f"| {name} | | projectileLifespan | {game['lifespan_s']} | {life if life is not None else '— (100)'} |")
+    if len(shells) == len(classes):
+        return rows
+    for cls in classes[1:]:
+        if blast(resolved[cls]) != blast(resolved[classes[0]]):
+            differing = {k: v for k, v in blast(resolved[cls]).items() if blast(resolved[classes[0]])[k] != v}
+            rows.append(f"| {name} | | variant `{cls}` | {json.dumps(differing)} | |")
+    return rows
+
+
 def raw(weapon):
     config = weapon["config"]
     projectile = weapon.get("projectile") or {}
@@ -168,6 +238,7 @@ def raw(weapon):
         "ConstantAccelerationTimeout_s": move.get("ConstantAccelerationTimeout"),
         "bIgnoreGravityDuringConstantAcceleration": move.get("bIgnoreGravityDuringConstantAcceleration", False),
         "InitialLifeSpan_s": projectile.get("life"),
+        "explosion": projectile.get("explosion"),
     }
 
 
@@ -199,8 +270,8 @@ def main(resolved_path, sb_path, squadcalc_path, out_json, out_md):
     rows = []
     for name, entry in report.items():
         game = entry["game"]
-        old = sb.get(RENAMED.get(name, name)) or {}
-        sc = calc_by_ballistics.get(RENAMED.get(name, name)) or next((calc[k] for k, v in SQUADCALC.items() if v == name and k in calc), None)
+        old = sb.get(name) or sb.get(RENAMED.get(name, name)) or {}
+        sc = (calc_by_ballistics.get(name) or calc_by_ballistics.get(RENAMED.get(name, name))) or next((calc[k] for k, v in SQUADCALC.items() if v == name and k in calc), None)
         sc_vals = {}
         if sc:
             sc_vals = {"velocity": sc["shells"][0]["velocity"], "gravity": sc.get("gravityScale"),
@@ -237,8 +308,23 @@ def main(resolved_path, sb_path, squadcalc_path, out_json, out_md):
     for name, entry in report.items():
         for cls, v in entry["variants_differing"].items():
             lines.append(f"- {name}: `{cls}` → {json.dumps({k: v[k] for k in ('velocity', 'gravity', 'acceleration', 'acceleration_time')})}")
+    lines += [
+        "",
+        "## Spread, explosion and lifespan of SquadCalc's own weapons",
+        "",
+        "Explosion = the widest one that deals damage (`blast()`); radii and height in metres.",
+        "",
+        "| Weapon | Shell | Field | Game | SquadCalc |",
+        "|---|---|---|---|---|",
+    ]
+    blast_count = 0
+    for calc_name, name in SQUADCALC.items():
+        if calc_name in calc:
+            found = blast_rows(name, TARGETS[name], resolved, calc[calc_name])
+            blast_count += len(found)
+            lines += found
     open(out_md, "w").write("\n".join(lines) + "\n")
-    print(f"{len(report)} weapons, {len(rows)} differing fields")
+    print(f"{len(report)} weapons, {len(rows)} differing ballistic fields, {blast_count} differing blast fields")
 
 
 if __name__ == "__main__":

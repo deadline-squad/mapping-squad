@@ -7,6 +7,12 @@ A missing parent class means the dump regex has to include it; dump it and run a
 """
 import json, glob, os, sys
 from resolve import Dump, class_path
+
+# Projectile CDO properties of the impact explosion (ASQProjectile) and of the optional second one.
+EXPLOSION_FIELDS = ("ExplosiveBaseDamage", "ExplosiveDamageInnerRadius", "ExplosiveDamageOuterRadius",
+                    "ExplosiveDamageFalloff", "ExplosiveDamageDistanceFromImpactNormal", "bUseSecondaryExplosion",
+                    "SecondaryExplosionBaseDmg", "SecondaryExplosionInnerRadius", "SecondaryExplosionOuterRadius",
+                    "SecondaryExplosionDamageFalloff", "SecondaryExplosionDistanceFromImpact")
 ROOT, FILES, OUT = sys.argv[1:4]
 d = Dump(ROOT, FILES)
 weapons = []
@@ -29,7 +35,8 @@ for w in sorted(weapons):
     entry = {"chain": chain, "config": wc}
     if proj:
         pcdo, pcomps, pchain = d.resolved(proj)
-        entry["projectile"] = {"chain": pchain, "movement": pcomps.get("ProjectileComp"), "life": pcdo.get("InitialLifeSpan")}
+        entry["projectile"] = {"chain": pchain, "movement": pcomps.get("ProjectileComp"), "life": pcdo.get("InitialLifeSpan"),
+                               "explosion": {k: pcdo[k] for k in EXPLOSION_FIELDS if k in pcdo}}
     out[w] = entry
 json.dump(out, open(OUT, "w"), indent=1)
 print(len(out), "weapons")
