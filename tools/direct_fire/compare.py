@@ -24,7 +24,9 @@ js = json.loads(subprocess.check_output(
 worst = {}
 checked = mismatch = 0
 for row in js:
-    w = weapons[row["name"]]
+    w = weapons.get(row["name"])
+    if w is None:
+        continue  # a weapon Squad Ballistics no longer has (mods, machine guns, autocannons)
     # Laid by holding a key and compared on both arcs (AGS-17); mortars only use it for the auto-lay
     laid_by_hold = w.has_hold and w.aim == "overlay"
     for arc in ("low", "high"):
