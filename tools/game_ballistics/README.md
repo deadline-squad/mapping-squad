@@ -10,6 +10,13 @@ inheritance chain (`resolve.py`). The model reproduces the long-verified mortar 
 UB-32 (300 m/s, −50 m/s² for 2 s, ×2), and the AGS-17 values (185 m/s, ×1.8) agree with 67 in-game
 hold-time/distance measurements to 0.7 % in v²/g.
 
+SquadCalc's own (artillery) weapons are also checked for what the map draws: spread
+(`WeaponConfig.MOA`), the damage circles (the projectile's explosion, or its secondary explosion when
+that one reaches further: base damage, inner and outer radius, falloff, height above the impact) and
+the projectile lifespan. A projectile with a native parent class leaves the fields it does not override
+at the C++ defaults, which are not in the paks; `NATIVE_EXPLOSION` in `gamecheck.py` holds them and
+explains how they were inferred, and `diff.md` marks every value that depends on them.
+
 ## Running
 
 With the extractor of `tools/heightmaps` built (`heightmaps.sh setup`), where `extractor` runs
