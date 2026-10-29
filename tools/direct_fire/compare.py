@@ -4,8 +4,9 @@ Runs SquadCalc's real Weapon and SquadFiringSolution under Node (solve.mjs) and
 Squad Ballistics' solve() on the same distances and heights, for every SquadCalc
 weapon with a `ballistics` name. Direct-fire weapons are compared on the low arc
 (elevation, angle over the line of sight shown for them, time of flight), the
-AGS-17 on both arcs and the hold time; the
-mortars and rockets keep their own SquadCalc data and are not compared.
+AGS-17 (laid by holding S, aimed with the overlay) on both arcs and the hold time; the
+mortars and rockets keep their own SquadCalc data and are not compared (the mortar's
+hold model in Squad Ballistics is its auto-lay, SquadCalc shows mils).
 
     python3 compare.py <Squad-Ballistics checkout> <SquadCalc checkout>
 
@@ -24,11 +25,13 @@ worst = {}
 checked = mismatch = 0
 for row in js:
     w = weapons[row["name"]]
+    # Laid by holding a key and compared on both arcs (AGS-17); mortars only use it for the auto-lay
+    laid_by_hold = w.has_hold and w.aim == "overlay"
     for arc in ("low", "high"):
         s = solve(w, row["distance"], row["height"], arc)
         sb = s.angle if s.reachable else math.nan
         sc = row[arc] if row[arc] is not None else math.nan
-        if not w.has_hold and (row["type"] != "directFire" or arc == "high"):
+        if not laid_by_hold and (row["type"] != "directFire" or arc == "high"):
             continue  # elevation weapons keep SquadCalc's own data (heightOffset, deceleration model)
         checked += 1
         if math.isnan(sb) != math.isnan(sc) or (not math.isnan(sb) and abs(sb - sc) > 1e-6):
@@ -43,13 +46,13 @@ for row in js:
             if (row["type"] == "directFire" or w.g == 0) and abs(sb_tof - row["tofLow"]) > 1e-6:
                 mismatch += 1
                 print("TOF", row["name"], row["distance"], row["height"], sb_tof, row["tofLow"])
-        if w.has_hold and arc == "high" and not math.isnan(sb):
+        if laid_by_hold and arc == "high" and not math.isnan(sb):
             if abs(s.hold_time - row["hold"]) > 1e-9:
                 mismatch += 1
                 print("HOLD", row["distance"], row["height"], s.hold_time, row["hold"])
-    if row["type"] == "directFire" or w.has_hold:
+    if row["type"] == "directFire" or laid_by_hold:
         sb_max = w.max_range() if w.g else 10000
-        if not w.has_hold and abs(sb_max - row["max"]) > 1e-3 * max(1, sb_max):
+        if not laid_by_hold and abs(sb_max - row["max"]) > 1e-3 * max(1, sb_max):
             worst[row["name"]] = (sb_max, row["max"])
 print("weapons:", len({r['name'] for r in js}), "checked:", checked, "mismatches:", mismatch)
 print("max range differences:", worst)
