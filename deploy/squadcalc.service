@@ -1,5 +1,5 @@
 [Unit]
-Description=SquadCalc site (AGS-17 build) and overlay relay proxy
+Description=SquadCalc site (AGS-17 build)
 
 [Service]
 ExecStart=/usr/bin/caddy run --config /home/seregatipich/apps/squadcalc/Caddyfile --adapter caddyfile
