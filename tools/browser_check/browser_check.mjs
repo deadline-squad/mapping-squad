@@ -1,5 +1,6 @@
 // Checks the Deadline SquadCalc in a real browser (Chromium through Playwright): the console stays clean,
-// the precise heightmaps load, and the bugs fixed in 45.5.1 stay fixed.
+// the precise heightmaps load (also when the network drops a request), and the bugs fixed in 45.5.1
+// and in the walkthrough review (walkthrough.mjs) stay fixed.
 //
 //     node browser_check.mjs <site URL> [--maps]
 //
@@ -31,9 +32,12 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME || un
 /**
  * Open SquadCalc with window.__App and a log of console errors, page errors and failed requests
  * @param {object} [contextOptions] - Playwright browser context options (viewport, mobile emulation)
+ * @param {(context: object) => Promise<void>} [prepare] - called with the context before the page loads (routes)
+ * @throws {Error} when the precise heightmap does not load within 120 s
  */
-async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }) {
+async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }, prepare = async () => {}) {
     const context = await browser.newContext(contextOptions);
+    await prepare(context);
     await context.route(/\/src\/js\/main\.[0-9a-f]+\.min\.js$/, async (route) => {
         const response = await route.fetch();
         const body = await response.text();
@@ -94,6 +98,26 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     // Back to a fresh map state for the rest
     await page.evaluate(() => { window.__App.minimap.activeWeaponsMarkers.getLayers().forEach((weapon) => weapon.delete()); });
     await place(page, [[0, 150]]);
+
+    // The Squad Ballistics bridge stays, and the removed device link leaves nothing behind
+    const bridge = await page.evaluate(async () => {
+        const bridge = window.squadBallistics;
+        const targets = bridge.targets();
+        const names = [...window.__App.WEAPON_SELECTOR[0].options].map((option) => option.textContent);
+        const selected = bridge.selectWeapon("UB-32 (S-5 rockets)");
+        const weapon = bridge.weapon();
+        const rejected = bridge.selectWeapon("no such weapon");
+        bridge.selectWeapon("Mortar (M252 / 2B14 / L16 / Type 63)");
+        return { version: bridge.version, count: targets.length, distance: targets[0]?.distance, hasProfile: Boolean(targets[0]?.profile), selected, weapon, rejected, names: names.length };
+    });
+    check("window.squadBallistics.targets()", bridge.count === 1 && Math.abs(bridge.distance - 150) < 1 && bridge.hasProfile, JSON.stringify(bridge));
+    check("window.squadBallistics weapon sync", bridge.selected && bridge.weapon === "UB-32 (S-5 rockets)" && !bridge.rejected, JSON.stringify(bridge));
+    const removedLink = await page.evaluate(() => ({
+        controls: document.querySelectorAll("#overlayLinkSetting, #overlayCode, #overlayCodeNew, #overlayStatus").length,
+        storage: ["settings-overlay-link", "overlay-session-code"].filter((key) => localStorage.getItem(key) !== null),
+        relayRequests: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("/relay/")).length,
+    }));
+    check("device link removed", removedLink.controls === 0 && removedLink.storage.length === 0 && removedLink.relayRequests === 0, JSON.stringify(removedLink));
 
     // The rounds line follows the damage radius setting
     const rounds = await page.evaluate(() => {
@@ -200,6 +224,48 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
 }
 
 {
+    // Every row of every settings panel stays above the footer of the dialog (on a 1920 x 1080 screen
+    // the Mortars panel spilled past the bottom of the fixed-height dialog)
+    const { context, page } = await open({ viewport: { width: 1920, height: 1080 } });
+    // Real clicks: the dialog closes on a click outside it, and a scripted click has no position
+    await page.click(".btn-settings");
+    await page.waitForTimeout(1500);
+    const settingsRows = [];
+    for (const panel of ["panel1", "panel2", "panel3", "panel4"]) {
+        await page.click(`#settingsControls button[value='${panel}']`);
+        await page.waitForTimeout(300);
+        settingsRows.push(...await page.evaluate((panel) => {
+            const footer = document.querySelector("#settingsVersion").getBoundingClientRect().top;
+            if (!footer) return [`${panel}: dialog not shown`];
+            return [...document.querySelectorAll("#helpDialog .panel.active tr")]
+                .filter((row) => row.getBoundingClientRect().bottom > footer + 1)
+                .map((row) => `${panel}: ${row.textContent.trim().replace(/\s+/g, " ").slice(0, 30)}`);
+        }, panel));
+    }
+    check("settings rows above the dialog footer", settingsRows.length === 0, settingsRows.length ? settingsRows.join(" | ") : "every panel fits");
+
+    await context.close();
+}
+
+{
+    // A heightmap request the network drops (here the first heightmap.png: connection lost) is tried
+    // again: the map still gets its precise heightmap instead of silently keeping the coarse 8-bit one
+    let dropped = 0;
+    let result;
+    try {
+        const { context, page } = await open(undefined, (context) => context.route(/\/heightmaps\/[^/]+\/heightmap\.png$/, (route) => {
+            dropped += 1;
+            return dropped === 1 ? route.abort("internetdisconnected") : route.fallback();
+        }));
+        result = await page.evaluate(() => ({ map: window.__App.minimap.activeMap.name, precise: window.__App.minimap.heightmap.precise }));
+        await context.close();
+    } catch (error) {
+        result = { error: error.message.split("\n")[0] };
+    }
+    check("precise heightmap after a dropped request", dropped >= 2 && result.precise === true, `requests ${dropped}, ${JSON.stringify(result)}`);
+}
+
+{
     // Mobile: a tap places the weapon, the next one a target
     const { context, page, problems } = await open({
         viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3,
@@ -221,6 +287,19 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     }, popupText.toString());
     check("mobile: tap places a weapon then a target", mobile.weapons === 1 && mobile.targets === 1 && /\d/.test(mobile.popup || ""), JSON.stringify(mobile));
     check("mobile console and requests clean", problems.length === 0, problems.length ? problems.slice(0, 10).join(" | ") : "no errors");
+    await context.close();
+}
+
+// What the removed device link saved in a browser is dropped on the next visit
+{
+    const { context, page, problems } = await open(undefined, (context) => context.addInitScript(() => {
+        if (sessionStorage.getItem("seeded")) return;
+        sessionStorage.setItem("seeded", "1");
+        localStorage.setItem("settings-overlay-link", "1");
+        localStorage.setItem("overlay-session-code", "ABCDEFGH2345");
+    }));
+    const left = await page.evaluate(() => ["settings-overlay-link", "overlay-session-code"].filter((key) => localStorage.getItem(key) !== null));
+    check("stale device link storage dropped", left.length === 0 && problems.length === 0, left.length ? `left: ${left}` : problems.length ? problems.join(" | ") : "keys removed, console clean");
     await context.close();
 }
 
