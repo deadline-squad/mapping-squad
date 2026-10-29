@@ -37,6 +37,9 @@ function expect(label, actual, check) {
 expect(`${direct} 300 m, flat ground: low clear`, solve(direct, 300).obstacle.low, (o) => o === null);
 expect(`${direct} 300 m, 10 m wall at 150 m: low blocked there`, solve(direct, 300, { from: 150, height: 10 }).obstacle.low,
     (o) => o !== null && o.distance >= 150 && o.distance < 152 && Math.abs(o.height - 10) < 1e-9);
+// The muzzle is at the shoulder (1.5 m) for weapons without heightOffset: a 0.3 m hump just in front of
+// the weapon is not an obstacle, as it would be for a trajectory starting on the ground
+expect(`${direct} 300 m, 0.3 m hump 3-5 m in front: clear`, solve(direct, 300, { from: 3, height: 0.3 }).obstacle.low, (o) => o === null);
 expect(`${direct} 300 m, wall at 1 m (weapon's own spot): ignored`, solve(direct, 300, { from: 1, height: 10 }).obstacle.low, (o) => o === null);
 expect(`${direct} 300 m, wall 1 m before the target: ignored`, solve(direct, 300, { from: 298.5, height: 10 }).obstacle.low, (o) => o === null);
 expect("Mortar 400 m, 20 m wall at 200 m: high lob clears it", solve("Mortar", 400, { from: 200, height: 20 }).obstacle.high, (o) => o === null);
