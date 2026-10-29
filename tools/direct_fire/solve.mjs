@@ -16,7 +16,12 @@ for (const w of WEAPONS) {
     weapon.decelerationDistance = weapon.velocity * weapon.decelerationTime - 0.5 * weapon.deceleration * weapon.decelerationTime ** 2;
     App.activeWeapon = weapon;
     // 1 map unit = 1 m; the target's height is carried in its LatLng
-    const map = { mapToGameScale: 1, heightmap: { getHeight: (ll) => ll.h } };
+    const map = {
+        mapToGameScale: 1,
+        mapToGameScaleY: 1,
+        toMeters: (origin, ll) => ({ east: ll.lng - origin.lng, north: ll.lat - origin.lat }),
+        heightmap: { getHeight: (ll) => ll.h },
+    };
     for (const [distance, height] of cases) {
         const fs = new SquadFiringSolution({ lat: 0, lng: 0, h: 0 }, { lat: 0, lng: distance, h: height }, map, 0);
         out.push({ name: w.ballistics, type: w.type, distance, height, low: fs.elevation.low.deg, sight: fs.getSightAngle(fs.elevation.low.rad), high: fs.elevation.high.deg, tofLow: fs.timeOfFlight.low, hold: fs.holdTime.high, max: weapon.getMaxDistance() });
