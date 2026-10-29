@@ -26,6 +26,9 @@
 		header @entry Cache-Control "no-cache"
 		@hashed path /src/js/*
 		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		# Precise heightmaps (tools/heightmaps): revalidated (ETag) so a rebuild after a game patch shows at once
+		@heightmaps path /heightmaps/*
+		header @heightmaps Cache-Control "no-cache"
 
 		file_server
 	}
