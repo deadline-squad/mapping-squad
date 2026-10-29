@@ -105,7 +105,9 @@ def write(out_dir, name, fused, meta, stats, build):
         "orientation": "row = world Y min->max, col = world X min->max",
         "sources": {
             "terrain": f"Squad dedicated server build {build}, landscape collision",
-            "objects": f"SquadHeight {meta.get('exported_utc', '')} (Squad SDK collision trace)",
+            "objects": f"Squad dedicated server build {build}, static mesh collision"
+                       if "game_object_cells" in stats else None,
+            "sdk_surface": f"SquadHeight {meta.get('exported_utc', '')} (Squad SDK collision trace)",
         },
         "object_min_m": OBJECT_MIN_M,
         "stats": stats,
