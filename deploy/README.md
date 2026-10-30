@@ -22,4 +22,4 @@ After a change to Squad Ballistics' `weapons.json`, rewrite SquadCalc's generate
 weapons SquadCalc lacks with
 `tools/direct_fire/gen_squadcalc_weapons.py <weapons.json> <entries.js> <names.json> src/data/weapons.js`,
 append them at the end of `WEAPONS`, add the names to every `public/locales/*/weapons.json`, and check both apps agree with
-`python3 tools/direct_fire/compare.py ~/dev/Squad-Ballistics ~/agl/SquadCalc` (exit 0).
+`python3 tools/direct_fire/compare.py ~/dev/Squad-Ballistics ~/agl/SquadCalc` (exit 0). It covers every weapon both apps have, the weapons aimed by elevation included (both arcs, every shell, time of flight, minimum distance and elevation limits), on the grid documented in its docstring.
