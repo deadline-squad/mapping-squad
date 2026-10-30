@@ -24,6 +24,13 @@
 		# Precise heightmaps (tools/heightmaps): revalidated (ETag) so a rebuild after a game patch shows at once
 		@heightmaps path /heightmaps/*
 		header @heightmaps Cache-Control "no-cache"
+		# The page requests the heavy files with ?v=<generated of meta.json> (src/js/heightmapWorker.js), so such a URL
+		# never changes content; a request without it (an older bundle) and meta.json stay revalidated
+		@heightmapfiles {
+			path_regexp ^/heightmaps/[a-z0-9_-]+/heightmap\.(png|webp)$
+			query v=*
+		}
+		header @heightmapfiles Cache-Control "public, max-age=31536000, immutable"
 		# Detailed map tiles (tools/maptiles): the page requests them with ?v=<meta.json generated>, so a
 		# tile URL never changes content; meta.json is revalidated so a re-render shows at once
 		@maptiles path_regexp ^/maptiles/[a-z0-9_-]+/[0-9]+/[0-9]+_[0-9]+\.webp$

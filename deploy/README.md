@@ -15,7 +15,8 @@ still load them). Then `tools/browser_check/browser_check.mjs https://calc.<doma
 
 Precise heightmaps (`dist/heightmaps/<map>/`, outside the webpack build): built from the game files
 with `tools/heightmaps/heightmaps.sh` (`extract`, `build`, then `deploy`, which backs up the previous
-copy); see `tools/heightmaps/README.md`. Without them SquadCalc uses its 8-bit heightmaps.
+copy); see `tools/heightmaps/README.md`. Each map has a `heightmap.webp` next to its `heightmap.png`; the
+PNGs stay for the older bundles. Without them SquadCalc uses its 8-bit heightmaps.
 
 After a change to Squad Ballistics' `weapons.json`, rewrite SquadCalc's generated entries in place with
 `tools/direct_fire/gen_squadcalc_weapons.py <weapons.json> --update src/data/weapons.js`, then generate the

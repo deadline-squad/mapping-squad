@@ -27,6 +27,31 @@ Squad Ballistics' weapons.json aimed with the overlay is selected by its name an
 hold-laid ones show a hold time) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). Exits with 1 on any failure.
 
+## netcost.mjs: what a visit costs on the network
+
+```sh
+node netcost.mjs <site URL> [--json <file>]
+```
+
+Bytes on the wire (Chromium's own count over the DevTools protocol, for the page, its workers and the service
+worker), requests and the time to the precise heightmap in each scenario: cold first visit (until the service
+worker has precached), warm revisit in a new tab and after restarting the browser, a map switch to Yehorivka,
+Skorpo and Al Basrah (empty HTTP cache, then again with the files cached), on the detailed layer one zoom
+step and a half-screen pan, and a drag at about 600 px/s (visible tiles still blank, frame rate, dropped frames
+of a Chromium trace). Each scenario runs in a profile with a real on-disk HTTP cache, and the page is not
+intercepted, so the browser cache works as for a visitor. `decodeMs` is the time from the end of the heightmap
+download to the page holding the heights.
+
+## heightmap_exact.mjs: the WebP against the PNG
+
+```sh
+node heightmap_exact.mjs <site URL> --maps albasrah,chora,skorpo [--dist <dir>] [--fast-png <package dir>] [--webp-meta <dir>]
+```
+
+Loads each map's heightmap in the site's worker through the WebP and through the PNG and compares them in the
+page pixel by pixel (identical where the step is the same, within half a step where it was coarsened);
+`--dist` with `--fast-png` also checks the worker's PNG decode against fast-png's. Exits with 1 on a difference.
+
 ## walkthrough.mjs: recorded click-through
 
 ```sh

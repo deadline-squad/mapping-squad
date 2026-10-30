@@ -15,16 +15,21 @@ wins). Where the game has no landscape: the highest of S and O.
 
 Output, in <out>/<map>/:
     heightmap.png  16-bit grayscale, height above the map's lowest point = value * z_step_m
-    meta.json      z_step_m, z_min_m, grid and the agreement statistics of the two sources
+    heightmap.webp the same grid as lossless WebP at a coarser step, see heightmap_webp.py
+    meta.json      z_step_m, z_min_m, grid, the agreement statistics of the two sources, and the
+                   WebP's step and checksum ("webp") with the build time ("generated": the page
+                   requests the files with ?v=<generated>, so a rebuild must change it)
 """
 
 import argparse
+import datetime
 import json
 import os
 
 import numpy as np
 from PIL import Image
 
+import heightmap_webp
 import landscape
 
 Image.MAX_IMAGE_PIXELS = None
@@ -92,9 +97,16 @@ def write(out_dir, name, fused, meta, stats, build):
     z_step = max((z_max - z_min) / 65535, 0.001)
     values = np.clip(np.rint((np.nan_to_num(fused, nan=z_min) - z_min) / z_step), 0, 65535).astype(np.uint16)
     Image.fromarray(values).save(os.path.join(out_dir, "heightmap.png"), optimize=True)
+    webp_step = heightmap_webp.step_for(name, z_step)
+    webp_values = np.clip(np.rint((np.nan_to_num(fused, nan=z_min) - z_min) / webp_step), 0, 65535).astype(np.uint16)
+    webp_path = os.path.join(out_dir, heightmap_webp.FILE)
+    heightmap_webp.encode(webp_values, webp_path)
     json.dump({
         "map": name,
-        "format": "16-bit grayscale PNG; height above z_min_m = value * z_step_m",
+        "format": heightmap_webp.FORMAT,
+        "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "png": "heightmap.png: 16-bit grayscale PNG; height above z_min_m = value * z_step_m",
+        "webp": heightmap_webp.meta_entry(webp_values, webp_step, webp_path),
         "z_step_m": z_step,
         "z_min_m": round(z_min, 4),
         "z_max_m": round(z_max, 4),
