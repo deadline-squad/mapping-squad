@@ -8,6 +8,28 @@ Each `heightmap.png` is a 16-bit grayscale PNG on SquadCalc's grid (minimap boun
 row = world Y min→max, col = world X min→max); height above the map's lowest point =
 `value * z_step_m` from `meta.json`, which also holds the sources and agreement statistics.
 
+## WebP form
+
+Next to each PNG is a `heightmap.webp` of the same grid: lossless WebP, an RGB image with the high byte
+of the 16-bit level in red and the low byte in green (`py/heightmap_webp.py`). The browser decodes it
+natively, and it is 33 to 53 % smaller than the PNG (326 MB for the 25 maps become 171 MB) because its
+step is coarsened to 1 cm, except where the PNG's is already coarser (Skorpo: its 1064 m range does not
+fit 16 bits at 1 cm) and Chora (re-quantising it makes the file bigger). `meta.json` announces it:
+
+* `format: "webp-rg16"`, `generated` (UTC build time: the page requests the files with `?v=<generated>`, so a
+  rebuild must change it) and `webp: {file, encoding, z_step_m, levels_sum}`; `levels_sum` is the sum of all
+  levels modulo 2^32, which the page checks after decoding, so a browser that alters canvas pixels uses the
+  PNG instead of showing wrong heights;
+* `z_step_m` stays the PNG's step: a SquadCalc bundle that only knows the PNG (an older one in a cached
+  page) keeps working. The PNG stays until the owner drops it.
+
+`heightmaps.sh build` writes both files. For heightmaps built before, `heightmaps.sh webp` converts them from
+the served copy and checks each result (`py/convert_webp.py`: the WebP decoded again equals the levels it was
+made from; the same step must match the PNG in every pixel, a coarsened one must be within half of the new step),
+`heightmaps.sh deploy-webp` copies the WebP files next to the PNGs (nothing changes for a page), and
+`heightmaps.sh switch-webp` then replaces each map's `meta.json`: the switch, last.
+In a browser, `tools/browser_check/heightmap_exact.mjs` compares the WebP and PNG paths of the site's worker.
+
 ## Sources and fusion
 
 | Layer | Source | Precision |
@@ -55,6 +77,7 @@ Files:
   `landscape`/`extractall` (landscape collision), `statics` (static mesh placements and collision),
   `dumpall` (assets as JSON, for `tools/game_ballistics`). `cue4parse.patch` keeps the cooked
   landscape collision that CUE4Parse skips.
+* `py/heightmap_webp.py`, `py/convert_webp.py` — the WebP form above;
 * `py/landscape.py` — cooked Chaos heightfield reader and landscape assembly;
   `py/objects.py` — static mesh collision rasterizer; `py/build_heightmap.py`, `py/build_all.py` —
   fusion and output; `py/maps.py` — SquadCalc map → SquadHeight name and landscape levels;
