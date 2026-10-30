@@ -12,13 +12,23 @@ named DF_<name>, with `ballistics` set to its Squad Ballistics name:
 
 The AGS-17 emplacement is skipped: SquadCalc's "AGS-17" is it.
 
+A boosted rocket gets `acceleration`/`accelerationTime`, a projectile with a speed cap `maxSpeed`
+(MaxSpeed of its movement component), and one whose motor keeps the barrel's axis
+`rotationFollowsVelocity: false` (SquadCalc's squadBallistics.js flies them like Squad Ballistics).
+
     python3 gen_squadcalc_weapons.py <weapons.json> <entries.js> <names.json> [<SquadCalc weapons.js>]
+    python3 gen_squadcalc_weapons.py <weapons.json> --update <SquadCalc weapons.js>
 
 entries.js goes at the end of WEAPONS in src/data/weapons.js (after the existing weapons: the
 selected weapon is stored by index); names.json maps DF_<name> to the display name for
 public/locales/*/weapons.json. With SquadCalc's src/data/weapons.js, only the weapons whose
 Squad Ballistics name it does not have yet are written, in weapons.json order, so an update is
-one run and one append. Prints the number of entries written. Check the result with compare.py.
+one run and one append. Prints the number of entries written.
+
+--update rewrites, in place and in their positions, the generated entries (DF_<name>) that
+SquadCalc's weapons.js already has, from the current weapons.json (its line endings kept), and
+prints how many changed; an entry whose weapon weapons.json no longer has is kept as it is and
+named on stderr. Run it before the append. Check the result with compare.py.
 """
 import json, math, re, sys
 
@@ -28,7 +38,7 @@ HOLD_LAID_FAMILY = "AGS-17"  # the only hold-laid weapon whose grenade SquadCalc
 
 data = json.load(open(sys.argv[1])); data.pop("_comment")
 existing = set()
-if len(sys.argv) > 4:
+if len(sys.argv) > 4 and sys.argv[2] != "--update":
     source = open(sys.argv[4], encoding="utf-8").read()
     existing = {json.loads(f'"{name}"') for name in re.findall(r'ballistics:\s*"((?:[^"\\]|\\.)*)"', source)}
 
@@ -100,6 +110,10 @@ def direct_fire_entry(key, w):
     ]
     if w.get("acceleration") and w.get("acceleration_time"):
         lines += [f"        acceleration: {num(w['acceleration'])},", f"        accelerationTime: {num(w['acceleration_time'])},"]
+    if w.get("max_speed"):
+        lines.append(f"        maxSpeed: {num(w['max_speed'])},")
+    if w.get("rotation_follows_velocity") is False:
+        lines.append("        rotationFollowsVelocity: false,")
     lim = w.get("elevation_limits", [-90, 90])
     lines += [
         f"        gravityScale: {num(w['gravity'])},",
@@ -127,6 +141,39 @@ def direct_fire_entry(key, w):
     return lines
 
 
+def entry(key, w):
+    return hold_laid_entry(key, w) if w.get("hold_rate") else direct_fire_entry(key, w)
+
+
+def update(path):
+    """Rewrite the generated entries of SquadCalc's weapons.js at `path` in place."""
+    raw = open(path, encoding="utf-8", newline="").read()
+    newline = "\r\n" if "\r\n" in raw else "\n"
+    source = raw.replace("\r\n", "\n")
+    # A generated entry: from its "    {" line to the "    }," that closes it
+    block = re.compile(r'^    \{\n        name: "DF_[^"]*",\n        ballistics: ("(?:[^"\\]|\\.)*"),\n.*?^    \},$', re.M | re.S)
+    changed = 0
+
+    def regenerate(match):
+        nonlocal changed
+        key = json.loads(match.group(1))
+        if key not in data:
+            # A weapon Squad Ballistics no longer has (autocannons): kept as it is
+            print(f"kept, not in {sys.argv[1]}: {key}", file=sys.stderr)
+            return match.group(0)
+        text = "\n".join(entry(key, data[key]))
+        changed += text != match.group(0)
+        return text
+
+    source = block.sub(regenerate, source)
+    open(path, "w", encoding="utf-8", newline="").write(source.replace("\n", newline))
+    print(changed)
+
+
+if sys.argv[2] == "--update":
+    update(sys.argv[3])
+    sys.exit(0)
+
 entries, names = [], {}
 for key, w in data.items():
     arc = w.get("arc", "low")
@@ -135,7 +182,7 @@ for key, w in data.items():
     if key in existing:
         continue
     names[ident(key)] = key
-    entries.append("\n".join(hold_laid_entry(key, w) if w.get("hold_rate") else direct_fire_entry(key, w)))
+    entries.append("\n".join(entry(key, w)))
 open(sys.argv[2], "w").write("\n".join(entries) + "\n" if entries else "")
 json.dump(names, open(sys.argv[3], "w"), ensure_ascii=False, indent=4)
 print(len(entries))
