@@ -378,9 +378,11 @@ for (const dropped of ["heightmap.png", "meta.json"]) {
     await page.evaluate(() => { const map = window.__App.minimap; map.setView([-map.pixelSize / 2, map.pixelSize / 2], 4, { animate: false }); });
     const center = await page.evaluate(() => { const box = window.__App.minimap.getContainer().getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2 }; });
     await page.touchscreen.tap(center.x, center.y + 120);
-    await page.waitForTimeout(800);
+    await page.waitForFunction(() => window.__App.minimap.activeWeaponsMarkers.getLayers().length === 1, null, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(2000);
     await page.touchscreen.tap(center.x, center.y - 100);
-    await page.waitForTimeout(1000);
+    await page.waitForFunction(() => window.__App.minimap.activeTargetsMarkers.getLayers().length === 1, null, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(500);
     const mobile = await page.evaluate((popupSource) => {
         const popup = new Function(`return ${popupSource}`)();
         const map = window.__App.minimap;
