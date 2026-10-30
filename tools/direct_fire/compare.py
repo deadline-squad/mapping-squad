@@ -2,61 +2,126 @@
 
 Runs SquadCalc's real Weapon and SquadFiringSolution under Node (solve.mjs) and
 Squad Ballistics' solve() on the same distances and heights, for every SquadCalc
-weapon with a `ballistics` name. Direct-fire weapons are compared on the low arc
-(elevation, angle over the line of sight shown for them, time of flight), the
-AGS-17 entries (laid by holding S, aimed with the overlay: "AGS-17" and the generated
-hold-laid DF_AGS_17_* entries) on both arcs and the hold time; the
-mortars and rockets keep their own SquadCalc data and are not compared (the mortar's
-hold model in Squad Ballistics is its auto-lay, SquadCalc shows mils).
+weapon with a `ballistics` name that Squad Ballistics has, every shell of it:
+
+* direct-fire weapons: the low arc (elevation, angle over the line of sight shown
+  for them, time of flight);
+* the AGS-17 entries (laid by holding S, aimed with the overlay: "AGS-17" and the
+  generated hold-laid DF_AGS_17_* entries): both arcs and the hold time;
+* the weapons aimed by elevation (mortars, UB-32, BM-21, Hell Cannon, the technical's
+  mortar and UB-32, M1064): both arcs, the time of flight of both, the shell's velocity,
+  the minimum distance (Squad Ballistics must refuse closer targets) and the elevation
+  limits.
+
+Every weapon is also checked on its maximum range.
+
+The grid (documented here, so that a regression in any corner shows up):
+
+* distances (m): DISTANCES, 15 values from 0.5 m (closer than any minimum distance) to 8000 m
+  (past every maximum range), with the M252's 51 m minimum and the M1064's 340 m one on the grid;
+* heights of the target above the weapon's ground (m): HEIGHTS, 9 values from -300 to +200;
+* near the maximum range: solve.mjs adds, for every weapon that has gravity, the fractions
+  0.5, 0.9, 0.99, 0.999, 1.001 and 1.01 of SquadCalc's own getMaxDistance() at -40, 0 and
+  +25 m.
 
     python3 compare.py <Squad-Ballistics checkout> <SquadCalc checkout>
 
-Exits with 1 on any difference above 1e-6 degree / second.
+Prints a summary table and exits with 1 on any difference above 1e-6 degree / second.
 """
 import json, math, os, subprocess, sys
 sys.path.insert(0, sys.argv[1])
 from ballistics import load_weapons, solve
 weapons = load_weapons(sys.argv[1] + "/weapons.json")
-cases = [(d, h) for d in (15, 60, 150, 300, 450, 700, 1000, 1500, 2500) for h in (-40, 0, 25)]
+
+DISTANCES = (0.5, 5, 15, 51, 150, 340, 450, 700, 1000, 1236, 1500, 2060, 2500, 5000, 8000)
+HEIGHTS = (-300, -100, -40, -10, 0, 10, 25, 100, 200)
+TOLERANCE = 1e-6
+
+cases = [(d, h) for d in DISTANCES for h in HEIGHTS]
 here = os.path.dirname(os.path.abspath(__file__))
 js = json.loads(subprocess.check_output(
     ["node", "--import", os.path.join(here, "register.mjs"), os.path.join(here, "solve.mjs"), os.path.abspath(sys.argv[2]), json.dumps(cases)]
 ))
 worst = {}
 checked = mismatch = 0
+per_weapon = {}
+
+
+def report(*fields):
+    """Print a mismatch (the first 15 in full) and count it."""
+    global mismatch
+    mismatch += 1
+    if mismatch <= 15:
+        print("MISMATCH", *fields)
+
+
+def differ(a, b):
+    """Whether two numbers (NaN = unreachable) differ by more than TOLERANCE."""
+    return math.isnan(a) != math.isnan(b) or (not math.isnan(a) and abs(a - b) > TOLERANCE)
+
+
+seen = set()
 for row in js:
     w = weapons.get(row["name"])
     if w is None:
         continue  # a weapon Squad Ballistics no longer has (mods, machine guns, autocannons)
     # Laid by holding a key and compared on both arcs (AGS-17); mortars only use it for the auto-lay
     laid_by_hold = w.has_hold and w.aim == "overlay"
+    direct = row["type"] == "directFire"
+    elevation = not direct and not laid_by_hold
+    stats = per_weapon.setdefault(row["name"], [0, 0])
+    before = mismatch
+
+    key = (row["name"], row["shell"])
+    if elevation and key not in seen:
+        seen.add(key)
+        if abs(w.velocity - row["velocity"]) > 1e-9:
+            report("VELOCITY", row["name"], row["shell"], w.velocity, row["velocity"])
+        if abs(w.min_distance - row["minDistance"]) > 1e-9:
+            report("MIN DISTANCE", row["name"], row["shell"], w.min_distance, row["minDistance"])
+        if any(abs(a - b) > 1e-9 for a, b in zip(w.elevation_limits, row["minElevation"])):
+            report("ELEVATION LIMITS", row["name"], w.elevation_limits, row["minElevation"])
+
     for arc in ("low", "high"):
+        if direct and arc == "high":
+            continue  # a direct-fire weapon is aimed on its low arc only
         s = solve(w, row["distance"], row["height"], arc)
+        if elevation and row["distance"] < w.min_distance:
+            # SquadCalc draws the minimum-distance circle instead; Squad Ballistics must refuse the shot
+            checked += 1
+            stats[0] += 1
+            if s.reachable or s.reason_code != "too_close":
+                report("TOO CLOSE", row["name"], arc, row["distance"], row["height"], s.reachable, s.reason_code)
+            continue
         sb = s.angle if s.reachable else math.nan
         sc = row[arc] if row[arc] is not None else math.nan
-        if not laid_by_hold and (row["type"] != "directFire" or arc == "high"):
-            continue  # elevation weapons keep SquadCalc's own data (heightOffset, deceleration model)
         checked += 1
-        if math.isnan(sb) != math.isnan(sc) or (not math.isnan(sb) and abs(sb - sc) > 1e-6):
-            mismatch += 1
-            if mismatch <= 15:
-                print("MISMATCH", row["name"], arc, row["distance"], row["height"], sb, sc)
-        if arc == "low" and not math.isnan(sb):
-            if abs(s.sight_angle - row["sight"]) > 1e-6:
-                mismatch += 1
-                print("SIGHT", row["name"], row["distance"], row["height"], s.sight_angle, row["sight"])
-            sb_tof = s.time_of_flight
-            if (row["type"] == "directFire" or w.g == 0) and abs(sb_tof - row["tofLow"]) > 1e-6:
-                mismatch += 1
-                print("TOF", row["name"], row["distance"], row["height"], sb_tof, row["tofLow"])
-        if laid_by_hold and arc == "high" and not math.isnan(sb):
-            if abs(s.hold_time - row["hold"]) > 1e-9:
-                mismatch += 1
-                print("HOLD", row["distance"], row["height"], s.hold_time, row["hold"])
-    if row["type"] == "directFire" or laid_by_hold:
+        stats[0] += 1
+        if differ(sb, sc):
+            report(row["name"], row["shell"], arc, row["distance"], row["height"], sb, sc)
+        if not s.reachable or math.isnan(sc):
+            continue
+        if arc == "low" and not elevation:
+            if abs(s.sight_angle - row["sight"]) > TOLERANCE:
+                report("SIGHT", row["name"], row["distance"], row["height"], s.sight_angle, row["sight"])
+            if (direct or w.g == 0) and abs(s.time_of_flight - row["tofLow"]) > TOLERANCE:
+                report("TOF", row["name"], row["distance"], row["height"], s.time_of_flight, row["tofLow"])
+        if elevation:
+            tof = row["tofLow" if arc == "low" else "tofHigh"]
+            if tof is None or abs(s.time_of_flight - tof) > TOLERANCE:
+                report("TOF", row["name"], arc, row["distance"], row["height"], s.time_of_flight, tof)
+        if laid_by_hold and arc == "high" and abs(s.hold_time - row["hold"]) > 1e-9:
+            report("HOLD", row["distance"], row["height"], s.hold_time, row["hold"])
+    stats[1] += mismatch - before
+
+    if direct or laid_by_hold or elevation:
         sb_max = w.max_range() if w.g else 10000
         if not laid_by_hold and abs(sb_max - row["max"]) > 1e-3 * max(1, sb_max):
             worst[row["name"]] = (sb_max, row["max"])
-print("weapons:", len({r['name'] for r in js}), "checked:", checked, "mismatches:", mismatch)
+
+print(f"{'weapon':<45}{'checks':>8}{'mismatches':>12}")
+for name, (count, bad) in sorted(per_weapon.items()):
+    print(f"{name:<45}{count:>8}{bad:>12}")
+print("weapons:", len(per_weapon), "checked:", checked, "mismatches:", mismatch)
 print("max range differences:", worst)
 sys.exit(1 if mismatch or worst else 0)
