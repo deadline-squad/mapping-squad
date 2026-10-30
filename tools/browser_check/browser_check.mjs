@@ -33,9 +33,11 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME || un
  * Open SquadCalc with window.__App and a log of console errors, page errors and failed requests
  * @param {object} [contextOptions] - Playwright browser context options (viewport, mobile emulation)
  * @param {(context: object) => Promise<void>} [prepare] - called with the context before the page loads (routes)
- * @throws {Error} when the precise heightmap does not load within 120 s
+ * @param {boolean} [precise] - wait for the precise heightmap (true) or for any heightmap result, also
+ *   the 8-bit one or a failure (false)
+ * @throws {Error} when the heightmap does not load within 120 s
  */
-async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }, prepare = async () => {}) {
+async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }, prepare = async () => {}, precise = true) {
     const context = await browser.newContext(contextOptions);
     await prepare(context);
     await context.route(/\/src\/js\/main\.[0-9a-f]+\.min\.js$/, async (route) => {
@@ -54,7 +56,10 @@ async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }
     page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
     page.on("response", (response) => { if (response.status() >= 400) problems.push(`HTTP ${response.status()}: ${response.url()}`); });
     await page.goto(base, { waitUntil: "load" });
-    await page.waitForFunction(() => window.__App?.minimap?.heightmap?.precise, null, { timeout: 120000 });
+    await page.waitForFunction((precise) => {
+        const heightmap = window.__App?.minimap?.heightmap;
+        return precise ? heightmap?.precise : heightmap?.jsonPng.length || heightmap?.failed;
+    }, precise, { timeout: 120000 });
     return { context, page, problems };
 }
 
@@ -247,22 +252,59 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     await context.close();
 }
 
-{
-    // A heightmap request the network drops (here the first heightmap.png: connection lost) is tried
-    // again: the map still gets its precise heightmap instead of silently keeping the coarse 8-bit one
-    let dropped = 0;
+// The precise heightmap's two requests, heightmap.png and meta.json, under the network's failures
+const preciseRequest = /\/heightmaps\/[^/]+\/(heightmap\.png|meta\.json)$/;
+/**
+ * Open SquadCalc with the precise heightmap's requests answered by `answer`
+ * @param {(route: object, file: string, attempt: number) => Promise<void>} answer - answers the
+ *   `attempt`-th request (1 for the first) of `file` ("heightmap.png" or "meta.json")
+ * @returns {Promise<{requests: object, result: object}>} - the number of requests per file, and the
+ *   heightmap's state (map, precise, the toast shown) or {error}
+ */
+async function openWithHeightmapRequests(answer) {
+    const requests = { "heightmap.png": 0, "meta.json": 0 };
     let result;
     try {
-        const { context, page } = await open(undefined, (context) => context.route(/\/heightmaps\/[^/]+\/heightmap\.png$/, (route) => {
-            dropped += 1;
-            return dropped === 1 ? route.abort("internetdisconnected") : route.fallback();
-        }));
-        result = await page.evaluate(() => ({ map: window.__App.minimap.activeMap.name, precise: window.__App.minimap.heightmap.precise }));
+        const { context, page } = await open(undefined, (context) => context.route(preciseRequest, (route) => {
+            const file = route.request().url().match(preciseRequest)[1];
+            requests[file] += 1;
+            return answer(route, file, requests[file]);
+        }), false);
+        result = await page.evaluate(() => {
+            const map = window.__App.minimap;
+            return { map: map.activeMap.name, precise: map.heightmap.precise, failed: map.heightmap.failed, toast: document.querySelector("#toast h4").getAttribute("data-i18n") };
+        });
         await context.close();
     } catch (error) {
         result = { error: error.message.split("\n")[0] };
     }
-    check("precise heightmap after a dropped request", dropped >= 2 && result.precise === true, `requests ${dropped}, ${JSON.stringify(result)}`);
+    return { requests, result };
+}
+
+// A heightmap request the network drops (connection lost) is tried again: the map still gets its
+// precise heightmap instead of silently keeping the coarse 8-bit one
+for (const dropped of ["heightmap.png", "meta.json"]) {
+    const { requests, result } = await openWithHeightmapRequests((route, file, attempt) =>
+        file === dropped && attempt === 1 ? route.abort("internetdisconnected") : route.fallback());
+    check(`precise heightmap after a dropped ${dropped} request`, requests[dropped] >= 2 && result.precise === true,
+        `requests ${JSON.stringify(requests)}, ${JSON.stringify(result)}`);
+}
+
+{
+    // A network that keeps dropping it: four attempts, then the 8-bit heightmap with a warning toast
+    const { requests, result } = await openWithHeightmapRequests((route, file) =>
+        file === "heightmap.png" ? route.abort("internetdisconnected") : route.fallback());
+    check("coarse heightmap announced when the network keeps dropping it",
+        requests["heightmap.png"] === 4 && result.precise === false && result.failed === false && result.toast === "tooltips:heightmapCoarse",
+        `requests ${JSON.stringify(requests)}, ${JSON.stringify(result)}`);
+}
+
+{
+    // A deployment without precise heightmaps (404) falls back at once: one request each, no warning
+    const { requests, result } = await openWithHeightmapRequests((route) => route.fulfill({ status: 404, body: "" }));
+    check("no precise heightmap (404): 8-bit one at once, no retry",
+        requests["heightmap.png"] === 1 && requests["meta.json"] === 1 && result.precise === false && result.failed === false && result.toast !== "tooltips:heightmapCoarse",
+        `requests ${JSON.stringify(requests)}, ${JSON.stringify(result)}`);
 }
 
 {
