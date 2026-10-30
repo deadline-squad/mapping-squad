@@ -2,11 +2,12 @@
 // the precise heightmaps load (also when the network drops a request), and the bugs fixed in 45.5.1
 // and in the walkthrough review (walkthrough.mjs) stay fixed.
 //
-//     node browser_check.mjs <site URL> [--maps]
+//     node browser_check.mjs <site URL> [--maps] [--ballistics <weapons.json>]
 //
 // <site URL> is a served build with the precise heightmaps under /heightmaps/ (the stand, or Caddy over
 // a local `npm run build`). --maps also switches through every map and checks each loads its precise
-// heightmap. Environment: PLAYWRIGHT_CORE = path of the playwright-core package if it is not
+// heightmap. --ballistics also selects every weapon of Squad Ballistics' weapons.json aimed with the
+// overlay through window.squadBallistics, by its name. Environment: PLAYWRIGHT_CORE = path of the playwright-core package if it is not
 // resolvable from here, CHROME = Chromium executable if Playwright's own is not installed.
 // Exits with 1 on any failure.
 //
@@ -16,10 +17,12 @@ const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.P
 
 const base = process.argv[2];
 if (!base) {
-    console.error("usage: node browser_check.mjs <site URL> [--maps]");
+    console.error("usage: node browser_check.mjs <site URL> [--maps] [--ballistics <weapons.json>]");
     process.exit(2);
 }
 const allMaps = process.argv.includes("--maps");
+const ballisticsIndex = process.argv.indexOf("--ballistics");
+const ballisticsFile = ballisticsIndex > 0 ? process.argv[ballisticsIndex + 1] : null;
 
 let failures = 0;
 function check(label, ok, detail) {
@@ -117,6 +120,42 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     });
     check("window.squadBallistics.targets()", bridge.count === 1 && Math.abs(bridge.distance - 150) < 1 && bridge.hasProfile, JSON.stringify(bridge));
     check("window.squadBallistics weapon sync", bridge.selected && bridge.weapon === "UB-32 (S-5 rockets)" && !bridge.rejected, JSON.stringify(bridge));
+
+    if (ballisticsFile) {
+        // Every weapon Squad Ballistics aims with the overlay (its `aim` rule, mods excluded) is selected by
+        // its name and reported back under it; those laid by holding a key (`hold_rate`) show the hold time
+        // of the lob on a target 600 m away, as the AGS-17
+        const { readFileSync } = await import("node:fs");
+        const weapons = JSON.parse(readFileSync(ballisticsFile, "utf8"));
+        delete weapons._comment;
+        const overlay = Object.entries(weapons).filter(([, w]) => !w.mod && (w.aim ?? ((w.arc ?? "low") === "high" ? "elevation" : "overlay")) === "overlay");
+        const selection = await page.evaluate(({ names, holdLaid, popupSource }) => {
+            const popup = new Function(`return ${popupSource}`)();
+            const app = window.__App;
+            const map = app.minimap;
+            const bridge = window.squadBallistics;
+            const weapon = map.activeWeaponsMarkers.getLayers()[0].getLatLng();
+            const failed = [];
+            const holds = {};
+            for (const name of names) {
+                const selected = bridge.selectWeapon(name);
+                const reported = bridge.weapon();
+                if (!selected || reported !== name) failed.push(`${name}: selectWeapon ${selected}, weapon() ${reported}`);
+                if (!holdLaid.includes(name)) continue;
+                const before = new Set(map.activeTargetsMarkers.getLayers());
+                map.createTarget({ lat: weapon.lat + 600 / map.mapToGameScale, lng: weapon.lng });
+                const target = map.activeTargetsMarkers.getLayers().find((layer) => !before.has(layer));
+                const hold = target.firingSolution1.holdTime.high;
+                holds[name] = { hold, popup: popup(target) };
+                if (!(hold > 0) || !holds[name].popup.includes(hold.toFixed(app.activeWeapon.elevationPrecision))) failed.push(`${name}: no hold time (${holds[name].popup})`);
+                target.delete();
+            }
+            bridge.selectWeapon("Mortar (M252 / 2B14 / L16 / Type 63)");
+            return { failed, holds };
+        }, { names: overlay.map(([name]) => name), holdLaid: overlay.filter(([, w]) => w.hold_rate).map(([name]) => name), popupSource: popupText.toString() });
+        check(`every Squad Ballistics overlay weapon selectable (${overlay.length})`, selection.failed.length === 0,
+            selection.failed.length ? selection.failed.join(" | ") : `all selected and reported back; hold times at 600 m: ${JSON.stringify(selection.holds)}`);
+    }
     const removedLink = await page.evaluate(() => ({
         controls: document.querySelectorAll("#overlayLinkSetting, #overlayCode, #overlayCodeNew, #overlayStatus").length,
         storage: ["settings-overlay-link", "overlay-session-code"].filter((key) => localStorage.getItem(key) !== null),
