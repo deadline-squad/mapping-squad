@@ -15,14 +15,16 @@ rest at the build's `dist`).
 ## browser_check.mjs: pass/fail checks
 
 ```sh
-node browser_check.mjs <site URL> [--maps]
+node browser_check.mjs <site URL> [--maps] [--ballistics <weapons.json>]
 ```
 
 Console and requests clean, precise heightmaps (`--maps`: on every map; a dropped heightmap.png or
 meta.json request is tried again, a network that keeps dropping it gives the 8-bit heightmap with a
 warning, a 404 falls back at once), regression checks for
 the bugs fixed in 45.5.1 and after the walkthrough review, the `window.squadBallistics` bridge the
-Squad Ballistics app reads (targets, weapon, weapon selection) and the absence of the removed device
+Squad Ballistics app reads (targets, weapon, weapon selection; `--ballistics`: every weapon of
+Squad Ballistics' weapons.json aimed with the overlay is selected by its name and reported back, the
+hold-laid ones show a hold time) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). Exits with 1 on any failure.
 
 ## walkthrough.mjs: recorded click-through
