@@ -19,7 +19,7 @@ for (const w of WEAPONS) {
         mapToGameScale: 1,
         mapToGameScaleY: 1,
         toMeters: (origin, ll) => ({ east: ll.lng - origin.lng, north: ll.lat - origin.lat }),
-        heightmap: { getHeight: (ll) => ll.h },
+        heightmap: { jsonPng: [[0]], getHeight: (ll) => ll.h },
     };
     for (const shell of w.shells) {
         weapon.velocity = shell.velocity;
