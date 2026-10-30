@@ -4,7 +4,9 @@
 //
 // Oracles: on flat ground the kill and wound zones are the circles SquadCalc already draws
 // (Weapon.calculateDistanceForDamage); a wall or a roof hides the soldiers behind it; with a circular
-// spread on flat ground the kill probability is the area ratio (kill radius / spread radius)^2.
+// spread on flat ground the kill probability is kill radius / spread radius (the game's VRandCone puts the
+// miss radius uniform on [0, R]: density 1/r, not uniform over the area; hit_probability_check.mjs checks the
+// distribution against a 400,000-shot simulation of the game's cone).
 // Exits with 1 on any failure.
 import "./stub-app.mjs";
 
@@ -82,11 +84,11 @@ const building = (east, north) => (Math.abs(east) <= 5 && Math.abs(north) <= 5 ?
 const street = impactDamage(building, mortar, { east: 0, north: 0 }, { east: 9, north: 0 });
 check("roof impact: soldier in the street 4 m from the wall", street.covered && street.damage === 0, JSON.stringify(street));
 
-// 5. Circular spread on flat ground: kill probability = (kill radius / spread radius)^2
+// 5. Circular spread on flat ground: kill probability = kill radius / spread radius (miss radius uniform)
 for (const spread of [30, 50]) {
     const shell = WEAPONS.find((w) => w.name === "Mortar").shells[0];
     const killRadius = circles(shell, KILL_DAMAGE);
-    const expected = Math.min(1, (killRadius / spread) ** 2);
+    const expected = Math.min(1, killRadius / spread);
     const { kill } = hitProbability(flat, explosionOf(shell), spread, spread, 37);
     check(`Mortar spread radius ${spread} m: kill probability`, Math.abs(kill - expected) <= 0.02, `${kill.toFixed(3)} vs ${expected.toFixed(3)}`);
 }
