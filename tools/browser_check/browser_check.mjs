@@ -93,15 +93,21 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
         const weapon = { lat: -map.pixelSize * 0.45, lng: map.pixelSize * 0.45 };
         map.createWeapon(weapon);
         const target = map.createTarget({ lat: weapon.lat + 400 / scale, lng: weapon.lng + 200 / scale }) || map.activeTargetsMarkers.getLayers()[0];
+        // While the heights load the popup says it has no height data and the bridge sends no height
+        const early = { heightDiff: window.squadBallistics.lastTarget()?.heightDiff, noHeightLine: popup(target).includes("height"), noHeightClass: target.calcMarker1.getContent().includes("calcNoHeight"), profile: window.squadBallistics.lastTarget()?.profile };
         await new Promise((resolve) => { const timer = setInterval(() => { if (map.heightmap.precise) { clearInterval(timer); resolve(); } }, 50); });
         await new Promise((resolve) => setTimeout(resolve, 300));
         const shown = popup(target);
         const heightDiff = target.firingSolution1.heightDiff;
         target.updateCalc();
-        return { loadedBefore, map: map.activeMap.name, shown, fresh: popup(target), heightDiff, expected: map.heightmap.getHeight(target.getLatLng()) - map.heightmap.getHeight(weapon) };
+        const late = window.squadBallistics.lastTarget();
+        return { early, late: { heightDiff: late?.heightDiff, hasProfile: Boolean(late?.profile) }, loadedBefore, map: map.activeMap.name, shown, fresh: popup(target), heightDiff, expected: map.heightmap.getHeight(target.getLatLng()) - map.heightmap.getHeight(weapon) };
     }, popupText.toString());
     check("solution after the heightmap loads", !stale.loadedBefore && stale.shown === stale.fresh && Math.abs(stale.heightDiff - stale.expected) < 0.01,
         `${stale.map}: shown "${stale.shown}", recomputed "${stale.fresh}", height difference ${stale.heightDiff.toFixed(2)} m of ${stale.expected.toFixed(2)} m`);
+
+    check("heights unknown until the precise heightmap loaded", stale.early.heightDiff === null && stale.early.noHeightClass && stale.early.profile === null
+        && Number.isFinite(stale.late.heightDiff) && stale.late.hasProfile, JSON.stringify({ early: { ...stale.early, profile: stale.early.profile }, late: stale.late }));
 
     // Back to a fresh map state for the rest
     await page.evaluate(() => { window.__App.minimap.activeWeaponsMarkers.getLayers().forEach((weapon) => weapon.delete()); });
@@ -111,14 +117,29 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     const bridge = await page.evaluate(async () => {
         const bridge = window.squadBallistics;
         const targets = bridge.targets();
+        const first = bridge.revision();
+        const sameAgain = bridge.revision();
+        const last = bridge.lastTarget();
+        const cached = bridge.targets()[0].profile === targets[0].profile;
+        const map = window.__App.minimap;
+        map.createTarget({ lat: map.activeTargetsMarkers.getLayers()[0].getLatLng().lat + 60 / map.mapToGameScale, lng: map.activeTargetsMarkers.getLayers()[0].getLatLng().lng });
+        const afterTarget = bridge.revision();
+        const two = bridge.targets();
+        const newest = bridge.lastTarget();
+        const lastIsNewest = JSON.stringify(newest) === JSON.stringify(two[two.length - 1]) && two.length === 2;
+        map.activeTargetsMarkers.getLayers()[1].delete();
+        const afterDelete = bridge.revision();
+        const revisions = { first, sameAgain, afterTarget, afterDelete, lastIsNewest, cached, lastMatches: JSON.stringify(last) === JSON.stringify(targets[0]), type: typeof first };
         const names = [...window.__App.WEAPON_SELECTOR[0].options].map((option) => option.textContent);
         const selected = bridge.selectWeapon("UB-32 (S-5 rockets)");
         const weapon = bridge.weapon();
         const rejected = bridge.selectWeapon("no such weapon");
         bridge.selectWeapon("Mortar (M252 / 2B14 / L16 / Type 63)");
-        return { version: bridge.version, count: targets.length, distance: targets[0]?.distance, hasProfile: Boolean(targets[0]?.profile), selected, weapon, rejected, names: names.length };
+        return { revisions, version: bridge.version, count: targets.length, distance: targets[0]?.distance, hasProfile: Boolean(targets[0]?.profile), selected, weapon, rejected, names: names.length };
     });
     check("window.squadBallistics.targets()", bridge.count === 1 && Math.abs(bridge.distance - 150) < 1 && bridge.hasProfile, JSON.stringify(bridge));
+    const r = bridge.revisions;
+    check("window.squadBallistics lastTarget() and revision()", bridge.version >= 5 && r.type === "number" && r.first === r.sameAgain && r.afterTarget > r.sameAgain && r.afterDelete > r.afterTarget && r.lastIsNewest && r.cached && r.lastMatches, JSON.stringify(r));
     check("window.squadBallistics weapon sync", bridge.selected && bridge.weapon === "UB-32 (S-5 rockets)" && !bridge.rejected, JSON.stringify(bridge));
 
     if (ballisticsFile) {

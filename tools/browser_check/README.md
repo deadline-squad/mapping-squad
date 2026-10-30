@@ -27,6 +27,32 @@ Squad Ballistics' weapons.json aimed with the overlay is selected by its name an
 hold-laid ones show a hold time) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). Exits with 1 on any failure.
 
+## perf_trace.mjs, cpu_profile.mjs: main-thread cost
+
+```sh
+node perf_trace.mjs <site URL> [--label <text>] [--scenarios coverage,zones,drag] [--map <option value>]
+node cpu_profile.mjs <site URL> <weapon name in weapons.js>
+```
+
+`perf_trace.mjs` takes a Chromium trace of the fire coverage of seven weapons (from the switch on to the image), of
+the damage zones of ten targets redrawn, of a scripted drag of a target (120 moves, 8 ms apart) and of four map
+switches (`--scenarios mapswitch`), and prints for each the wall time and the main-thread tasks: the longest one, how
+many are over 16 and 50 ms, and the busy total. Run it on two builds served side by side to compare them
+(`TOP_EVENTS=1`, `LONG_TASKS=1` and `FRAME_LOG=1` print more). The wall time of a coverage run includes a
+fixed 0.3 s wait. `cpu_profile.mjs` samples the page's V8 profiler during one coverage (inclusive and self time;
+readable on an unminified build). A local build is served by any static server that answers `/heightmaps/` from
+`~/apps/squadcalc/dist/heightmaps`.
+
+## sb_bridge_probe.mjs: Squad Ballistics' own page scripts
+
+```sh
+python3 -c "import json, maplink; json.dump({'bridge': maplink.bridge_script(None), 'watch': maplink.WATCH_SCRIPT}, open('/tmp/sb_scripts.json', 'w'))"   # in a Squad Ballistics checkout
+node sb_bridge_probe.mjs <site URL> /tmp/sb_scripts.json [--clicks 12]
+```
+
+Runs SB's poll script and watcher against the page and times a double-click on the map to the poll that returns
+the new target, the way SB's map host does (it is not a real SB window).
+
 ## walkthrough.mjs: recorded click-through
 
 ```sh
