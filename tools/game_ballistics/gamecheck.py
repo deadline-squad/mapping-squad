@@ -36,8 +36,8 @@ TARGETS = {
     "Rifle grenade": ["Blueprints/Items/GrenadeLaunchers/FNFAL_GL/BP_FNFAL_GL_Frag", "Blueprints/Items/GrenadeLaunchers/FNFAL_GL/BP_FNFAL_GL_HEAT"],
     "MK19": ["Vehicles/M1117/Weapons/BP_M1117_MK19", "Vehicles/AAVP7A1/Weapons/BP_AAVP7A1_MK19", "Vehicles/RHIB/Weapons/BP_Mk19_RHIB_Weapon", "Vehicles/Emplaced_Mk19/BP_Mk19_OpenTurret_Weapon"],
     "MK19 · emplacement / C16 / L134A1": ["Vehicles/Emplaced_Mk19/BP_Mk19_Weapon", "Vehicles/Emplaced_Mk19/BP_Weapon_C16", "Vehicles/Emplaced_Mk19/BP_Weapon_L134A1"],
-    "AGS-17 · emplacement": ["Vehicles/Emplaced_AGS-17/BP_AGS-17_Weapon", "Vehicles/Emplaced_AGS-17/BP_AGS-17_Weapon_Optic"],
-    "QLZ87": ["Blueprints/Items/GrenadeLaunchers/QLZ-87/BP_QLZ-87_AGL_Parent", "Vehicles/Emplaced_QLZ87/BP_QLZ87_Weapon", "Vehicles/CSK131/Weapons/BP_QLZ87_OpenTurret_Weapon"],
+    "AGS-17 · emplacement · optic (RMB ×2.5)": ["Vehicles/Emplaced_AGS-17/BP_AGS-17_Weapon", "Vehicles/Emplaced_AGS-17/BP_AGS-17_Weapon_Optic"],
+    "QLZ87 · optic (RMB ×3)": ["Blueprints/Items/GrenadeLaunchers/QLZ-87/BP_QLZ-87_AGL_Parent", "Vehicles/Emplaced_QLZ87/BP_QLZ87_Weapon", "Vehicles/CSK131/Weapons/BP_QLZ87_OpenTurret_Weapon"],
     "AGS-30 / BTR-4 AGS": ["Vehicles/BTR4/Weapons/BP_BTR4_KBA117", "Vehicles/BMP-2M/Weapons/Woodland/BP_BMP2M_AGS30", "Vehicles/BMP1TS_AFU/Weapons/BP_BMP1TS_KBA117"],
     "M72A7 LAW / RPG-26": ["Blueprints/Items/RocketLaunchers/BP_M72A7_M72A5_2mags", "Blueprints/Items/RocketLaunchers/BP_RPG26_2mags", "Blueprints/Items/RocketLaunchers/BP_HAR66_2mags"],
     "AT-4": ["Blueprints/Items/RocketLaunchers/BP_M136AT4"],
@@ -60,7 +60,7 @@ TARGETS = {
     "2A28 Grom (BMP-1 / BMD-1) · HEAT": ["Vehicles/BMP-1/Weapons/BP_BMP1_2A28_HEAT", "Vehicles/BMD-1M/Weapons/BP_BMD1M_2A28_HEAT"],
     "2A28 Grom (BMP-1 / BMD-1) · FRAG": ["Vehicles/BMP-1/Weapons/BP_BMP1_2A28_Frag", "Vehicles/BMD-1M/Weapons/BP_BMD1M_2A28_Frag"],
     "2A70 100mm (BMP-3 / BMD-4 / ZBD04A) · FRAG": ["Vehicles/BMP-3M/Weapons/BP_BMP3M_2A70_HEFrag", "Vehicles/BMD-4M/Weapons/BP_BMD4M_2A70_HEFrag", "Vehicles/ZBD04A/Weapons/BP_ZBD04A_2A70_HEFrag"],
-    "ZiS-3": ["Vehicles/Emplaced_ZiS3_Cannon/Weapons/BP_ZiS3_Weapon_HEAT", "Vehicles/Emplaced_ZiS3_Cannon/Weapons/BP_ZiS3_Weapon_Frag"],
+    "ZiS-3 · optic (RMB ×4)": ["Vehicles/Emplaced_ZiS3_Cannon/Weapons/BP_ZiS3_Weapon_HEAT", "Vehicles/Emplaced_ZiS3_Cannon/Weapons/BP_ZiS3_Weapon_Frag"],
     "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": ["Vehicles/T72B3/Weapons/BP_2A46_AP", "Vehicles/T90A/Weapons/BP_2A46M_AP", "Vehicles/ZTZ99/Weapons/BP_ZPT-98_AP", "Vehicles/T62/Weapons/BP_2A20_AP", "Vehicles/Sprut-SDM1/Weapons/BP_2A45_AP", "Vehicles/T64_BM2/Weapons/BP_KBA3_AP"],
     "Tank AP · M256 / Rh120": ["Vehicles/M1A2/Weapons/BP_M256A1_AP", "Vehicles/Leopard2/Weapons/BP_L55_AP", "Vehicles/M60T/Weapons/BP_MG253_AP"],
     "Tank AP · L30A1 (Challenger 2) / M68A2": ["Vehicles/FV4034/Weapons/BP_L30A1_AP", "Vehicles/M1128_MGS/Weapons/BP_M68A2_AP"],
@@ -121,7 +121,7 @@ SQUADCALC = {
     "M1064M121": "M1064 M121 (120mm)",
     "Mk19": "MK19",
     "BTR4-AGS": "AGS-30 / BTR-4 AGS",
-    "AGS-17": "AGS-17 · emplacement",
+    "AGS-17": "AGS-17 · emplacement · optic (RMB ×2.5)",
 }
 
 

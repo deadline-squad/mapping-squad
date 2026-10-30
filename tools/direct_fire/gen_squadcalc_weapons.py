@@ -11,7 +11,9 @@ named DF_<name>, with `ballistics` set to its Squad Ballistics name:
 * any other weapon becomes a "directFire" weapon (low arc only, no explosion) with the spread of its
   game weapon (`moa`, from GAME_MOA: a weapon missing there stops the generator).
 
-The AGS-17 emplacement is skipped: SquadCalc's "AGS-17" is it.
+The AGS-17 optic emplacement is skipped: SquadCalc's "AGS-17" is it.
+
+A weapon Squad Ballistics renamed (RENAMED: the RMB sights, "QLZ87" -> "QLZ87 · optic (RMB ×3)") keeps its DF_ identifier, so its position in WEAPONS and its locale key stay, and gets `legacyBallistics` with the old name.
 
 A boosted rocket gets `acceleration`/`accelerationTime`, a projectile with a speed cap `maxSpeed`
 (MaxSpeed of its movement component), and one whose motor keeps the barrel's axis
@@ -34,7 +36,20 @@ named on stderr. Run it before the append. Check the result with compare.py.
 import json, math, re, sys
 
 GRAVITY = 9.80  # m/s², the world gravity of the game files (SquadCalc's app.js, Squad Ballistics)
-SKIP = {"AGS-17 · emplacement"}  # SquadCalc "AGS-17" already is this weapon
+SKIP = {"AGS-17 · emplacement · optic (RMB ×2.5)"}  # SquadCalc "AGS-17" already is this weapon
+# The RMB sights were renamed in Squad Ballistics (old name -> current name) so that the name says which view the
+# entry is for: "QLZ87" was the ×3 optic's entry and used from the normal view overshot by hundreds of metres.
+# SquadCalc's entry keeps its DF_ identifier (the locale key; the stored weapon is the entry's index) and its old
+# name as `legacyBallistics`, which selectBallisticsWeapon still accepts, so an older Squad Ballistics keeps working.
+RENAMED = {
+    "QLZ87": "QLZ87 · optic (RMB ×3)",
+    "QLZ87 · Lynx / CSK131": "QLZ87 · Lynx / CSK131 · optic (RMB ×3)",
+    "AGS-17 · emplacement": "AGS-17 · emplacement · optic (RMB ×2.5)",
+    "SPG-9 · HEAT · scope": "SPG-9 · HEAT · scope · optic (RMB ×4)",
+    "SPG-9 · FRAG · scope": "SPG-9 · FRAG · scope · optic (RMB ×4)",
+    "ZiS-3": "ZiS-3 · optic (RMB ×4)",
+}
+OLD_NAME = {new: old for old, new in RENAMED.items()}
 HOLD_LAID_FAMILY = "AGS-17"  # the only hold-laid weapon whose grenade SquadCalc has (VOG_17)
 
 # Spread of the direct-fire weapons: the cone's full angle in MOA (WeaponConfig.MOA of the weapon the
@@ -61,9 +76,9 @@ GAME_MOA = {
     "MK19 · M1151 / RHIB open turret": 15,
     "MK19 · emplacement / C16 / L134A1": 15,
     "MK19 · emplacement / C16 / L134A1 · no sights": 15,
-    "QLZ87": 15,
+    "QLZ87 · optic (RMB ×3)": 15,
     "QLZ87 · no optic": 15,
-    "QLZ87 · Lynx / CSK131": 15,
+    "QLZ87 · Lynx / CSK131 · optic (RMB ×3)": 15,
     "QLZ87 · Lynx / CSK131 · no optic": 15,
     "AGS-30 / BTR-4 AGS": 15,
     "AGS-30 (BMP-1TS)": 15,
@@ -85,10 +100,10 @@ GAME_MOA = {
     "Carl Gustav M2 · FFV751 Tandem": 7,
     "NLAW": 1,
     "SPG-9 · HEAT": 3,
-    "SPG-9 · HEAT · scope": 3,
+    "SPG-9 · HEAT · scope · optic (RMB ×4)": 3,
     "SPG-9 · HEAT · scope · no optic": 3,
     "SPG-9 · FRAG": 3,
-    "SPG-9 · FRAG · scope": 3,
+    "SPG-9 · FRAG · scope · optic (RMB ×4)": 3,
     "SPG-9 · FRAG · scope · no optic": 3,
     "2A28 Grom (BMP-1 / BMD-1) · HEAT": 3,
     "2A28 Grom (BMD-1M) · HEAT": 3,
@@ -97,7 +112,7 @@ GAME_MOA = {
     "2A70 100mm (BMP-3 / BMD-4 / ZBD04A) · FRAG": 1.6,
     "2A70 100mm (ZBD-04A) · FRAG": 1.6,
     "2A70 100mm (BMD-4M) · FRAG": 1.6,
-    "ZiS-3": 3,
+    "ZiS-3 · optic (RMB ×4)": 3,
     "ZiS-3 · no optic": 3,
     "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": 1.5,
     "Tank AP · T-62 (2A20)": 1.5,
@@ -129,7 +144,16 @@ if len(sys.argv) > 4 and sys.argv[2] != "--update":
 
 
 def ident(key):
-    return "DF_" + re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9]", "_", key)).strip("_")
+    """DF_<name>; a renamed weapon keeps the identifier of its old name."""
+    return "DF_" + re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9]", "_", OLD_NAME.get(key, key))).strip("_")
+
+
+def legacy_lines(key):
+    """The `legacyBallistics` line of a renamed weapon, none for any other."""
+    if key not in OLD_NAME:
+        return []
+
+    return [f"        legacyBallistics: [{json.dumps(OLD_NAME[key], ensure_ascii=False)}],"]
 
 
 def num(x):
@@ -192,6 +216,7 @@ def direct_fire_entry(key, w):
         "    {",
         f'        name: "{ident(key)}",',
         f"        ballistics: {json.dumps(key, ensure_ascii=False)},",
+        *legacy_lines(key),
         "        deceleration: 0,",
         "        decelerationTime: 0,",
     ]
@@ -245,6 +270,7 @@ def update(path):
     def regenerate(match):
         nonlocal changed
         key = json.loads(match.group(1))
+        key = RENAMED.get(key, key)
         if key not in data:
             # A weapon Squad Ballistics no longer has (autocannons): kept as it is
             print(f"kept, not in {sys.argv[1]}: {key}", file=sys.stderr)
