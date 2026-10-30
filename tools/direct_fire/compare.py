@@ -4,8 +4,8 @@ Runs SquadCalc's real Weapon and SquadFiringSolution under Node (solve.mjs) and
 Squad Ballistics' solve() on the same distances and heights, for every SquadCalc
 weapon with a `ballistics` name. Direct-fire weapons are compared on the low arc
 (elevation, angle over the line of sight shown for them, time of flight), the
-AGS-17 (laid by holding S, aimed with the overlay) on both arcs and the hold time (a
-SquadCalc direct-fire copy of such a weapon, as the AGS-17 "· no optic", only on the low arc); the
+AGS-17 entries (laid by holding S, aimed with the overlay: "AGS-17" and the generated
+hold-laid DF_AGS_17_* entries) on both arcs and the hold time; the
 mortars and rockets keep their own SquadCalc data and are not compared (the mortar's
 hold model in Squad Ballistics is its auto-lay, SquadCalc shows mils).
 
@@ -28,9 +28,8 @@ for row in js:
     w = weapons.get(row["name"])
     if w is None:
         continue  # a weapon Squad Ballistics no longer has (mods, machine guns, autocannons)
-    # Laid by holding a key and compared on both arcs (AGS-17); mortars only use it for the auto-lay.
-    # A SquadCalc direct-fire entry of such a weapon has no hold: it is compared as direct fire.
-    laid_by_hold = w.has_hold and w.aim == "overlay" and row["type"] != "directFire"
+    # Laid by holding a key and compared on both arcs (AGS-17); mortars only use it for the auto-lay
+    laid_by_hold = w.has_hold and w.aim == "overlay"
     for arc in ("low", "high"):
         s = solve(w, row["distance"], row["height"], arc)
         sb = s.angle if s.reachable else math.nan
