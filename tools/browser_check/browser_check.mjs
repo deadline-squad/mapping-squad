@@ -63,6 +63,9 @@ async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }
         const heightmap = window.__App?.minimap?.heightmap;
         return precise ? heightmap?.precise : heightmap?.jsonPng.length || heightmap?.failed;
     }, precise, { timeout: 120000 });
+    // The map image still fades in after the heights (the WebP heightmap is usually there first): clicks
+    // before the spinner is gone are lost
+    await page.waitForFunction(() => !window.__App.minimap._spinning, null, { timeout: 120000 });
     return { context, page, problems };
 }
 

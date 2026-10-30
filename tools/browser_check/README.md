@@ -52,6 +52,16 @@ Loads each map's heightmap in the site's worker through the WebP and through the
 page pixel by pixel (identical where the step is the same, within half a step where it was coarsened);
 `--dist` with `--fast-png` also checks the worker's PNG decode against fast-png's. Exits with 1 on a difference.
 
+## offline_check.mjs: the service worker's caches
+
+```sh
+node offline_check.mjs <site URL> --vehicles <dir of the vehicle images>
+```
+
+With a profile that survives a browser restart: the precache holds no vehicle image except the placeholder and no
+README screenshot; a vehicle image shown once is served from the service worker's cache afterwards, with the network
+gone and after a restart; one never shown fails offline (the page shows the placeholder, which is precached).
+
 ## walkthrough.mjs: recorded click-through
 
 ```sh
