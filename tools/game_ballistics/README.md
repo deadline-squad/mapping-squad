@@ -4,8 +4,9 @@ Checks every weapon of Squad Ballistics (`weapons.json`) and the Deadline SquadC
 (`src/data/weapons.js`) against the Squad dedicated server paks.
 
 Model (see the `gamecheck.py` docstring): launch speed `WeaponConfig.MuzzleVelocity`, gravity
-`ProjectileGravityScale`, rocket boost `ConstantAcceleration` for `ConstantAccelerationTimeout`
-stopped at `MaxSpeed`, lifespan `InitialLifeSpan`; values are merged along the Blueprint
+`ProjectileGravityScale`, speed cap `MaxSpeed` (applied from the first 20 ms substep), rocket motor
+`ConstantAcceleration` for `ConstantAccelerationTimeout` along the projectile's rotation
+(`bRotationFollowsVelocity`), lifespan `InitialLifeSpan`; values are merged along the Blueprint
 inheritance chain (`resolve.py`). The model reproduces the long-verified mortar (110 m/s, ×1) and
 UB-32 (300 m/s, −50 m/s² for 2 s, ×2), and the AGS-17 values (185 m/s, ×1.8) agree with 67 in-game
 hold-time/distance measurements to 0.7 % in v²/g.

@@ -9,18 +9,21 @@ const { default: SquadFiringSolution } = await import(`${root}/src/js/squadFirin
 
 function load(name) {
     const w = WEAPONS.find((weapon) => weapon.name === name);
-    const weapon = new Weapon(w.name, w.deceleration, w.decelerationTime, w.gravityScale, w.minElevation, w.unit, w.logo, w.marker, w.type, w.angleType, w.elevationPrecision, w.shells, w.heightOffset, w.angleOffset, w.projectileLifespan, w.mod, w.elevationRate, w.heatmap, w.acceleration, w.accelerationTime, w.holdElevation, w.ballistics, w.image);
+    const weapon = new Weapon(w.name, w.deceleration, w.decelerationTime, w.gravityScale, w.minElevation, w.unit, w.logo, w.marker, w.type, w.angleType, w.elevationPrecision, w.shells, w.heightOffset, w.angleOffset, w.projectileLifespan, w.mod, w.elevationRate, w.heatmap, w.acceleration, w.accelerationTime, w.holdElevation, w.ballistics, w.image, w.muzzle, w.maxSpeed, w.rotationFollowsVelocity);
     weapon.velocity = w.shells[0].velocity;
     weapon.moa = w.shells[0].moa;
     weapon.decelerationDistance = weapon.velocity * weapon.decelerationTime - 0.5 * weapon.deceleration * weapon.decelerationTime ** 2;
     return weapon;
 }
 
+// squadMinimap.toMeters with 1 map unit = 1 m
+const toMeters = (origin, ll) => ({ east: ll.lng - origin.lng, north: ll.lat - origin.lat });
+
 // 1 map unit = 1 m along lng; a wall of `height` m covers lng [from, from + 2)
 function solve(weaponName, distance, wall) {
     App.activeWeapon = load(weaponName);
     const getHeight = (ll) => (wall && ll.lng >= wall.from && ll.lng < wall.from + 2 ? wall.height : 0);
-    const map = { mapToGameScale: 1, heightmap: { jsonPng: [[0]], getHeight } };
+    const map = { mapToGameScale: 1, mapToGameScaleY: 1, toMeters, heightmap: { jsonPng: [[0]], getHeight } };
     return new SquadFiringSolution({ lat: 0, lng: 0 }, { lat: 0, lng: distance }, map, 0);
 }
 
@@ -47,7 +50,7 @@ expect("Mortar 400 m, 60 m wall 5 m in front: high lob blocked", solve("Mortar",
     (o) => o !== null && o.distance >= 5 && o.distance < 7);
 expect("Mortar 400 m, no heightmap loaded: no obstacle", (() => {
     App.activeWeapon = load("Mortar");
-    const map = { mapToGameScale: 1, heightmap: { jsonPng: [], getHeight: () => 1000 } };
+    const map = { mapToGameScale: 1, mapToGameScaleY: 1, toMeters, heightmap: { jsonPng: [], getHeight: () => 1000 } };
     return new SquadFiringSolution({ lat: 0, lng: 0 }, { lat: 0, lng: 400 }, map, 0).obstacle.high;
 })(), (o) => o === null);
 

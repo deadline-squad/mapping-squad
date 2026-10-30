@@ -6,14 +6,18 @@ movement merged along the Blueprint inheritance chain) and writes:
     diff.md          game vs Squad Ballistics weapons.json vs SquadCalc weapons.js: ballistics of every
                      weapon, spread, explosion and lifespan of SquadCalc's own weapons.
 
-Effective model (Squad Ballistics' v0 + constant acceleration for a time, gravity scale):
+Effective model (the game's projectile movement as Squad Ballistics and SquadCalc fly it:
+20 ms substeps, deadline-squad/squad-ballistics#4):
     v0       WeaponConfig.MuzzleVelocity (the launch speed: MK19 fires its 76 m/s UGL shell at
-             230 m/s, the range everybody uses);
+             230 m/s, the range everybody uses; InitializeComponent does not clamp it);
+    cap      ProjectileComp.MaxSpeed when > 0 (max_speed), applied on every substep, the first one
+             too: a weapon that fires faster than its projectile's cap (tank HEAT/HE 1100 m/s, cap
+             850) is slowed to it at once (UProjectileMovementComponent::ComputeVelocity 0x7cf08a0);
     boost    ProjectileComp.ConstantAcceleration.X during ConstantAccelerationTimeout
-             (0 = for the whole flight), stopped when the speed reaches the cap;
-    cap      ProjectileComp.MaxSpeed when > 0, raised to v0 when the weapon fires faster (the game
-             tunes MuzzleVelocity per weapon above the shared projectile's MaxSpeed, e.g. .50 cal
-             890/860/850 m/s with MaxSpeed 800, which would be pointless if it were clamped);
+             (acceleration_time), along the projectile's rotation, which follows the velocity unless
+             bRotationFollowsVelocity is false (rotation_follows_velocity; ASQProjectile sets it,
+             the S-5 clears it). A timeout of 0 is the whole flight; such a motor is compared as
+             the time it takes to reach the cap, after which the cap holds the speed (NLAW);
     gravity  ProjectileGravityScale, 0 while bIgnoreGravityDuringConstantAcceleration boosts for
              the whole flight (NLAW).
 Units: game cm -> m.
@@ -60,7 +64,7 @@ TARGETS = {
     "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": ["Vehicles/T72B3/Weapons/BP_2A46_AP", "Vehicles/T90A/Weapons/BP_2A46M_AP", "Vehicles/ZTZ99/Weapons/BP_ZPT-98_AP", "Vehicles/T62/Weapons/BP_2A20_AP", "Vehicles/Sprut-SDM1/Weapons/BP_2A45_AP", "Vehicles/T64_BM2/Weapons/BP_KBA3_AP"],
     "Tank AP · M256 / Rh120": ["Vehicles/M1A2/Weapons/BP_M256A1_AP", "Vehicles/Leopard2/Weapons/BP_L55_AP", "Vehicles/M60T/Weapons/BP_MG253_AP"],
     "Tank AP · L30A1 (Challenger 2) / M68A2": ["Vehicles/FV4034/Weapons/BP_L30A1_AP", "Vehicles/M1128_MGS/Weapons/BP_M68A2_AP"],
-    "Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2": ["Vehicles/M1A2/Weapons/BP_M256A1_HEAT", "Vehicles/Leopard2/Weapons/BP_L55_HEAT", "Vehicles/T72B3/Weapons/BP_2A46_HEAT", "Vehicles/T72B3/Weapons/BP_2A46_Frag", "Vehicles/ZTZ99/Weapons/BP_ZPT-98_HEAT", "Vehicles/T62/Weapons/BP_2A20_HEAT", "Vehicles/M1128_MGS/Weapons/BP_M68A2_HEAT", "Vehicles/M1128_MGS/Weapons/BP_M68A2_HESH", "Vehicles/M60T/Weapons/BP_MG253_Frag"],
+    "Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2": ["Vehicles/T72B3/Weapons/BP_2A46_HEAT", "Vehicles/M1A2/Weapons/BP_M256A1_HEAT", "Vehicles/Leopard2/Weapons/BP_L55_HEAT", "Vehicles/T72B3/Weapons/BP_2A46_Frag", "Vehicles/ZTZ99/Weapons/BP_ZPT-98_HEAT", "Vehicles/T62/Weapons/BP_2A20_HEAT", "Vehicles/M1128_MGS/Weapons/BP_M68A2_HEAT", "Vehicles/M1128_MGS/Weapons/BP_M68A2_HESH", "Vehicles/M60T/Weapons/BP_MG253_Frag"],
     "Tank HESH · L30A1 (Challenger 2)": ["Vehicles/FV4034/Weapons/BP_L30A1_HESH", "Vehicles/FV4034/Weapons/BP_L30A1_Smoke"],
     "ZPL-98A 105mm (ZTD-05) · AP": ["Vehicles/ZTD05/Weapons/BP_ZTD05_ZPL-98A_AP"],
     "ZPL-98A 105mm (ZTD-05) · HEAT / HE": ["Vehicles/ZTD05/Weapons/BP_ZTD05_ZPL-98A_HEAT", "Vehicles/ZTD05/Weapons/BP_ZTD05_ZPL-98A_Frag"],
@@ -128,16 +132,15 @@ def effective(weapon):
     move = projectile.get("movement") or {}
     v0 = config["MuzzleVelocity"] / 100
     max_speed = (move.get("MaxSpeed") or 0) / 100
-    cap = max(max_speed, v0) if max_speed > 0 else None
     accel = ((move.get("ConstantAcceleration") or {}).get("X") or 0) / 100
     timeout = move.get("ConstantAccelerationTimeout") or 0
     gravity = move.get("ProjectileGravityScale", 1.0)
+    follows = move.get("bRotationFollowsVelocity", True)
     boost_time = 0.0
-    if accel > 0:
-        limit = (cap - v0) / accel if cap else math.inf
-        boost_time = min(timeout if timeout > 0 else math.inf, limit)
-    elif accel < 0:
+    if accel:
         boost_time = timeout if timeout > 0 else math.inf
+        if timeout <= 0 and accel > 0 and max_speed:
+            boost_time = max(0.0, (max_speed - v0) / accel)
     if move.get("bIgnoreGravityDuringConstantAcceleration") and accel and timeout == 0:
         gravity = 0.0
     if boost_time <= 0 or not accel:
@@ -147,6 +150,9 @@ def effective(weapon):
         "gravity": gravity,
         "acceleration": round(accel, 3),
         "acceleration_time": round(boost_time, 4) if math.isfinite(boost_time) else None,
+        "max_speed": round(max_speed, 3),
+        # Only a motor turns with the projectile: compared for boosted ones
+        "rotation_follows_velocity": bool(follows) if accel else None,
         "lifespan_s": projectile.get("life") or None,
         "moa": config.get("MOA"),
         "moa_curve": (config.get("MOACurve") or {}).get("ObjectPath"),
@@ -242,6 +248,10 @@ def raw(weapon):
     }
 
 
+# The model values compared between the game, Squad Ballistics and SquadCalc
+BALLISTIC_FIELDS = ("velocity", "gravity", "acceleration", "acceleration_time", "max_speed", "rotation_follows_velocity")
+
+
 def main(resolved_path, sb_path, squadcalc_path, out_json, out_md):
     resolved = {k.replace("/Game/", "", 1): v for k, v in json.load(open(resolved_path)).items()}
     by_base = {}
@@ -260,7 +270,7 @@ def main(resolved_path, sb_path, squadcalc_path, out_json, out_md):
         if missing:
             raise SystemExit(f"{name}: not in resolved.json: {missing}")
         values = [effective(resolved[c]) for c in classes]
-        ballistic = ("velocity", "gravity", "acceleration", "acceleration_time")
+        ballistic = BALLISTIC_FIELDS
         disagree = [classes[i] for i, v in enumerate(values) if any(v[k] != values[0][k] for k in ballistic)]
         report[name] = {"game": values[0], "variants_differing": {c: effective(resolved[c]) for c in disagree},
                         "sources": [raw(resolved[c]) for c in classes]}
@@ -276,10 +286,21 @@ def main(resolved_path, sb_path, squadcalc_path, out_json, out_md):
         if sc:
             sc_vals = {"velocity": sc["shells"][0]["velocity"], "gravity": sc.get("gravityScale"),
                        "acceleration": sc.get("acceleration", 0) or (-sc.get("deceleration", 0) if sc.get("deceleration") else 0),
-                       "acceleration_time": sc.get("accelerationTime", 0) or sc.get("decelerationTime", 0) or 0}
+                       "acceleration_time": sc.get("accelerationTime", 0) or sc.get("decelerationTime", 0) or 0,
+                       "max_speed": sc.get("maxSpeed", 0),
+                       "rotation_follows_velocity": sc.get("rotationFollowsVelocity", True)}
         sb_vals = {"velocity": old.get("velocity"), "gravity": old.get("gravity"),
-                   "acceleration": old.get("acceleration", 0), "acceleration_time": old.get("acceleration_time", 0)}
-        for field in ("velocity", "gravity", "acceleration", "acceleration_time"):
+                   "acceleration": old.get("acceleration", 0), "acceleration_time": old.get("acceleration_time", 0),
+                   "max_speed": old.get("max_speed", 0),
+                   "rotation_follows_velocity": old.get("rotation_follows_velocity", True)}
+        for field in BALLISTIC_FIELDS:
+            if field == "rotation_follows_velocity":
+                if game[field] is None:
+                    continue
+                if game[field] == sb_vals[field] and (not sc or game[field] == sc_vals[field]):
+                    continue
+                rows.append(f"| {name} | {field} | {game[field]} | {sb_vals[field] if old else '—'} | {sc_vals[field] if sc else '—'} |")
+                continue
             g = game[field] if game[field] is not None else "∞"
             s = sb_vals.get(field) if old else "—"
             c = sc_vals.get(field, "—") if sc else "—"
@@ -307,7 +328,7 @@ def main(resolved_path, sb_path, squadcalc_path, out_json, out_md):
     ]
     for name, entry in report.items():
         for cls, v in entry["variants_differing"].items():
-            lines.append(f"- {name}: `{cls}` → {json.dumps({k: v[k] for k in ('velocity', 'gravity', 'acceleration', 'acceleration_time')})}")
+            lines.append(f"- {name}: `{cls}` → {json.dumps({k: v[k] for k in BALLISTIC_FIELDS})}")
     lines += [
         "",
         "## Spread, explosion and lifespan of SquadCalc's own weapons",

@@ -17,7 +17,9 @@ Precise heightmaps (`dist/heightmaps/<map>/`, outside the webpack build): built 
 with `tools/heightmaps/heightmaps.sh` (`extract`, `build`, then `deploy`, which backs up the previous
 copy); see `tools/heightmaps/README.md`. Without them SquadCalc uses its 8-bit heightmaps.
 
-After a change to Squad Ballistics' `weapons.json`, generate the weapons SquadCalc lacks with
+After a change to Squad Ballistics' `weapons.json`, rewrite SquadCalc's generated entries in place with
+`tools/direct_fire/gen_squadcalc_weapons.py <weapons.json> --update src/data/weapons.js`, then generate the
+weapons SquadCalc lacks with
 `tools/direct_fire/gen_squadcalc_weapons.py <weapons.json> <entries.js> <names.json> src/data/weapons.js`,
 append them at the end of `WEAPONS`, add the names to every `public/locales/*/weapons.json`, and check both apps agree with
 `python3 tools/direct_fire/compare.py ~/dev/Squad-Ballistics ~/agl/SquadCalc` (exit 0).
