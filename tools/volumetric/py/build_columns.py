@@ -4,7 +4,8 @@
 
 slug (default fallujah) picks the landscape levels from tools/heightmaps/py/maps.py under /data/squad-extract/landscapes.
 
-channel is visibility, projectile or pawn (collision.py). Voxels that lie entirely at or below the landscape
+channel is visibility, projectile or pawn (collision.py). The grid starts Z_MARGIN_M under the map's lowest point (Fallujah keeps the -60 m of the first run).
+Voxels that lie entirely at or below the landscape
 (+ LAND_MARGIN_M) are dropped: the terrain layer already blocks there.
 Writes <out>.npz with sorted int64 arrays ``occupied``, ``up``, ``down`` and the grid parameters.
 """
@@ -20,6 +21,8 @@ import maps
 import terrain
 
 LAND_MARGIN_M = 0.1
+Z_MARGIN_M = 5.0
+OBJECT_HEIGHT_M = 100.0
 LANDSCAPE_ROOT = "/data/squad-extract/landscapes"
 
 
@@ -42,7 +45,10 @@ def main():
     cell, dz = float(cell), float(dz)
     meta = json.load(open(meta_path))
     b = meta["bounds_m"]
-    grid = columns.Grid(b["min_x"], b["min_y"], b["max_x"] - b["min_x"], b["max_y"] - b["min_y"], cell, dz, -60.0)
+    z_min = float(np.floor(meta["z_min_m"])) - Z_MARGIN_M if slug != "fallujah" else -60.0
+    if (meta["z_max_m"] + OBJECT_HEIGHT_M - z_min) / dz >= (1 << columns.Z_BITS):
+        raise SystemExit(f"{slug}: z range {z_min}..{meta['z_max_m']} m does not fit {1 << columns.Z_BITS} steps of {dz} m; use a larger dz")
+    grid = columns.Grid(b["min_x"], b["min_y"], b["max_x"] - b["min_x"], b["max_y"] - b["min_y"], cell, dz, z_min)
     occupied, up, down = columns.build_keys(triangle_chunks(tris_path, collision.CHANNELS[channel.capitalize()]), grid)
     print("voxels before ground filter", len(occupied), "up", len(up), "down", len(down), flush=True)
     actors = load_terrain([f"{LANDSCAPE_ROOT}/{level}" for level in maps.MAPS[slug][1]])
@@ -53,6 +59,8 @@ def main():
         top = z + grid.dz / 2
         return np.isnan(ground) | hole | (top > ground + LAND_MARGIN_M)
 
+    if len(occupied) == 0:
+        raise SystemExit(f"{slug}: no collision voxel inside the grid")
     keep = np.concatenate([above_ground(occupied[i:i + 5_000_000]) for i in range(0, len(occupied), 5_000_000)])
     occupied = occupied[keep]
     up = up[np.isin(up, occupied)]
