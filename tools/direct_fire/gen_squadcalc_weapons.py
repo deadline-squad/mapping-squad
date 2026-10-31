@@ -56,8 +56,21 @@ RENAMED = {
     "SPG-9 · HEAT · scope": "SPG-9 · HEAT · scope · optic (RMB ×4)",
     "SPG-9 · FRAG · scope": "SPG-9 · FRAG · scope · optic (RMB ×4)",
     "ZiS-3": "ZiS-3 · optic (RMB ×4)",
+    # The M1151 and RHIB open turrets were one entry; the M1151 (with its launch point) kept the name's first half.
+    "MK19 · M1151 / RHIB open turret": "MK19 · M1151 open turret",
 }
 OLD_NAME = {new: old for old, new in RENAMED.items()}
+# Weapons renamed earlier (when their data was checked against the game files, Squad build 26005357; Squad
+# Ballistics' RENAMED_WEAPONS): their DF_ identifier is already the new name's, only the old name is accepted too.
+EARLIER_NAME = {
+    "M203 / M320 / GP-25 / HK79 / SL40": "M203 / M320 / GP-25 / HK79 / MKE MGL",
+    "MK19": "MK19 / AGS-17 / AGS-30",
+    "AGS-30 / BTR-4 AGS": "BTR-4 AGS",
+    "M3 MAAWS · HEAT / Smoke": "Carl Gustav / M3 MAAWS · HEAT",
+    "M3 MAAWS · Tandem": "Carl Gustav / M3 MAAWS · Tandem",
+    "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": "Tank AP · 2A46 / ZPT98 / 2A20 / M68A2",
+    "Tank AP · L30A1 (Challenger 2) / M68A2": "Tank AP · L30A1 (Challenger 2)",
+}
 HOLD_LAID_FAMILY = "AGS-17"  # the only hold-laid weapon whose grenade SquadCalc has (VOG_17)
 
 # Spread of the direct-fire weapons: the cone's full angle in MOA (WeaponConfig.MOA of the weapon the
@@ -78,10 +91,16 @@ GAME_MOA = {
     "QLG10": 40,
     "Rifle grenade": 30,
     "MK19": 50,
+    "MK19 · AAVP-7A1": 50,
     "MK19 · PARS III RWS": 50,
     "MK19 · TAPV C16 RWS": 15,
     "MK19 · M113 open turret": 15,
-    "MK19 · M1151 / RHIB open turret": 15,
+    "MK19 · M113 open turret · no sights": 15,
+    "MK19 · M1151 open turret": 15,
+    "MK19 · M1151 open turret · no sights": 15,
+    "MK19 · MATV open turret": 15,
+    "MK19 · MATV open turret · no sights": 15,
+    "MK19 · RHIB open turret": 15,
     "MK19 · emplacement / C16 / L134A1": 15,
     "MK19 · emplacement / C16 / L134A1 · no sights": 15,
     "QLZ87 · optic (RMB ×3)": 15,
@@ -92,13 +111,18 @@ GAME_MOA = {
     "AGS-30 (BMP-1TS)": 15,
     "AGS-30 (BMP-2M)": 15,
     "M72A7 LAW / RPG-26": 15,
+    "C90-CR": 10,
     "AT-4": 10,
     "MK153 SMAW": 7,
     "PF98 · Tandem": 7,
     "PF98 · HE-I": 7,
     "RPG-29": 10,
+    "DZJ-08": 10,
+    "RPG-28": 20,
     "RPG-7 · PG-7V HEAT / OG-7V": 20,
     "RPG-7 · PG-7VR Tandem": 20,
+    "RPG-7V1 · PG-7VR Tandem": 15,
+    "RPG-7V2 · PG-7VR Tandem": 20,
     "RPG-7 · TBG-7V Thermobaric": 20,
     "RPG-7V1 · HEAT": 15,
     "M3 MAAWS · HEAT / Smoke": 7,
@@ -113,6 +137,15 @@ GAME_MOA = {
     "SPG-9 · FRAG": 3,
     "SPG-9 · FRAG · scope · optic (RMB ×4)": 3,
     "SPG-9 · FRAG · scope · no optic": 3,
+    # The technicals' SPG-9 (BP_SPG9 3 MOA, BP_SPG9_Frag 1 MOA, the tripod FRAG has 3)
+    "SPG-9 · HEAT · technical · optic (RMB ×4)": 3,
+    "SPG-9 · HEAT · technical · no optic": 3,
+    "SPG-9 · FRAG · technical · optic (RMB ×4)": 1,
+    "SPG-9 · FRAG · technical · no optic": 1,
+    "SPG-9 · HEAT · INS armoured technical · optic (RMB ×4)": 3,
+    "SPG-9 · HEAT · INS armoured technical · no optic": 3,
+    "SPG-9 · FRAG · INS armoured technical · optic (RMB ×4)": 1,
+    "SPG-9 · FRAG · INS armoured technical · no optic": 1,
     "2A28 Grom (BMP-1 / BMD-1) · HEAT": 3,
     "2A28 Grom (BMD-1M) · HEAT": 3,
     "2A28 Grom (BMP-1 / BMD-1) · FRAG": 3,
@@ -177,6 +210,9 @@ GAME_EXPLOSION = {
     "MK19": [
         ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
+    "MK19 · AAVP-7A1": [
+        ("default", "BP_AAVP7A1_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
     "MK19 · PARS III RWS": [  # BP_SancakRWS_MK19 and BP_C16_MK19 are not in resolved.json: their WeaponConfig.ProjectileClass is BP_40MM_MK19_Proj, the MK19's (/tmp/mech/vdump2)
         ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
@@ -186,8 +222,23 @@ GAME_EXPLOSION = {
     "MK19 · M113 open turret": [
         ("default", "BP_Mk19_OpenTurret_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
-    "MK19 · M1151 / RHIB open turret": [
+    "MK19 · M113 open turret · no sights": [
         ("default", "BP_Mk19_OpenTurret_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "MK19 · M1151 open turret": [
+        ("default", "BP_Mk19_OpenTurret_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "MK19 · M1151 open turret · no sights": [
+        ("default", "BP_Mk19_OpenTurret_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "MK19 · MATV open turret": [
+        ("default", "BP_Mk19_OpenTurret_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "MK19 · MATV open turret · no sights": [
+        ("default", "BP_Mk19_OpenTurret_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "MK19 · RHIB open turret": [
+        ("default", "BP_Mk19_RHIB_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
     "MK19 · emplacement / C16 / L134A1": [
         ("default", "BP_Mk19_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
@@ -219,6 +270,9 @@ GAME_EXPLOSION = {
     "M72A7 LAW / RPG-26": [
         ("default", "BP_M72A7_M72A5_2mags", 100, 1.5, 7.5, 0.08, 1),  # native default: falloff
     ],
+    "C90-CR": [
+        ("default", "BP_C90CR", 115, 1.5, 7.5, 0.08, 1),  # native default: damage, falloff
+    ],
     "AT-4": [
         ("default", "BP_M136AT4", 115, 1.5, 7.5, 0.08, 1),  # native default: damage, falloff
     ],
@@ -235,6 +289,12 @@ GAME_EXPLOSION = {
     "RPG-29": [
         ("default", "BP_RPG29", 200, 2, 8, 0.08, 1),  # native default: falloff
     ],
+    "DZJ-08": [
+        ("default", "BP_DZJ-08", 130, 2, 7, 0.08, 1),  # native default: falloff
+    ],
+    "RPG-28": [
+        ("default", "BP_RPG28", 200, 2, 10, 0.08, 1.5),
+    ],
     "RPG-7 · PG-7V HEAT / OG-7V": [
         ("HEAT", "BP_RPG7_Heat", 130, 2, 8, 0.08, 1),  # native default: falloff
         ("HE", "BP_RPG7_Frag", 250, 2, 16, 0.08, 1),  # native default: falloff
@@ -244,6 +304,12 @@ GAME_EXPLOSION = {
     ],
     "RPG-7 · TBG-7V Thermobaric": [
         ("default", "BP_RPG7_Thermo", 200, 8, 24, 0.08, 2),
+    ],
+    "RPG-7V1 · PG-7VR Tandem": [
+        ("default", "BP_RPG7V1_Tandem", 200, 2, 10, 0.08, 2),
+    ],
+    "RPG-7V2 · PG-7VR Tandem": [
+        ("default", "BP_RPG7V2_Tandem_2mag", 200, 2, 10, 0.08, 2),
     ],
     "RPG-7V1 · HEAT": [
         ("HEAT", "BP_RPG7V1_Heat", 130, 2, 8, 0.08, 1),  # native default: falloff
@@ -284,6 +350,30 @@ GAME_EXPLOSION = {
     ],
     "SPG-9 · FRAG · scope · no optic": [
         ("default", "BP_EmplacedSPG9_FragScope", 200, 2, 16, 0.08, 1),  # native default: falloff
+    ],
+    "SPG-9 · HEAT · technical · optic (RMB ×4)": [
+        ("default", "BP_SPG9", 100, 2, 8, 0.08, 1),  # native default: falloff
+    ],
+    "SPG-9 · HEAT · technical · no optic": [
+        ("default", "BP_SPG9", 100, 2, 8, 0.08, 1),  # native default: falloff
+    ],
+    "SPG-9 · FRAG · technical · optic (RMB ×4)": [
+        ("default", "BP_SPG9_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
+    ],
+    "SPG-9 · FRAG · technical · no optic": [
+        ("default", "BP_SPG9_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
+    ],
+    "SPG-9 · HEAT · INS armoured technical · optic (RMB ×4)": [
+        ("default", "BP_SPG9", 100, 2, 8, 0.08, 1),  # native default: falloff
+    ],
+    "SPG-9 · HEAT · INS armoured technical · no optic": [
+        ("default", "BP_SPG9", 100, 2, 8, 0.08, 1),  # native default: falloff
+    ],
+    "SPG-9 · FRAG · INS armoured technical · optic (RMB ×4)": [
+        ("default", "BP_SPG9_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
+    ],
+    "SPG-9 · FRAG · INS armoured technical · no optic": [
+        ("default", "BP_SPG9_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
     ],
     "2A28 Grom (BMP-1 / BMD-1) · HEAT": [
         ("default", "BP_BMP1_2A28_HEAT", 100, 2, 8, 0.08, 1),  # native default: falloff
@@ -457,11 +547,13 @@ def ident(key):
 
 
 def legacy_lines(key):
-    """The `legacyBallistics` line of a renamed weapon, none for any other."""
-    if key not in OLD_NAME:
+    """The `legacyBallistics` line of a renamed weapon (RENAMED or EARLIER_NAME), none for any other."""
+    old_name = OLD_NAME.get(key) or EARLIER_NAME.get(key)
+
+    if old_name is None:
         return []
 
-    return [f"        legacyBallistics: [{json.dumps(OLD_NAME[key], ensure_ascii=False)}],"]
+    return [f"        legacyBallistics: [{json.dumps(old_name, ensure_ascii=False)}],"]
 
 
 def num(x):
@@ -522,12 +614,25 @@ def rewrite_shells(key, text):
 
 def lob_min_distance(w):
     """Flat-ground range in metres, rounded, of a shot at the top of the hold (no key held): the
-    shortest distance the hold can lob to, from launch_height above the ground."""
+    shortest distance the hold can lob to, from the muzzle (`muzzle_forward` along the barrel and
+    `muzzle_up` above its axis, the pivot `launch_height` above the ground)."""
     v, g = w["velocity"], GRAVITY * w["gravity"]
     angle = math.radians(w["hold_elevation"][1])
     up, forward = v * math.sin(angle), v * math.cos(angle)
-    flight = (up + math.sqrt(up * up + 2 * g * w.get("launch_height", 0))) / g
-    return round(forward * flight)
+    ahead = w.get("muzzle_forward", 0) * math.cos(angle) - w.get("muzzle_up", 0) * math.sin(angle)
+    height = w.get("launch_height", 0) + w.get("muzzle_forward", 0) * math.sin(angle) + w.get("muzzle_up", 0) * math.cos(angle)
+    flight = (up + math.sqrt(up * up + 2 * g * height)) / g
+    return round(ahead + forward * flight)
+
+
+def muzzle_lines(w):
+    """The `muzzle` line of a weapon whose barrel socket is off its pivot: the shell starts `muzzle_forward`
+    along the barrel and `muzzle_up` above its axis, the pivot `launch_height` above the ground (SquadCalc's
+    `muzzle`, as the vehicle mortars have it). None of the other weapons has one."""
+    if not (w.get("muzzle_forward") or w.get("muzzle_up")):
+        return []
+
+    return [f"        muzzle: {{ pivotHeight: {num(w.get('launch_height', 0))}, forward: {num(w.get('muzzle_forward', 0))}, up: {num(w.get('muzzle_up', 0))} }},"]
 
 
 def hold_laid_entry(key, w):
@@ -556,6 +661,7 @@ def hold_laid_entry(key, w):
     if w.get("launch_height"):
         lines.append(f"        heightOffset: {num(w['launch_height'])},")
     lines += [
+        *muzzle_lines(w),
         f'        image: "{HOLD_LAID_FAMILY}",',
         "        shells: [{",
         '            name: "default",',
@@ -600,6 +706,7 @@ def direct_fire_entry(key, w):
     if w.get("angle_offset"):
         lines.append(f"        angleOffset: {num(w['angle_offset'])},")
     lines += [
+        *muzzle_lines(w),
         '        image: "DirectFire",',
         "        heatmap: false,",
         *shell_lines(game_shells(key), w["velocity"], w.get("min_distance", 0)),

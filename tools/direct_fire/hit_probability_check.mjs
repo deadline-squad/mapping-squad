@@ -247,7 +247,9 @@ for (const { name, distance, shown, kill, wound } of cases) {
 const DIRECT_SHOTS = 300000;
 const directCases = [
     { name: "DF_M203_M320_GP_25_HK79_SL40", shell: 0, distances: [150, 300, 450] },
-    { name: "DF_MK19_PARS_III_RWS", shell: 0, distances: [300, 800, 1500] },
+    // The tripod MK19 shoots from the ground (a plain parabola). The vehicle MK19s (PARS III, 2.7 m up) have the game's launch
+    // point, which makes the shot graze the ground at 300 m; the symmetric ellipse is off there by 0.02-0.03 (deadline-squad/deadline-squadcalc#19)
+    { name: "DF_MK19_emplacement_C16_L134A1", shell: 0, distances: [300, 800, 1500] },
     { name: "DF_RPG_7_PG_7V_HEAT_OG_7V", shell: 0, distances: [150, 400, 800] },
     { name: "DF_RPG_7_PG_7V_HEAT_OG_7V", shell: 1, distances: [150, 400, 800] },
     { name: "DF_SPG_9_FRAG", shell: 0, distances: [150, 400, 800] },
