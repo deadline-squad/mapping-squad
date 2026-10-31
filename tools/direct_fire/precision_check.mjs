@@ -270,6 +270,9 @@ const GAME_ROCKETS = {
     DF_RPG_7_PG_7V_HEAT_OG_7V: RPG_7,
     DF_RPG_7V1_HEAT: RPG_7,
     DF_RPG_7_PG_7VR_Tandem: { velocity: 63, acceleration: 45, boostTime: 0.6, maxSpeed: 160, steered: true },
+    DF_RPG_7V1_PG_7VR_Tandem: { velocity: 65, acceleration: 45, boostTime: 0.6, maxSpeed: 160, steered: true },
+    DF_RPG_7V2_PG_7VR_Tandem: { velocity: 117, acceleration: 45, boostTime: 0.6, maxSpeed: 160, steered: true },
+    DF_DZJ_08: { velocity: 172, acceleration: 150, boostTime: 0.8, maxSpeed: 172, steered: true },
     DF_RPG_7_TBG_7V_Thermobaric: { velocity: 63, acceleration: 150, boostTime: 0.6, maxSpeed: 160, steered: true },
     DF_M3_MAAWS_HEAT_Smoke: { velocity: 63, acceleration: 230, boostTime: 1.5, maxSpeed: 230, steered: true },
     DF_M3_MAAWS_Tandem: { velocity: 63, acceleration: 230, boostTime: 1.5, maxSpeed: 230, steered: true },
@@ -285,6 +288,14 @@ const GAME_ROCKETS = {
     DF_SPG_9_FRAG: SPG_9_FRAG,
     DF_SPG_9_FRAG_scope: SPG_9_FRAG,
     DF_SPG_9_FRAG_scope_no_optic: SPG_9_FRAG,
+    DF_SPG_9_HEAT_technical_optic_RMB_4: SPG_9_HEAT,
+    DF_SPG_9_HEAT_technical_no_optic: SPG_9_HEAT,
+    DF_SPG_9_FRAG_technical_optic_RMB_4: SPG_9_FRAG,
+    DF_SPG_9_FRAG_technical_no_optic: SPG_9_FRAG,
+    DF_SPG_9_HEAT_INS_armoured_technical_optic_RMB_4: SPG_9_HEAT,
+    DF_SPG_9_HEAT_INS_armoured_technical_no_optic: SPG_9_HEAT,
+    DF_SPG_9_FRAG_INS_armoured_technical_optic_RMB_4: SPG_9_FRAG,
+    DF_SPG_9_FRAG_INS_armoured_technical_no_optic: SPG_9_FRAG,
     DF_2A28_Grom_BMP_1_BMD_1_HEAT: SPG_9_HEAT,
     DF_2A28_Grom_BMD_1M_HEAT: SPG_9_HEAT,
     DF_2A28_Grom_BMP_1_BMD_1_FRAG: GROM_FRAG,
@@ -329,13 +340,38 @@ const GAME = {
         Mortar: { pivotHeight: 0.0245, forward: 1.569, up: 0.002 },
         HellCannon: { pivotHeight: 0.155, forward: 2.373, up: 0.002 },
         "UB-32": { pivotHeight: 1.3075, forward: 1.430, up: 0.251 },
+        // The MK19, AGS-17 and SPG-9 of the vehicles (pivot height above the wheels' contact with the ground, the
+        // seat socket composed with the turret's GunMountComponent or GunAttachPoint; the barrel socket along and
+        // above the barrel: Squad Ballistics' tests/data/game_weapons.json `launch`, tools/game_weapons.py)
+        DF_MK19_AAVP_7A1: { pivotHeight: 3.2232, forward: 1.0868, up: 0.0748 },
+        DF_MK19_M113_open_turret_no_sights: { pivotHeight: 2.6316, forward: 0.6951, up: -0.0087 },
+        DF_MK19_M1151_open_turret_no_sights: { pivotHeight: 2.3056, forward: 0.6951, up: -0.0087 },
+        DF_MK19_MATV_open_turret: { pivotHeight: 3.0282, forward: 0.6951, up: -0.0087 },
+        DF_MK19_MATV_open_turret_no_sights: { pivotHeight: 3.0282, forward: 0.6951, up: -0.0087 },
+        DF_AGS_17_Technical: { pivotHeight: 2.2118, forward: 0.87, up: 0.068 },
+        DF_AGS_17_Tigr: { pivotHeight: 2.5927, forward: 0.87, up: 0.068 },
+        DF_AGS_17_Safir: { pivotHeight: 1.7967, forward: 0.87, up: 0.068 },
+        DF_AGS_17_M1151: { pivotHeight: 2.2891, forward: 0.87, up: 0.068 },
+        DF_AGS_17_BTR_D: { pivotHeight: 2.2635, forward: 0.87, up: 0.068 },
+        DF_SPG_9_HEAT_technical_optic_RMB_4: { pivotHeight: 2.4725, forward: 1.7773, up: 0.0546 },
+        DF_SPG_9_HEAT_technical_no_optic: { pivotHeight: 2.4725, forward: 1.7773, up: 0.0546 },
+        DF_SPG_9_FRAG_technical_optic_RMB_4: { pivotHeight: 2.4725, forward: 1.7773, up: 0.0546 },
+        DF_SPG_9_FRAG_technical_no_optic: { pivotHeight: 2.4725, forward: 1.7773, up: 0.0546 },
+        DF_SPG_9_HEAT_INS_armoured_technical_optic_RMB_4: { pivotHeight: 2.3252, forward: 1.7773, up: 0.0546 },
+        DF_SPG_9_HEAT_INS_armoured_technical_no_optic: { pivotHeight: 2.3252, forward: 1.7773, up: 0.0546 },
+        DF_SPG_9_FRAG_INS_armoured_technical_optic_RMB_4: { pivotHeight: 2.3252, forward: 1.7773, up: 0.0546 },
+        DF_SPG_9_FRAG_INS_armoured_technical_no_optic: { pivotHeight: 2.3252, forward: 1.7773, up: 0.0546 },
+        DF_MK19_PARS_III_RWS: { pivotHeight: 2.6617, forward: 0.4161, up: 0.0257 },
+        DF_MK19_TAPV_C16_RWS: { pivotHeight: 3.093, forward: 0.6256, up: -0.0155 },
+        DF_MK19_M113_open_turret: { pivotHeight: 2.6316, forward: 0.6951, up: -0.0087 },
+        DF_MK19_M1151_RHIB_open_turret: { pivotHeight: 2.3056, forward: 0.6951, up: -0.0087 },
     },
 };
 
 sections.MUZZLE = () => {
     check("world gravity is the game's", App.gravity === GAME.gravity, `${App.gravity} m/s², game ${GAME.gravity} m/s²`);
     const cases = [60, 150, 300, 500, 800, 1000, 1200, 1500, 2000].flatMap((d) => [-40, 0, 25].map((h) => [d, h]));
-    simulateSolutions("game launch point", Object.keys(GAME.launch), cases, 0.5, GAME);
+    simulateSolutions("game launch point", Object.keys(GAME.launch), cases, 0.5, GAME, GAME_ROCKETS);
 };
 
 sections.B9 = () => {
