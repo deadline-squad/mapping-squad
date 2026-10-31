@@ -1,7 +1,7 @@
 // Proves the browser decodes heightmap.webp exactly: for each map the worker of the site loads the
 // heightmap twice, once through the WebP (meta.json announcing it) and once through the PNG (meta.json
 // without `format`), and the two are compared pixel by pixel in the page. A map whose WebP keeps the
-// PNG's step must match it in every pixel; a coarsened one must be within half of the WebP's step. With
+// PNG's step must match it in every pixel; a coarsened one must be within half of the WebP's step plus half of the PNG's (each is the same height rounded to its own step). With
 // --fast-png the PNG the worker decoded (native inflate and our own scanline filters) is also compared
 // with the one fast-png (the decoder the worker used before 45.10) reads from --dist, by checksum.
 //
@@ -99,7 +99,7 @@ for (const slug of slugs) {
         return { sizeMatches: webp.length === png.length, mismatches, worstMm: worst * 1000, pngChecksum: hash };
     }, { slug, webpStep: result.webp.step, pngStep: result.png.step });
     const same = result.webp.step === result.png.step;
-    let ok = compared.sizeMatches && result.webp.width === result.png.width && (same ? compared.mismatches === 0 : compared.worstMm <= result.webp.step * 500 + 1e-6);
+    let ok = compared.sizeMatches && result.webp.width === result.png.width && (same ? compared.mismatches === 0 : compared.worstMm <= (result.webp.step + result.png.step) * 500 + 1e-6);
     let reference = "";
     if (fastPng && distDir) {
         const old = fastPng.decode(readFileSync(`${distDir}/${slug}/heightmap.png`));
@@ -108,7 +108,7 @@ for (const slug of slugs) {
         reference = `, native PNG decode ${referenceMatches ? "identical to" : "DIFFERENT from"} fast-png`;
     }
     console.log(`${ok ? "ok  " : "FAIL"} ${label}: webp step ${(result.webp.step * 1000).toFixed(3)} mm, png step ${(result.png.step * 1000).toFixed(3)} mm, `
-        + (same ? `${compared.mismatches} mismatched pixels` : `worst height difference ${compared.worstMm.toFixed(3)} mm (limit ${(result.webp.step * 500).toFixed(3)})`) + reference);
+        + (same ? `${compared.mismatches} mismatched pixels` : `worst height difference ${compared.worstMm.toFixed(3)} mm (limit ${((result.webp.step + result.png.step) * 500).toFixed(3)})`) + reference);
     if (!ok) failures++;
 }
 await browser.close();

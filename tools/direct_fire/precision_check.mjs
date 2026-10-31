@@ -119,6 +119,28 @@ sections.B2 = async () => {
         check(`peak heightmap at ${east} m east, ${south} m south follows the game's triangles`, Math.abs(got - expected) < 1e-9,
             `${got.toFixed(4)} m, expected ${expected.toFixed(4)} m`);
     }
+
+    // A 0.5 m heightmap (Chora, Kokan: meta.json resolution_m 0.5) of a 100 x 120 m map has 201 x 241 samples: the
+    // page scales its grid from the sample count, the reads stay exact on a plane, and the sample spacing is kept
+    // for the obstacle step. A heightmap without resolution (the 8-bit one, an older meta.json) is one meter.
+    const fine = Object.create(SquadHeightmap.prototype);
+    fine.jsonPng = [];
+    fine.worker = null;
+    fine.map = { pixelSize: 256, heightmap: fine, activeMap: { size: 100, sizeY: 120 } };
+    const fineWidth = 201, fineHeight = 241;
+    const fineLevels = new Uint16Array(fineWidth * fineHeight);
+    for (let row = 0; row < fineHeight; row++) for (let col = 0; col < fineWidth; col++) fineLevels[row * fineWidth + col] = 3 * col + 7 * row;
+    fine.receive({ levels: fineLevels, width: fineWidth, height: fineHeight, step, resolution: 0.5, precise: true, url: "synthetic" });
+    check("0.5 m heightmap: resolution kept", fine.resolution === 0.5, String(fine.resolution));
+    check("0.5 m heightmap: samples per map unit follow the grid", fine.colsPerUnit === 200 / 256 && fine.rowsPerUnit === 240 / 256,
+        `${fine.colsPerUnit} x ${fine.rowsPerUnit}`);
+    for (const [east, south] of [[0, 0], [37.3, 88.6], [99.5, 0.25], [100, 120], [12.75, 119.9], [50, 60]]) {
+        const got = fine.getHeight({ lat: -south / 120 * 256, lng: east / 100 * 256 });
+        const expected = (3 * east / 0.5 + 7 * south / 0.5) * step;
+        check(`0.5 m plane heightmap at ${east} m east, ${south} m south`, Math.abs(got - expected) < 1e-9,
+            `${got.toFixed(4)} m, expected ${expected.toFixed(4)} m (error ${(got - expected).toFixed(4)} m)`);
+    }
+    check("1 m heightmap without resolution: one meter", heightmap.resolution === 1, String(heightmap.resolution));
 };
 
 /** App.minimap stand-in for the bridge in smcConnector: one weapon marker and these targets (their firingSolution1) */

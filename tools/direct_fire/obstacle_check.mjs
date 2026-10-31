@@ -19,11 +19,12 @@ function load(name) {
 // squadMinimap.toMeters with 1 map unit = 1 m
 const toMeters = (origin, ll) => ({ east: ll.lng - origin.lng, north: ll.lat - origin.lat });
 
-// 1 map unit = 1 m along lng; a wall of `height` m covers lng [from, from + 2)
-function solve(weaponName, distance, wall) {
+// 1 map unit = 1 m along lng; a wall of `height` m covers lng [from, from + width) (width 2 by default); the
+// heightmap's sample spacing is `resolution` m (SquadHeightmap.resolution)
+function solve(weaponName, distance, wall, resolution = 1) {
     App.activeWeapon = load(weaponName);
-    const getHeight = (ll) => (wall && ll.lng >= wall.from && ll.lng < wall.from + 2 ? wall.height : 0);
-    const map = { mapToGameScale: 1, mapToGameScaleY: 1, toMeters, heightmap: { jsonPng: [[0]], getHeight } };
+    const getHeight = (ll) => (wall && ll.lng >= wall.from && ll.lng < wall.from + (wall.width ?? 2) ? wall.height : 0);
+    const map = { mapToGameScale: 1, mapToGameScaleY: 1, toMeters, heightmap: { jsonPng: [[0]], resolution, getHeight } };
     return new SquadFiringSolution({ lat: 0, lng: 0 }, { lat: 0, lng: distance }, map, 0);
 }
 
@@ -45,6 +46,13 @@ expect(`${direct} 300 m, 10 m wall at 150 m: low blocked there`, solve(direct, 3
 expect(`${direct} 300 m, 0.3 m hump 3-5 m in front: clear`, solve(direct, 300, { from: 3, height: 0.3 }).obstacle.low, (o) => o === null);
 expect(`${direct} 300 m, wall at 1 m (weapon's own spot): ignored`, solve(direct, 300, { from: 1, height: 10 }).obstacle.low, (o) => o === null);
 expect(`${direct} 300 m, wall 1 m before the target: ignored`, solve(direct, 300, { from: 298.5, height: 10 }).obstacle.low, (o) => o === null);
+// A 0.5 m wall between two samples of a 1 m step (x = 150 and 151) is only found by the 0.5 m step of a 0.5 m heightmap
+const thin = { from: 150.25, width: 0.5, height: 10 };
+expect(`${direct} 300 m, 0.5 m wall at 150.25 m, 1 m heightmap: low clear (between the 1 m steps)`, solve(direct, 300, thin, 1).obstacle.low, (o) => o === null);
+expect(`${direct} 300 m, 0.5 m wall at 150.25 m, 0.5 m heightmap: low blocked there`, solve(direct, 300, thin, 0.5).obstacle.low,
+    (o) => o !== null && o.distance === 150.5 && Math.abs(o.height - 10) < 1e-9);
+expect(`${direct} 300 m, 0.5 m heightmap, flat ground: low clear`, solve(direct, 300, null, 0.5).obstacle.low, (o) => o === null);
+expect(`${direct} 300 m, heightmap without resolution (not loaded yet): the 1 m step`, solve(direct, 300, thin, 0).obstacle.low, (o) => o === null);
 expect("Mortar 400 m, 20 m wall at 200 m: high lob clears it", solve("Mortar", 400, { from: 200, height: 20 }).obstacle.high, (o) => o === null);
 expect("Mortar 400 m, 60 m wall 5 m in front: high lob blocked", solve("Mortar", 400, { from: 5, height: 60 }).obstacle.high,
     (o) => o !== null && o.distance >= 5 && o.distance < 7);

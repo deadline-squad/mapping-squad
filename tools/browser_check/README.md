@@ -87,8 +87,20 @@ node heightmap_exact.mjs <site URL> --maps albasrah,chora,skorpo [--dist <dir>] 
 ```
 
 Loads each map's heightmap in the site's worker through the WebP and through the PNG and compares them in the
-page pixel by pixel (identical where the step is the same, within half a step where it was coarsened);
+page pixel by pixel (identical where the step is the same, within half a step of each where it was coarsened);
 `--dist` with `--fast-png` also checks the worker's PNG decode against fast-png's. Exits with 1 on a difference.
+
+## heightmap_native.mjs: maps finer than 1 m
+
+```sh
+node heightmap_native.mjs <site URL> --maps chora,kokan [--points points.json] [--runs 5]
+```
+
+Chora and Kokan have 0.5 m heightmaps (`tools/heightmaps`, "Grid size"). For each map the site's worker loads the
+heightmap `--runs` times and the script prints its grid (samples, `resolution`, step) and the worker's time (the
+first run is cold, the rest read the browser cache, so they are the decoding). `--points` is a file written by
+`tools/heightmaps/py/compare_native_vertices.py --points-out`: the page's own `getHeight` is read at landscape
+vertices of the game and must agree to half the height step. Exits with 1 on a failure.
 
 ## fonts_check.mjs: the fonts come from the site
 

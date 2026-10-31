@@ -33,6 +33,17 @@ MAPS = {
 }
 
 
+# Heightmap cell size in metres of the maps whose landscape has vertices every 0.5 m (landscape scale 50:
+# a 1 m grid drops every other vertex); every other map is built on SquadHeight's 1 m grid
+DEFAULT_CELL_M = 1.0
+CELL_M = {"chora": 0.5, "kokan": 0.5}
+
+
+def cell_m(slug):
+    """Cell size in metres of a map's heightmap grid."""
+    return CELL_M.get(slug, DEFAULT_CELL_M)
+
+
 def statics_root(slug):
     """Path filter of every level of a map, for ``SquadExtract statics``: its map folder, or its plugin."""
     level = MAPS[slug][1][0]

@@ -1,11 +1,13 @@
 """Build a SquadCalc heightmap by fusing the game's landscape with SquadHeight's surface.
 
-Sources, all in world space on SquadHeight's grid (minimap bounds, 1 m, row = world Y min->max,
-col = world X min->max, the same grid as SquadCalc's heightmap.png):
+Sources, all in world space on the heightmap's grid (minimap bounds, `cell` metres per sample, 1 m unless
+maps.CELL_M says otherwise, row = world Y min->max, col = world X min->max, the same grid as SquadCalc's
+heightmap.png; samples sit on the bounds' min corner and every `cell` from it, the max corner included):
     terrain T: landscape collision heightfields from the game paks (landscape.py), exact for
                the installed game build;
     surface S: SquadHeight's top-most trace of the Squad SDK collision (terrain + buildings,
-               rocks, bridges), 1.6 cm steps.
+               rocks, bridges), 1.6 cm steps, always on a 1 m grid: on a finer heightmap each cell
+               takes the nearest SquadHeight sample's height above the terrain (upsample_surface).
 
     objects O: top of the static meshes' collision from the game paks (objects.py), optional.
 
@@ -35,6 +37,7 @@ import landscape
 Image.MAX_IMAGE_PIXELS = None
 OBJECT_MIN_M = 0.5
 NEAR_M = 1.0
+STRIP_CELLS = 2_000_000
 
 
 def load_squadheight(directory):
@@ -45,18 +48,60 @@ def load_squadheight(directory):
     return meta, png * per_unit + meta["z_offset_m"]
 
 
-def game_terrain(level_dirs, meta, shape):
-    """Terrain in metres on the SquadHeight grid, NaN where no landscape covers a cell."""
+def grid_shape(meta, cell):
+    """(rows, cols) of the grid of `cell` metres from the bounds' min corner to its max corner, both included."""
     b = meta["bounds_m"]
-    step = meta["resolution_m"]
+    return (round((b["max_y"] - b["min_y"]) / cell) + 1, round((b["max_x"] - b["min_x"]) / cell) + 1)
+
+
+def upsample_surface(surface, terrain, meta, cell):
+    """SquadHeight's surface on the grid of `cell` metres, given the game's `terrain` on that grid.
+
+    Where the landscape covers the cell, each cell takes the height above the terrain (surface - terrain at the
+    SquadHeight sample) of the nearest SquadHeight sample, on top of its own terrain: a building keeps its height
+    above the ground, and the slope between two samples does not turn into a bump (nearest-sample absolute heights
+    would rise by up to the slope times half a SquadHeight cell). Cells without landscape (or whose sample has
+    none) read the SquadHeight grid the way the page reads a 1 m heightmap, along the game's triangles
+    (landscape.triangle_surface): there SquadHeight is the only ground, and a mountain side must not step.
+    A cell on a SquadHeight sample keeps it exactly; one halfway between two takes the one with the larger
+    coordinate in the first case. `cell` must divide SquadHeight's resolution.
+    """
+    ratio = round(meta["resolution_m"] / cell)
+    if abs(ratio * cell - meta["resolution_m"]) > 1e-9:
+        raise ValueError(f"cell {cell} m does not divide SquadHeight's {meta['resolution_m']} m")
+    if ratio == 1:
+        return surface
+    nearest = lambda count, size: np.minimum((np.arange(count) + ratio // 2) // ratio, size - 1)
+    rows, cols = np.ix_(nearest(terrain.shape[0], surface.shape[0]), nearest(terrain.shape[1], surface.shape[1]))
+    above = (surface - terrain[::ratio, ::ratio])[rows, cols]
+    fused = np.where(np.isnan(terrain) | np.isnan(above), np.nan, terrain + above)
+    cols_at = np.arange(terrain.shape[1]) / ratio
+    rows_per_strip = max(1, STRIP_CELLS // terrain.shape[1])
+    for first in range(0, terrain.shape[0], rows_per_strip):
+        strip = fused[first:first + rows_per_strip]
+        gx, gy = np.meshgrid(cols_at, np.arange(first, first + strip.shape[0]) / ratio)
+        strip[:] = np.where(np.isnan(strip), landscape.triangle_surface(surface, gx, gy), strip)
+    return fused
+
+
+def game_terrain(level_dirs, meta, shape, cell=None):
+    """Terrain in metres on the grid of `cell` metres (SquadHeight's by default), NaN where no landscape covers a cell.
+
+    Sampled in strips of rows: a 0.5 m grid of a 4 km map holds 66 million cells.
+    """
+    b = meta["bounds_m"]
+    step = cell or meta["resolution_m"]
     xs = (b["min_x"] + np.arange(shape[1]) * step) * 100
     ys = (b["min_y"] + np.arange(shape[0]) * step) * 100
-    gx, gy = np.meshgrid(xs, ys)
     terrain = np.full(shape, np.nan)
-    for level in level_dirs:
-        for actor in landscape.assemble(level, transpose=False).values():
+    actors = [actor for level in level_dirs for actor in landscape.assemble(level, transpose=False).values()]
+    rows_per_strip = max(1, STRIP_CELLS // shape[1])
+    for first in range(0, shape[0], rows_per_strip):
+        gx, gy = np.meshgrid(xs, ys[first:first + rows_per_strip])
+        strip = terrain[first:first + rows_per_strip]
+        for actor in actors:
             z = landscape.sample_world(actor, gx, gy) / 100
-            terrain = np.where(np.isnan(terrain), z, terrain)
+            strip[:] = np.where(np.isnan(strip), z, strip)
     return terrain
 
 
@@ -90,7 +135,7 @@ def fuse(terrain, surface, objects=None):
     return fused, stats
 
 
-def write(out_dir, name, fused, meta, stats, build):
+def write(out_dir, name, fused, meta, stats, build, cell=None):
     os.makedirs(out_dir, exist_ok=True)
     z_min = float(np.nanmin(fused))
     z_max = float(np.nanmax(fused))
@@ -112,7 +157,7 @@ def write(out_dir, name, fused, meta, stats, build):
         "z_max_m": round(z_max, 4),
         "width": int(values.shape[1]),
         "height": int(values.shape[0]),
-        "resolution_m": meta["resolution_m"],
+        "resolution_m": cell or meta["resolution_m"],
         "bounds_m": meta["bounds_m"],
         "orientation": "row = world Y min->max, col = world X min->max",
         "sources": {
@@ -132,12 +177,15 @@ def main():
     parser.add_argument("squadheight_dir")
     parser.add_argument("out_dir")
     parser.add_argument("build")
+    parser.add_argument("--cell", type=float, help="heightmap cell size in metres (SquadHeight's resolution by default)")
     parser.add_argument("levels", nargs="+", help="directories written by SquadExtract for the map's landscape levels")
     args = parser.parse_args()
     meta, surface = load_squadheight(args.squadheight_dir)
-    terrain = game_terrain(args.levels, meta, surface.shape)
+    cell = args.cell or meta["resolution_m"]
+    terrain = game_terrain(args.levels, meta, grid_shape(meta, cell), cell)
+    surface = upsample_surface(surface, terrain, meta, cell)
     fused, stats = fuse(terrain, surface)
-    write(args.out_dir, args.name, fused, meta, stats, args.build)
+    write(args.out_dir, args.name, fused, meta, stats, args.build, cell)
     print(args.name, json.dumps(stats))
 
 
