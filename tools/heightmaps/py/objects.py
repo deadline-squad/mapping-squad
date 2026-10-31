@@ -260,9 +260,8 @@ def rasterize(tris, top, x0, y0, step):
         start = stop
 
 
-def object_surface(directory, bounds, step, shape):
-    """Highest static mesh collision above each grid point in metres (-inf where none), and stats."""
-    top = np.full(shape, -np.inf)
+def placements(directory):
+    """Colliding static mesh placements of a map: ({mesh id: [4x4 world matrices]}, skipped counts)."""
     by_mesh = {}
     skipped = {"no_collision_component": 0, "level": 0}
     for line in open(os.path.join(directory, "instances.ndjson")):
@@ -279,6 +278,27 @@ def object_surface(directory, bounds, step, shape):
         else:
             mats = [world]
         by_mesh.setdefault(item["mesh"], []).extend(mats)
+    return by_mesh, skipped
+
+
+def world_triangles(directory, by_mesh):
+    """Yield (mesh id, source, world triangles [t, 3, 3] in metres) of every placement that collides."""
+    for mesh, mats in by_mesh.items():
+        found = mesh_triangles(os.path.join(directory, "bodies", str(mesh)))
+        if found is None:
+            continue
+        local, default, source = found
+        if not blocks(default):
+            continue
+        points = np.concatenate([local.reshape(-1, 3), np.ones((local.shape[0] * 3, 1))], axis=1)
+        for m in mats:
+            yield mesh, source, (points @ m)[:, :3].reshape(-1, 3, 3) / 100
+
+
+def object_surface(directory, bounds, step, shape):
+    """Highest static mesh collision above each grid point in metres (-inf where none), and stats."""
+    top = np.full(shape, -np.inf)
+    by_mesh, skipped = placements(directory)
     sources = {"complex": 0, "simple": 0, "none": 0, "no_collision_mesh": 0}
     for mesh, mats in by_mesh.items():
         found = mesh_triangles(os.path.join(directory, "bodies", str(mesh)))
@@ -295,3 +315,54 @@ def object_surface(directory, bounds, step, shape):
             world_tris = (points @ m)[:, :3].reshape(-1, 3, 3) / 100
             rasterize(world_tris, top, bounds["min_x"], bounds["min_y"], step)
     return top, {**skipped, **sources}
+
+
+def mesh_name(directory, mesh):
+    """Asset path of a mesh id, for reports."""
+    return json.load(open(os.path.join(directory, "bodies", f"{mesh}.json"))).get("path", str(mesh))
+
+
+def probe_points(directory, xs, ys, reach=3.0):
+    """Static mesh collision at world points (arrays in metres), by exact triangle test.
+
+    Returns arrays ``top, top_mesh, near_m, near_top, near_mesh``: the highest collision straight above
+    each point (-inf and mesh "" where none) and, for the triangle whose bounding box comes closest
+    horizontally within `reach` metres (inf and mesh "" when nothing is that close), that distance, its
+    highest point and its mesh id. Used to explain where the heightmap and the game differ.
+    """
+    count = len(xs)
+    top = np.full(count, -np.inf)
+    top_mesh = np.full(count, "", dtype=object)
+    near_m = np.full(count, np.inf)
+    near_top = np.full(count, -np.inf)
+    near_mesh = np.full(count, "", dtype=object)
+    by_mesh, _ = placements(directory)
+    px = xs[:, None]
+    py = ys[:, None]
+    for mesh, _, tris in world_triangles(directory, by_mesh):
+        lo = tris[:, :, :2].min(1)
+        hi = tris[:, :, :2].max(1)
+        if (lo[:, 0].min() > xs.max() + reach or hi[:, 0].max() < xs.min() - reach
+                or lo[:, 1].min() > ys.max() + reach or hi[:, 1].max() < ys.min() - reach):
+            continue
+        gap = np.hypot(np.maximum(np.maximum(lo[:, 0] - px, px - hi[:, 0]), 0),
+                       np.maximum(np.maximum(lo[:, 1] - py, py - hi[:, 1]), 0))
+        closest = gap.argmin(1)
+        best = gap[np.arange(count), closest]
+        closer = best < np.minimum(reach, near_m)
+        near_m[closer] = best[closer]
+        near_top[closer] = tris[closest[closer], :, 2].max(1)
+        near_mesh[closer] = str(mesh)
+        for p in np.flatnonzero((gap == 0).any(1)):
+            t = tris[gap[p] == 0]
+            den = (t[:, 1, 1] - t[:, 2, 1]) * (t[:, 0, 0] - t[:, 2, 0]) + (t[:, 2, 0] - t[:, 1, 0]) * (t[:, 0, 1] - t[:, 2, 1])
+            with np.errstate(divide="ignore", invalid="ignore"):
+                a = ((t[:, 1, 1] - t[:, 2, 1]) * (xs[p] - t[:, 2, 0]) + (t[:, 2, 0] - t[:, 1, 0]) * (ys[p] - t[:, 2, 1])) / den
+                b = ((t[:, 2, 1] - t[:, 0, 1]) * (xs[p] - t[:, 2, 0]) + (t[:, 0, 0] - t[:, 2, 0]) * (ys[p] - t[:, 2, 1])) / den
+            c = 1 - a - b
+            hit = (den != 0) & (a >= -1e-9) & (b >= -1e-9) & (c >= -1e-9)
+            if hit.any():
+                z = (a * t[:, 0, 2] + b * t[:, 1, 2] + c * t[:, 2, 2])[hit].max()
+                if z > top[p]:
+                    top[p], top_mesh[p] = z, str(mesh)
+    return top, top_mesh, near_m, near_top, near_mesh

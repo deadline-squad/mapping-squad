@@ -6,7 +6,7 @@
 //     node precision_browser.mjs <site URL> <SquadCalc checkout for node_modules/fast-png>
 //
 //   B1   Skorpo (non-square): distance and bearing between two world points, map assets on the east edge
-//   B2   heights of the page = bilinear interpolation of the served 16-bit heightmap at world points
+//   B2   heights of the page = the game's triangles on the served 16-bit heightmap at world points
 //   SHOT mortar and UB-32 solutions of the page land within 0.5 m in a simulation with the game's values
 //   B10  a session peer's height padding (sent as a string by older clients) is a number; ours is sent as one
 //   B11  with the heightmaps blocked, an error toast says so and the target popup says "no height data"
@@ -67,12 +67,14 @@ const png = decode(new Uint8Array(await (await fetch(new URL("/heightmaps/skorpo
 const { min_x: minX, max_x: maxX, min_y: minY, max_y: maxY } = meta.bounds_m;
 /** World meters (X east, Y south) -> Leaflet LatLng of the 256-unit map, from the minimap corners alone */
 const toLatLng = (x, y) => ({ lat: -(y - minY) / (maxY - minY) * 256, lng: (x - minX) / (maxX - minX) * 256 });
-/** Bilinear height of the served grid (one sample per meter from the min corner) at world meters */
+/** Height of the served grid (one sample per meter from the min corner) at world meters, on the game's triangles: each quad splits along the diagonal from (row, col) to (row + 1, col + 1) */
 function gridHeight(x, y) {
     const col = (x - minX) / meta.resolution_m, row = (y - minY) / meta.resolution_m;
     const c0 = Math.floor(col), r0 = Math.floor(row), fc = col - c0, fr = row - r0;
     const at = (r, c) => png.data[r * png.width + c] * meta.z_step_m;
-    return (at(r0, c0) * (1 - fc) + at(r0, c0 + 1) * fc) * (1 - fr) + (at(r0 + 1, c0) * (1 - fc) + at(r0 + 1, c0 + 1) * fc) * fr;
+    return fc >= fr
+        ? at(r0, c0) + (at(r0, c0 + 1) - at(r0, c0)) * fc + (at(r0 + 1, c0 + 1) - at(r0, c0 + 1)) * fr
+        : at(r0, c0) + (at(r0 + 1, c0) - at(r0, c0)) * fr + (at(r0 + 1, c0 + 1) - at(r0 + 1, c0)) * fc;
 }
 
 {
