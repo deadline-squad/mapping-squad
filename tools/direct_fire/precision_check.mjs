@@ -4,7 +4,8 @@
 //     node --import ./register.mjs precision_check.mjs <SquadCalc checkout> [SECTION ...]
 //
 //   B1  non-square maps: distance and bearing use the scale of each map axis (Skorpo 6849 x 6869 m)
-//   B2  heightmap grid of width+1 samples and bilinear interpolation (synthetic plane heightmap)
+//   B2  heightmap grid of width+1 samples and interpolation (synthetic plane heightmap), and the game's triangles:
+//       each quad splits along the diagonal from (row, col) to (row + 1, col + 1), not bilinear (synthetic saddles)
 //   B6  UB-32 equivalent velocity below the end of its deceleration (Squad Ballistics' time_to model)
 //   B7  rockets: the elevation lands on the target, to 0.5 m, in a simulation of the game's 20 ms substeps
 //       with the game's values (GAME_ROCKETS): the S-5's boost along the launch axis, the other rockets'
@@ -83,7 +84,7 @@ sections.B2 = async () => {
     globalThis.document ??= {};
     globalThis.$ ??= () => ({ trigger() {}, show() {}, hide() {}, text() {}, html() {}, attr() {} });
     // A plane on a 100 x 120 m map: one sample per meter, corners included (101 x 121 samples), level =
-    // 3 per meter east + 7 per meter south, 1 cm per level. Bilinear interpolation is exact on a plane.
+    // 3 per meter east + 7 per meter south, 1 cm per level. Both bilinear and triangle interpolation are exact on a plane.
     const width = 101, height = 121, step = 0.01;
     const levels = new Uint16Array(width * height);
     for (let row = 0; row < height; row++) for (let col = 0; col < width; col++) levels[row * width + col] = 3 * col + 7 * row;
@@ -97,6 +98,26 @@ sections.B2 = async () => {
         const expected = (3 * east + 7 * south) * step;
         check(`plane heightmap at ${east} m east, ${south} m south`, Math.abs(got - expected) < 1e-9,
             `${got.toFixed(4)} m, expected ${expected.toFixed(4)} m (error ${(got - expected).toFixed(4)} m)`);
+    }
+
+    // A peak of 1 m (level 100 at 1 cm) at the centre sample of a 3 x 3 grid, one meter per sample, 0 elsewhere. The
+    // game splits a quad along the diagonal from its (row, col) corner to its (row + 1, col + 1) corner. Quad
+    // (0, 0) has the peak at that far corner, so its surface is min(east, south); quad (0, 1) has it at its
+    // (row + 1, col) corner, off the diagonal: 0 where east - 1 >= south and south - (east - 1) above it.
+    // Bilinear interpolation gives east * south and (1 - fx) * fy there.
+    const peak = Object.create(SquadHeightmap.prototype);
+    peak.jsonPng = [];
+    peak.worker = null;
+    peak.map = { pixelSize: 256, heightmap: peak, activeMap: { size: 2, sizeY: 2 } };
+    peak.receive({ levels: Uint16Array.from([0, 0, 0, 0, 100, 0, 0, 0, 0]), width: 3, height: 3, step: 0.01, precise: true, url: "synthetic" });
+    const triangles = [
+        [0.5, 0.5, 0.5], [0.75, 0.25, 0.25], [0.25, 0.75, 0.25], [0.5, 0.25, 0.25], [0.25, 0.5, 0.25], [1, 1, 1],
+        [1.5, 0.5, 0], [1.75, 0.25, 0], [1.25, 0.75, 0.5],
+    ];
+    for (const [east, south, expected] of triangles) {
+        const got = peak.getHeight({ lat: -south / 2 * 256, lng: east / 2 * 256 });
+        check(`peak heightmap at ${east} m east, ${south} m south follows the game's triangles`, Math.abs(got - expected) < 1e-9,
+            `${got.toFixed(4)} m, expected ${expected.toFixed(4)} m`);
     }
 };
 

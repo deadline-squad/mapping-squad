@@ -97,15 +97,48 @@ def assemble(directory, transpose):
     return result
 
 
-def sample_world(actor_grid, xs_cm, ys_cm):
-    """World Z in cm at world points (arrays in cm), NaN outside the landscape. Bilinear."""
-    from scipy.ndimage import map_coordinates
+def triangle_surface(grid, gx, gy):
+    """Height of the game's collision surface at fractional grid positions (NaN outside or over a hole).
 
+    The cooked heightfield splits every quad into two triangles along the diagonal from vertex
+    (x, y) to (x + 1, y + 1) in the landscape's local grid axes, the diagonal of Unreal's landscape
+    render mesh. It was found with ground truth from the server log (``audit_ground_truth.py``): on
+    points where the other diagonal would differ by more than 5 mm, this one is the closer in 79 of 89.
+    """
+    rows, cols = grid.shape
+    i = np.clip(np.floor(gx), -1, cols - 1).astype(np.int64)
+    j = np.clip(np.floor(gy), -1, rows - 1).astype(np.int64)
+    inside = (gx >= 0) & (gy >= 0) & (gx <= cols - 1) & (gy <= rows - 1)
+    i = np.clip(i, 0, cols - 2)
+    j = np.clip(j, 0, rows - 2)
+    fx = gx - i
+    fy = gy - j
+    z00 = grid[j, i]
+    z10 = grid[j, i + 1]
+    z01 = grid[j + 1, i]
+    z11 = grid[j + 1, i + 1]
+    z = np.where(fx >= fy, z00 + fx * (z10 - z00) + fy * (z11 - z10), z00 + fy * (z01 - z00) + fx * (z11 - z01))
+    return np.where(inside, z, np.nan)
+
+
+def sample_world(actor_grid, xs_cm, ys_cm, method="bilinear"):
+    """World Z in cm at world points (arrays in cm), NaN outside the landscape.
+
+    `method` is "bilinear" (how the heightmaps were built so far) or "triangle" (the game's own
+    collision surface, see triangle_surface).
+    """
     grid, x0, y0, (loc, yaw, scale), _ = actor_grid
     dx = xs_cm - loc[0]
     dy = ys_cm - loc[1]
     c, s = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
     gx = (c * dx + s * dy) / scale[0] - x0
     gy = (-s * dx + c * dy) / scale[1] - y0
-    raw = map_coordinates(grid, [gy, gx], order=1, mode="constant", cval=np.nan)
+    if method == "triangle":
+        raw = triangle_surface(grid, gx, gy)
+    elif method == "bilinear":
+        from scipy.ndimage import map_coordinates
+
+        raw = map_coordinates(grid, [gy, gx], order=1, mode="constant", cval=np.nan)
+    else:
+        raise ValueError(f"unknown method {method!r}")
     return loc[2] + scale[2] * raw / 128.0

@@ -71,6 +71,51 @@ Paths are set with `SQUAD_DIR`, `SQUADHEIGHT`, `WORK`, `OUT` and `DIST` (see the
 After a game patch: update the server with SteamCMD, then `extract`, `build`, `deploy`; a new map
 goes into `py/maps.py` (its SquadHeight name and landscape levels).
 
+## Interpolation: the game's triangles
+
+The game's landscape collision splits every quad of four vertices into two triangles along the diagonal
+from vertex (x, y) to (x + 1, y + 1) of the landscape grid. This was found with ground truth from the
+server log (below): on points where the other diagonal would differ by more than 5 mm the diagonal above
+is the closer one in 79 of 89 (17 of 20 above 2 cm), and it is Unreal's landscape render mesh diagonal.
+`landscape.triangle_surface` reads it; SquadCalc's `getHeight` reads the served grid the same way (its quads
+split from (row, col) to (row + 1, col + 1), the same diagonal in world axes), where it used bilinear
+interpolation. `py/compare_interpolation.py <extract root> <heightmaps dir> <map>` measures a grid against the
+game's surface at random points (terrain only). Bilinear against triangle on a grid whose nodes sit on the
+game's vertices (Al Basrah, Fallujah, Gorodok, Harju, Kamdesh, Lashkar, Mestia, Mutaha, Narva, Pacific, Sanxian,
+Sumari): RMS 0.3 to 2.2 cm and up to 0.2 to 1.1 m on the steepest quads, triangle 0.0 to 0.1 cm. On maps
+whose vertices are not on the 1 m grid (Goose Bay, Jensen, Manicouagan, Tallil, Black Coast, Skorpo, Anvil, Chora, Kokan)
+the grid itself is a resample of the vertices and the read is a small part of an error of 0.5 to 3 cm RMS.
+On static objects the mesh heights are not triangle surfaces: in the object-dense 1 km window of Fallujah
+(`py/compare_resolution.py`) the triangle read is 2 % worse than bilinear on object cells (RMS 0.951 against 0.931 m)
+and equal on terrain, an accepted cost of being exact on terrain.
+
+## Audit against the game server
+
+`log_points.awk` turns dedicated server logs into anonymous lines `<MapFolder> <Kind> x y z` (world cm): placed map
+markers, deployables at their placement, spawn points (the player capsule centre, 0.88 m above the ground),
+explosions. Nothing else is copied; the sample comes from the Training server only.
+
+```sh
+cat SquadGame*.log | awk -f tools/heightmaps/log_points.awk | sort -u > points.txt
+py/audit_ground_truth.py <heightmaps dir> <map> points.txt [--extract <extract root>] [--objects] [--csv table.csv]
+```
+
+It prints, for every point that does not agree, the logged Z, the served heightmap read bilinear / nearest / triangle,
+the landscape surface, the highest static mesh above the point and the nearest object, with a verdict
+(`ok`, `no-trace`, `sub-cell`, `grid-object`, `object`, `above-terrain`, `below-terrain`), then summaries per kind.
+Result on the Training server's logs (build 26005357, served heightmaps; points that agree with the log or only
+differ by the grid, within 15 cm): bilinear / nearest / triangle within 2 cm of the log on Fallujah 90 / 79 / 92 %
+(p95 10.1 / 8.0 / 5.5 cm, 107 points), Goose Bay 92 / 60 / 92 %, Yehorivka 96 / 63 / 97 %, Black Coast 89 / 63 / 91 %.
+Every Fallujah point more than 15 cm off (36 of 143) has a static mesh on it or beside it (a roof, wall, tent or
+truck: `object`, `above-terrain`, `grid-object` name the mesh), or the log has Z = 0 (`no-trace`: markers the
+server did not trace). The river bed at -44.20 m is the landscape's own flat floor (spawn points stand on it); the
+water actor of Fallujah is a box volume at -48.43 m, not a collision plane.
+`py/test_audit_ground_truth.py` tests it on synthetic grids (`python -m unittest test_audit_ground_truth`).
+Kinds that are ground traces: placed markers except those with Z = 0 and the types logged at odd heights,
+deployables, spawn points. `tools/direct_fire/precision_check.mjs` (B2) and `tools/browser_check/precision_browser.mjs`
+check SquadCalc's read against the triangle rule; `tools/direct_fire/los_resolution.mjs` compares obstacle
+verdicts for 1, 0.5 and 0.25 m grids written by `py/compare_resolution.py`.
+
 Files:
 
 * `extractor/` — SquadExtract (C#, [CUE4Parse](https://github.com/FabianFG/CUE4Parse)): `list`,
@@ -83,3 +128,5 @@ Files:
   `py/objects.py` — static mesh collision rasterizer; `py/build_heightmap.py`, `py/build_all.py` —
   fusion and output; `py/maps.py` — SquadCalc map → SquadHeight name and landscape levels;
   `py/compare_*.py` — the checks above.
+* `py/audit_ground_truth.py`, `log_points.awk`, `py/compare_interpolation.py`, `py/compare_resolution.py`: the
+  checks above.
