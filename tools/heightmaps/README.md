@@ -75,7 +75,8 @@ Files:
 
 * `extractor/` — SquadExtract (C#, [CUE4Parse](https://github.com/FabianFG/CUE4Parse)): `list`,
   `landscape`/`extractall` (landscape collision), `statics` (static mesh placements and collision),
-  `dumpall` (assets as JSON, for `tools/game_ballistics`). `cue4parse.patch` keeps the cooked
+  `dumpall` (assets as JSON, for `tools/game_ballistics`), `features` (foliage, landscape splines and
+  water actors, for `tools/maptiles`). `cue4parse.patch` keeps the cooked
   landscape collision that CUE4Parse skips.
 * `py/heightmap_webp.py`, `py/convert_webp.py` — the WebP form above;
 * `py/landscape.py` — cooked Chaos heightfield reader and landscape assembly;
