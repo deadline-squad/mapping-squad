@@ -168,10 +168,21 @@ NATIVE_EXPLOSION = {"ExplosiveBaseDamage": 115.0, "ExplosiveDamageInnerRadius": 
                     "bUseSecondaryExplosion": False}
 
 
+# WeaponConfig.MOACurve assets (CurveFloat, Squad build 26005357): MOA from the weapon's dynamic MOA
+# (0 at rest, grown by each shot, decayed between bursts; native code) -> (at rest, sustained). A weapon
+# with a curve spreads by it, not by its base MOA; SquadCalc draws the sustained value, the envelope of a burst.
+MOA_CURVES = {
+    "/Game/Vehicles/FC_MOACurve_GenericGMG.0": (15.0, 50.0),
+    "/Game/Vehicles/FC_MOACurve_GenericGPMG.0": (3.0, 65.0),
+    "/Game/Vehicles/FC_MOACurve_GenericHMG.0": (3.0, 65.0),
+    "/Game/Vehicles/Emplaced_Kord/Curves/FC_MOACurve_Kord.0": (7.0, 150.0),
+}
+
+
 def blast(weapon):
     """Spread and the explosion SquadCalc draws (the widest one that deals damage), in SquadCalc's units.
 
-    Returns {"moa", "explosionDamage", "explosionRadius" [inner, outer] m, "explosionDistanceFromImpact" m,
+    Returns {"moa" (the sustained value of the MOACurve when the weapon has one), "explosionDamage", "explosionRadius" [inner, outer] m, "explosionDistanceFromImpact" m,
     "damageFallOff", "lifespan_s", "native": [fields taken from NATIVE_EXPLOSION]}.
     """
     projectile = weapon.get("projectile") or {}
@@ -185,8 +196,9 @@ def blast(weapon):
                            values["SecondaryExplosionDamageFalloff"], "secondary"))
     damage, inner, outer, height, falloff, which = max((e for e in explosions if e[0] > 0), key=lambda e: e[2])
     prefix = "Explosive" if which == "primary" else "SecondaryExplosion"
+    curve = (weapon["config"].get("MOACurve") or {}).get("ObjectPath")
     return {
-        "moa": weapon["config"].get("MOA"),
+        "moa": MOA_CURVES[curve][1] if curve in MOA_CURVES else weapon["config"].get("MOA"),
         "explosionDamage": damage,
         "explosionRadius": [inner / 100, outer / 100],
         "explosionDistanceFromImpact": height / 100,

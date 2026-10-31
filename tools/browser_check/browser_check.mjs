@@ -71,14 +71,16 @@ async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }
     return { context, page, problems };
 }
 
-// Weapon at the map centre, targets `north` meters north of it (and `east`)
+// Weapon at the map centre, targets `north` meters north of it (and `east`); non-square maps scale
+// north and east apart (mapToGameScaleY)
 const place = (page, targets) => page.evaluate((targets) => {
     const map = window.__App.minimap;
     const scale = map.mapToGameScale;
+    const scaleY = map.mapToGameScaleY;
     const weapon = { lat: -map.pixelSize / 2, lng: map.pixelSize / 2 };
-    map.setView([weapon.lat + 100 / scale, weapon.lng], 5, { animate: false });
+    map.setView([weapon.lat + 100 / scaleY, weapon.lng], 5, { animate: false });
     if (!map.activeWeaponsMarkers.getLayers().length) map.createWeapon(weapon);
-    for (const [east, north] of targets) map.createTarget({ lat: weapon.lat + north / scale, lng: weapon.lng + east / scale });
+    for (const [east, north] of targets) map.createTarget({ lat: weapon.lat + north / scaleY, lng: weapon.lng + east / scale });
 }, targets);
 const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
@@ -95,9 +97,10 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
         await new Promise((resolve) => setTimeout(resolve, 0));
         const loadedBefore = map.heightmap.precise;
         const scale = map.mapToGameScale;
+        const scaleY = map.mapToGameScaleY;
         const weapon = { lat: -map.pixelSize * 0.45, lng: map.pixelSize * 0.45 };
         map.createWeapon(weapon);
-        const target = map.createTarget({ lat: weapon.lat + 400 / scale, lng: weapon.lng + 200 / scale }) || map.activeTargetsMarkers.getLayers()[0];
+        const target = map.createTarget({ lat: weapon.lat + 400 / scaleY, lng: weapon.lng + 200 / scale }) || map.activeTargetsMarkers.getLayers()[0];
         // While the heights load the popup says it has no height data and the bridge sends no height
         const early = { heightDiff: window.squadBallistics.lastTarget()?.heightDiff, noHeightLine: popup(target).includes("height"), noHeightClass: target.calcMarker1.getContent().includes("calcNoHeight"), profile: window.squadBallistics.lastTarget()?.profile };
         await new Promise((resolve) => { const timer = setInterval(() => { if (map.heightmap.precise) { clearInterval(timer); resolve(); } }, 50); });
@@ -127,7 +130,7 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
         const last = bridge.lastTarget();
         const cached = bridge.targets()[0].profile === targets[0].profile;
         const map = window.__App.minimap;
-        map.createTarget({ lat: map.activeTargetsMarkers.getLayers()[0].getLatLng().lat + 60 / map.mapToGameScale, lng: map.activeTargetsMarkers.getLayers()[0].getLatLng().lng });
+        map.createTarget({ lat: map.activeTargetsMarkers.getLayers()[0].getLatLng().lat + 60 / map.mapToGameScaleY, lng: map.activeTargetsMarkers.getLayers()[0].getLatLng().lng });
         const afterTarget = bridge.revision();
         const two = bridge.targets();
         const newest = bridge.lastTarget();
@@ -169,7 +172,7 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
                 if (!selected || reported !== name) failed.push(`${name}: selectWeapon ${selected}, weapon() ${reported}`);
                 if (!holdLaid.includes(name)) continue;
                 const before = new Set(map.activeTargetsMarkers.getLayers());
-                map.createTarget({ lat: weapon.lat + 600 / map.mapToGameScale, lng: weapon.lng });
+                map.createTarget({ lat: weapon.lat + 600 / map.mapToGameScaleY, lng: weapon.lng });
                 const target = map.activeTargetsMarkers.getLayers().find((layer) => !before.has(layer));
                 const hold = target.firingSolution1.holdTime.high;
                 holds[name] = { hold, popup: popup(target) };
@@ -205,7 +208,7 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     const burstPoint = await page.evaluate(() => {
         const map = window.__App.minimap;
         const target = map.activeTargetsMarkers.getLayers()[0].getLatLng();
-        const point = map.latLngToContainerPoint({ lat: target.lat + 25 / map.mapToGameScale, lng: target.lng + 25 / map.mapToGameScale });
+        const point = map.latLngToContainerPoint({ lat: target.lat + 25 / map.mapToGameScaleY, lng: target.lng + 25 / map.mapToGameScale });
         const box = map.getContainer().getBoundingClientRect();
         return { x: box.left + point.x, y: box.top + point.y };
     });
