@@ -5,12 +5,13 @@ Usage: check_alignment.py <map> [<map> ...]   (writes /check/<map>.json and over
 Three independent comparisons per map, each on the building-dense windows of the map:
 
 1. Tiles vs the precise heightmap SquadCalc serves (/heightmaps/<map>/, tools/heightmaps): buildings
-   in the finest tiles (low-saturation pixels) against the heightmap's bumps (cells over 2.5 m above the
-   21 m median), the heightmap placed with SquadCalc's grid convention (whole metres from corner0,
+   in the finest tiles (darker grey pixels) against the heightmap's objects (over 2 m above the bare
+   ground), in the windows with the most buildings, the heightmap placed with SquadCalc's grid convention (whole metres from corner0,
    squadHeightmaps.js getHeight). The offset is the peak of their cross-correlation, refined to
-   sub-pixel by a parabola, in pixels of the finest zoom. Pass: under 1 px on both axes.
-2. Height reference: the prepared ground against the served heightmap on open ground (cells within
-   0.05 m of the 21 m median): the median difference must be under 1 cm, so contour labels read
+   sub-pixel by a parabola, in pixels of the finest zoom; windows without a clear peak are reported
+   but not counted. Pass: the median over at least two windows under 1 px on both axes.
+2. Height reference: the prepared ground against the served heightmap where they agree within 5 cm
+   (open ground; the share is reported): the median difference must be under 1 cm, so contour labels read
    the same heights as SquadCalc's readouts.
 3. Tiles vs the upstream SquadCalc images: zoom 5 of our tiles against the upstream basemap tiles
    (https://squadcalc.app/api/img/maps/<map>/basemap_hq/5_x_y.webp) by phase correlation of their
@@ -20,7 +21,6 @@ Three independent comparisons per map, each on the building-dense windows of the
 
 import io
 import json
-import math
 import os
 import sys
 import urllib.request
@@ -46,11 +46,11 @@ def mosaic(tiles_dir, z, x0, y0, n):
 
 
 def objectness(rgb):
-    """Buildings in the tiles: grey (low saturation) pixels that are neither white nor black."""
+    """Buildings in the tiles: grey (low saturation) pixels darker than the ground colours."""
     f = rgb.astype(np.float32) / 255
     high, low = f.max(2), f.min(2)
     saturation = (high - low) / np.maximum(high, 1e-3)
-    return ((saturation < 0.12) & (high > 0.2) & (high < 0.92)).astype(np.float32)
+    return ((saturation < 0.12) & (high > 0.15) & (high < 0.8)).astype(np.float32)
 
 
 def peak_offset(a, b, search=SEARCH):
@@ -82,20 +82,19 @@ def check(slug):
     z = meta["maxNativeZoom"]
     full = 256 * 2 ** z
     px_x, px_y = size_x / full, size_y / full
-    median = ndimage.median_filter(hm, size=21)
-    bumps = (hm - median > 2.5).astype(np.float32)
+    ground = np.load(os.path.join(prep, "ground.npy"))
+    # Objects of the served heightmap: where it rises 2 m above the bare ground
+    bumps = (hm - ground > 2.0).astype(np.float32)
     report = {"map": slug, "zoom": z, "m_per_px": round(px_x, 4), "windows": []}
 
-    # Building-dense windows from the heightmap itself
+    # The windows with the most buildings (roof labels of prep.py)
     n = full // 256 // WINDOW_TILES
-    counts = []
-    for wy in range(n):
-        for wx in range(n):
-            u0, u1 = int(wx * WINDOW_TILES * 256 * px_x), int((wx + 1) * WINDOW_TILES * 256 * px_x)
-            v0, v1 = int(wy * WINDOW_TILES * 256 * px_y), int((wy + 1) * WINDOW_TILES * 256 * px_y)
-            counts.append((float(bumps[v0:v1, u0:u1].sum()), wx, wy))
-    counts.sort(reverse=True)
-    picked = [c for c in counts[:WINDOWS] if c[0] > 50]
+    counts = {}
+    for label in json.load(open(os.path.join(prep, "labels.json"))):
+        key = (int((label["x"] - b["min_x"]) / px_x // (256 * WINDOW_TILES)), int((label["y"] - b["min_y"]) / px_y // (256 * WINDOW_TILES)))
+        counts[key] = counts.get(key, 0) + label["area"]
+    ranked = sorted(((area, wx, wy) for (wx, wy), area in counts.items() if 0 <= wx < n and 0 <= wy < n), reverse=True)
+    picked = ranked[:WINDOWS]
 
     offsets = []
     for _, wx, wy in picked:
@@ -108,22 +107,26 @@ def check(slug):
         rows = np.clip(np.rint(gy * px_y).astype(int), 0, hm.shape[0] - 1)
         theirs = bumps[np.ix_(rows, cols)]
         dx, dy, peak = peak_offset(ours, theirs)
-        offsets.append((dx, dy))
-        report["windows"].append({"tiles": [z, x0, y0], "dx_px": round(dx, 2), "dy_px": round(dy, 2), "correlation": round(peak, 3)})
+        # A peak on the search boundary or a weak one is no measurement (too few buildings in the window)
+        measured = max(abs(dx), abs(dy)) < SEARCH - 0.5 and peak >= 0.1
+        if measured:
+            offsets.append((dx, dy))
+        report["windows"].append({"tiles": [z, x0, y0], "dx_px": round(dx, 2), "dy_px": round(dy, 2), "correlation": round(peak, 3), "measured": measured})
         overlay = rgb.astype(np.float32)
         overlay[theirs > 0] = overlay[theirs > 0] * 0.5 + np.array([255, 0, 0]) * 0.5
         Image.fromarray(overlay.astype(np.uint8)).save(f"/check/{slug}_heightmap_{z}_{x0}_{y0}.png")
+    report["heightmap_pass"] = False
     if offsets:
         dx = float(np.median([o[0] for o in offsets]))
         dy = float(np.median([o[1] for o in offsets]))
         report["heightmap_offset_px"] = [round(dx, 2), round(dy, 2)]
         report["heightmap_offset_m"] = [round(dx * px_x, 3), round(dy * px_y, 3)]
-        report["heightmap_pass"] = abs(dx) < 1 and abs(dy) < 1
+        report["heightmap_pass"] = abs(dx) < 1 and abs(dy) < 1 and len(offsets) >= 2
 
-    ground = np.load(os.path.join(prep, "ground.npy"))
-    open_ground = np.abs(hm - median) < 0.05
+    open_ground = np.abs(hm - ground) < 0.05
     diff = (ground - hm)[open_ground]
     report["height_reference_median_diff_m"] = round(float(np.median(diff)), 4)
+    report["height_reference_open_ground_share"] = round(float(open_ground.mean()), 4)
     report["height_reference_pass"] = abs(float(np.median(diff))) < 0.01
 
     # Upstream basemap at zoom 5

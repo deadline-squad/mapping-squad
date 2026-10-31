@@ -38,7 +38,6 @@ MARGIN = 64
 FINEST_M_PER_PX = 0.33
 WEBP_QUALITY = 82
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
 # Ground cover colours by landscape physical material (features.PHYSICAL_MATERIALS)
 COVER_RGB = {
@@ -88,6 +87,7 @@ CONTOUR_LADDER = [1, 2, 5, 10, 20, 50, 100, 200]
 MAJOR = {1: 10, 2: 10, 5: 25, 10: 50, 20: 100, 50: 250, 100: 500, 200: 1000}
 LABEL_CELL = 320
 LABEL_STEP = 8
+LABEL_HALF_PX = 14
 
 _data = {}
 
@@ -296,29 +296,34 @@ def downsample(canvas, frame):
 
 
 def draw_water(d, frame, h, rgb):
-    """Sea below the ocean level, static water planes over lower ground, and river splines."""
-    level = np.full(h.shape, -np.inf, np.float32)
-    if d["sea"] is not None:
-        level[:] = d["sea"]
+    """Water wherever the ground lies below a water surface: the sea (ocean actors' level), static
+    water planes and river splines (their ribbons at the spline's height: the river mesh is laid
+    bank to bank and the banks rise above it). Returns the water coverage [H, W]."""
+    surfaces = []
     box = frame.world_box(4)
     for plane in d["planes"]:
         b = plane["box"]
         if b[2] < box[0] or b[0] > box[2] or b[3] < box[1] or b[1] > box[3]:
             continue
-        p = np.asarray(plane["polygon"])
-        px, py = frame.to_px(p[:, 0], p[:, 1])
-
-        def draw(canvas, s, px=px, py=py):
-            canvas.polygon([(x * s, y * s) for x, y in zip(px, py)], fill=255)
-        inside = supersampled_mask(frame, draw) > 0.5
-        level = np.where(inside, np.maximum(level, plane["z"]), level)
+        surfaces.append((plane["z"], np.asarray(plane["polygon"])))
+    for line in d["lines"]:
+        b = line["box"]
+        if line["cls"] != "river" or b[2] < box[0] or b[0] > box[2] or b[3] < box[1] or b[1] > box[3]:
+            continue
+        z = line["center"][:, 2] - d["meta"]["z_min_m"]
+        for k in range(len(z) - 1):
+            surfaces.append((float(max(z[k], z[k + 1])), np.array([line["left"][k], line["right"][k], line["right"][k + 1], line["left"][k + 1]])))
+    level = np.full(h.shape, -np.inf if d["sea"] is None else d["sea"], np.float32)
+    if surfaces:
+        # Painter's order: the higher surface wins where two overlap
+        canvas = Image.new("F", (frame.width, frame.height), -1e9)
+        draw = ImageDraw.Draw(canvas)
+        for z, polygon in sorted(surfaces, key=lambda item: item[0]):
+            px, py = frame.to_px(polygon[:, 0], polygon[:, 1])
+            draw.polygon(list(zip(px.tolist(), py.tolist())), fill=z)
+        level = np.maximum(level, np.asarray(canvas, np.float32))
     depth = level - h
     water = smoothstep(-0.05, 0.15, depth)
-    rivers = [line for line in d["lines"] if line["cls"] == "river"]
-    if rivers:
-        river = polygon_mask(frame, rivers, box, 0.0)
-        depth = np.where(river > 0, np.maximum(depth, 1.0), depth)
-        water = np.maximum(water, river)
     if not water.any():
         return np.zeros(h.shape, np.float32)
     deep = smoothstep(0.0, 12.0, depth)[..., None]
@@ -423,6 +428,8 @@ def contour_labels(d, frame, minor, major):
             level = np.round(h / major) * major
             dist = np.abs(h - level) / grad
             ok = (dist < LABEL_STEP * 0.75) & (minor / grad >= 7) & (major / grad >= 28) & (grad > 1e-4)
+            if frame.px <= 1:
+                ok &= ~objects_near(d, u, v, LABEL_HALF_PX * frame.px)
             if d["sea"] is not None:
                 ok &= level > d["sea"] + 0.5
             if not ok.any():
@@ -443,6 +450,20 @@ def contour_labels(d, frame, minor, major):
             half = d["font_label"].getlength(text) / 2 + 3
             labels.append((x - frame.gx0, y - frame.gy0, angle, text, half))
     return labels
+
+
+def objects_near(d, u, v, radius_m):
+    """Whether an object (0.3 m or taller, 1 m pyramid level) lies within radius_m of each point (u, v in m)."""
+    r = int(math.ceil(radius_m))
+    # Level 2 cell i is centred i + 0.375 m from min (see prep.py)
+    cols = np.rint(u - 0.375).astype(np.int64)
+    rows = np.rint(v - 0.375).astype(np.int64)
+    c0, r0 = int(cols.min()) - r, int(rows.min()) - r
+    window = crop(d["obj"][("v", 2)], r0, int(rows.max()) + r + 1, c0, int(cols.max()) + r + 1) > 0
+    if not window.any():
+        return np.zeros(u.shape, bool)
+    busy = ndimage.maximum_filter(window, size=2 * r + 1)
+    return busy[rows - r0, cols - c0]
 
 
 def knockout(alpha, labels, half_height=7.0):
@@ -729,6 +750,8 @@ def main():
             if i % max(1, len(tasks) // 20) == 0:
                 print(time.strftime("%H:%M:%S"), slug, f"{i}/{len(tasks)} blocks, {done} tiles", flush=True)
     m_per_px = (b["max_x"] - b["min_x"]) / (TILE * 2 ** finest)
+    # "Squad dedicated server build <n>, landscape collision" of the heightmap the ground comes from
+    build = json.load(open(os.path.join("/heightmaps", slug, "meta.json")))["sources"]["terrain"].split(",")[0]
     json.dump({
         "map": slug,
         "tileSize": TILE,
@@ -737,8 +760,8 @@ def main():
         "metresPerPixel": round(m_per_px, 4),
         "bounds_m": b,
         "url": "{z}/{x}_{y}.webp",
-        "sources": "Squad dedicated server build game files: landscape collision and physical materials, static mesh "
-                   "collision, foliage, landscape splines, water; SquadHeight for Blueprint objects (tools/maptiles)",
+        "sources": f"{build}: landscape collision and physical materials, static mesh collision, foliage, landscape "
+                   "splines, water; SquadHeight for Blueprint objects (tools/maptiles)",
         "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "seconds": round(time.time() - started),
     }, open(os.path.join(staging, "meta.json"), "w"), indent=1)
