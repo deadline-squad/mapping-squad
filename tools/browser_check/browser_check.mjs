@@ -349,6 +349,51 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     await context.close();
 }
 
+// Placed mortar and Hell Cannon strat markers show their range circle while hovered (Leaflet 2 fires
+// pointerover/pointerout, not mouseover/mouseout), and dragging one pauses the keypad popup under the cursor
+// through the pointermove listener it was bound with
+{
+    const { context, page } = await open();
+    // The start-up splash still covers the map for a moment after the heights are there: pointer events need it gone
+    await page.waitForFunction(() => document.elementFromPoint(800, 500)?.closest("#map"), null, { timeout: 30000 });
+    await page.evaluate(() => { window.__App.userSettings.set("keypadUnderCursor", true); });
+    for (const [icon, range] of [["deployable_mortars", 1237], ["deployable_hellcannon", 923]]) {
+        const marker = await page.evaluate((icon) => {
+            const map = window.__App.minimap;
+            map.setView([-map.pixelSize / 2, map.pixelSize / 2], 4, { animate: false });
+            map.createMarker({ lat: -map.pixelSize / 2, lng: map.pixelSize / 2 }, "ally", "deployables", icon);
+            const marker = window.__strat = map.activeMarkers.getLayers().at(-1);
+            return { point: map.latLngToContainerPoint(marker.getLatLng()), rect: map.getContainer().getBoundingClientRect().toJSON() };
+        }, icon);
+        const shown = () => page.evaluate(() => window.__App.minimap.markersGroup.hasLayer(window.__strat.constructionRange));
+        const before = await shown();
+        await page.mouse.move(marker.rect.left + marker.point.x + 150, marker.rect.top + marker.point.y + 150);
+        await page.mouse.move(marker.rect.left + marker.point.x, marker.rect.top + marker.point.y, { steps: 5 });
+        const over = await shown();
+        const radius = await page.evaluate(() => window.__strat.constructionRange.getRadius() / window.__App.minimap.gameToMapScale);
+        await page.mouse.move(marker.rect.left + marker.point.x + 150, marker.rect.top + marker.point.y + 150, { steps: 5 });
+        const after = await shown();
+        check(`${icon} marker shows its range circle on hover`, !before && over && !after && Math.abs(radius - range) < 1,
+            `before hover ${before}, hovered ${over}, pointer away ${after}, radius ${radius.toFixed(0)} m of ${range} m`);
+        await page.evaluate(() => window.__strat.delete());
+    }
+    const drag = await page.evaluate(() => {
+        const map = window.__App.minimap;
+        const listening = () => map.listens("pointermove", map._handleMouseMove);
+        map.createMarker({ lat: -map.pixelSize / 2, lng: map.pixelSize / 2 }, "ally", "deployables", "deployable_mortars");
+        const marker = map.activeMarkers.getLayers().at(-1);
+        const idle = listening();
+        marker.fire("dragstart");
+        const dragging = listening();
+        marker.fire("dragend");
+        const dropped = listening();
+        marker.delete();
+        return { idle, dragging, dropped };
+    });
+    check("strat marker drag pauses the pointer popup and restores it", drag.idle && !drag.dragging && drag.dropped, JSON.stringify(drag));
+    await context.close();
+}
+
 // The precise heightmap's requests: meta.json first, then the heavy file it names (heightmap.webp or
 // heightmap.png, with ?v=<generated> once meta.json has it)
 const preciseRequest = /\/heightmaps\/[^/]+\/(heightmap\.(?:webp|png)|meta\.json)(?:\?.*)?$/;

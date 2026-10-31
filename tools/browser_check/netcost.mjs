@@ -1,7 +1,9 @@
 // Network cost of the Deadline SquadCalc as a first-time and as a returning visitor: bytes on the wire,
 // requests and the time to the precise heightmap, per scenario, in a real Chromium.
 //
-//     node netcost.mjs <site URL> [--json <file>]
+//     node netcost.mjs <site URL> [--json <file>] [--cold-only]
+//
+// --cold-only stops after the three visits of the first scenario (no map switches, no detailed layer).
 //
 // Scenarios: cold first visit (empty caches, until the service worker finished precaching), warm
 // revisit (same browser profile, a new page), a map switch to Yehorivka / Skorpo / Al Basrah (empty HTTP
@@ -23,11 +25,12 @@ import { join } from "node:path";
 
 const base = process.argv[2];
 if (!base) {
-    console.error("usage: node netcost.mjs <site URL> [--json <file>]");
+    console.error("usage: node netcost.mjs <site URL> [--json <file>] [--cold-only]");
     process.exit(2);
 }
 const jsonIndex = process.argv.indexOf("--json");
 const jsonFile = jsonIndex > 0 ? process.argv[jsonIndex + 1] : null;
+const coldOnly = process.argv.includes("--cold-only");
 const IDLE_MS = 1500;
 
 /**
@@ -300,6 +303,7 @@ async function switchMap(page, mapName) {
 }
 
 // Map switches: with empty HTTP cache (one profile per map), then again with the files cached
+if (!coldOnly) {
 for (const mapName of ["Yehorivka", "Skorpo", "AlBasrah"]) {
     log(`switch ${mapName}`);
     const { context } = await launch();
@@ -425,6 +429,7 @@ for (const mapName of ["Yehorivka", "Skorpo", "AlBasrah"]) {
         runs: runs.map(({ fps, framesOver25ms, droppedFrameEvents }) => ({ fps, framesOver25ms, droppedFrameEvents })),
     };
     await context.close();
+}
 }
 
 for (const profile of profiles) rmSync(profile, { recursive: true, force: true });
