@@ -103,6 +103,38 @@ reload: a subset used before comes from the service worker's `fonts` cache, one 
 repeats a cold visit on Slow 4G with a 4x slower CPU and prints FCP and the font requests; `--shots` saves a screenshot
 of the page and of the settings dialog per language, to compare two builds. Exits with 1 on a failure.
 
+## sb_bridge_races.mjs: the bridge against Squad Ballistics' own scripts
+
+```sh
+python3 -c "import json, maplink, ballistics; json.dump({'bridge': maplink.bridge_script(None), 'watch': maplink.WATCH_SCRIPT, 'renamed': ballistics.RENAMED_WEAPONS}, open('/tmp/sb_scripts.json', 'w'))"   # in a Squad Ballistics checkout
+node sb_bridge_races.mjs <site URL> [/tmp/sb_scripts.json]
+```
+
+A model of SB's map host (known revision, last targets, last weapon) polls with SB's real poll script after every kind of
+change (target added, moved, deleted; weapon marker moved, raised, removed; weapon and shell switched; heights loading
+late; two quick map switches) and must end each step with the page's newest target, profile and weapon. Every name of
+`RENAMED_WEAPONS` must also select its current weapon through `selectWeapon`.
+
+## sw_upgrade_check.mjs: the service worker across a deploy
+
+```sh
+node sw_upgrade_check.mjs <site URL> --old <dist> --new <dist> --link <symlink the server root is> [--hm-link <symlink of /heightmaps/> --heightmaps <dir>]
+```
+
+Upgrade and rollback between two builds (precache holds exactly the new bundle, the page runs it, opens offline),
+an open tab asking for a chunk of the old bundle, a precache missing entries, and old-format against current
+heightmaps with both builds. See the header of the script for the Caddy setup.
+
+## offline_app_check.mjs: the app without a network
+
+```sh
+node offline_app_check.mjs <site URL> [--no-fonts]
+```
+
+After one visit: the page, translations and the seen precise heightmap open offline (also after a browser restart),
+fonts stay, online the page and translations come from the network first, and a regenerated heightmap (new `generated` in
+meta.json) is fetched under its new `?v=` URL. The Google Fonts caches are checked only when the page requests them.
+
 ## offline_check.mjs: the service worker's caches
 
 ```sh
