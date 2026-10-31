@@ -13,6 +13,11 @@
 //   so Phi is uniform on [0, h) (acos(2v - 1) is spread over [0, pi], the remainder by a tiny h is flat):
 //   the miss RADIUS is uniform, the density is 1/r, not uniform over the area. Theta is uniform.
 //
+// Direct-fire weapons (deadline-squad/deadline-squadcalc#8) are flown in the game's 20 ms substeps (motor along the
+// path or the barrel, speed cap, as squadBallistics.js documents): the shot of each cone direction is flown from the
+// real muzzle, so the closed-form spread of getSpreadParameter, which assumes a constant speed, is not part of the
+// oracle (SquadCalc's hit probability uses firingSolution.getHitSpread for those shots).
+//
 // Cases: first shell of the Mortar (50 MOA) and of the AGS-17 (50 MOA, high arc) on flat ground, the aim
 // point at the origin. 400,000 shots each, seeded; the recorded kill and wound are those of the oracle (the
 // issue lists 0.489 / 0.901 for the mortar at 1000 m, its oracle left out the muzzle's 1.57 m along the tube,
@@ -57,10 +62,10 @@ const explosionOf = (shell) => ({
 });
 
 /** The weapon, loaded with its first shell, and the firing solution to a target on flat ground */
-function solve(name, distance) {
+function solve(name, distance, shellIndex = 0) {
     const w = WEAPONS.find((entry) => entry.name === name);
     const weapon = new Weapon(w.name, w.deceleration, w.decelerationTime, w.gravityScale, w.minElevation, w.unit, w.logo, w.marker, w.type, w.angleType, w.elevationPrecision, w.shells, w.heightOffset, w.angleOffset, w.projectileLifespan, w.mod, w.elevationRate, w.heatmap, w.acceleration, w.accelerationTime, w.holdElevation, w.ballistics, w.image, w.muzzle, w.maxSpeed, w.rotationFollowsVelocity);
-    const shell = w.shells[0];
+    const shell = w.shells[shellIndex];
     weapon.velocity = shell.velocity;
     weapon.moa = shell.moa;
     weapon.minDistance = shell.minDistance;
@@ -104,8 +109,69 @@ function gameImpacts(weapon, moa, elevation, distance, random) {
     return impacts;
 }
 
+const SUBSTEP = 0.02;
+
+/**
+ * Horizontal distance a shot flies, in the game's substeps (Velocity Verlet, motor along R for boostTime, speed
+ * cap on every substep, R following the velocity unless the projectile keeps the barrel's axis), until it comes
+ * down to the ground, from its start point.
+ */
+function flySubsteps(shot, elevation, startX, startZ) {
+    let x = startX;
+    let z = startZ;
+    let vx = shot.velocity * Math.cos(elevation);
+    let vz = shot.velocity * Math.sin(elevation);
+    let axis = [Math.cos(elevation), Math.sin(elevation)];
+    const next = (axisNow, time) => {
+        const push = shot.boostTime > 0 && time < shot.boostTime - 1e-12 ? shot.acceleration : 0;
+        let nx = vx + push * axisNow[0] * SUBSTEP;
+        let nz = vz + (push * axisNow[1] - shot.gravity) * SUBSTEP;
+        const speed = Math.hypot(nx, nz);
+        if (shot.maxSpeed && speed > shot.maxSpeed) {
+            nx *= shot.maxSpeed / speed;
+            nz *= shot.maxSpeed / speed;
+        }
+        return [nx, nz];
+    };
+    for (let step = 0, time = 0; step < 20000; step++, time += SUBSTEP) {
+        const before = next(axis, time);
+        const nextX = x + vx * SUBSTEP + (before[0] - vx) * SUBSTEP / 2;
+        const nextZ = z + vz * SUBSTEP + (before[1] - vz) * SUBSTEP / 2;
+        if (nextZ <= 0 && step > 0) return x + (nextX - x) * z / (z - nextZ);
+        x = nextX;
+        z = nextZ;
+        if (shot.rotationFollowsVelocity) axis = [vx / Math.hypot(vx, vz), vz / Math.hypot(vx, vz)];
+        [vx, vz] = next(axis, time);
+    }
+    return NaN;
+}
+
+/** The game's shots at the aim point for a weapon that does not fly a plain parabola (rockets, capped shells) */
+function substepImpacts(weapon, moa, elevation, distance, random, shots) {
+    const shot = weapon.getShot();
+    const halfAngle = (moa / 60) * 0.5 * Math.PI / 180;
+    const sinE = Math.sin(elevation);
+    const cosE = Math.cos(elevation);
+    const x0 = shot.muzzleForward * cosE - shot.muzzleUp * sinE;
+    const z0 = shot.pivotHeight + shot.muzzleForward * sinE + shot.muzzleUp * cosE;
+    const impacts = new Array(shots);
+    for (let i = 0; i < shots; i++) {
+        const phi = Math.acos(2 * random() - 1) % halfAngle;
+        const theta = 2 * Math.PI * random();
+        const sideways = Math.sin(phi) * Math.cos(theta);
+        const upwards = Math.sin(phi) * Math.sin(theta);
+        const forward = Math.cos(phi) * cosE - upwards * sinE;
+        const up = Math.cos(phi) * sinE + upwards * cosE;
+        const range = flySubsteps(shot, Math.atan2(up, Math.hypot(forward, sideways)), x0, z0) - x0;
+        const azimuth = Math.atan2(sideways, forward);
+        impacts[i] = { east: x0 + range * Math.cos(azimuth) - distance, north: range * Math.sin(azimuth) };
+    }
+    return impacts;
+}
+
 const aimPoint = { east: 0, north: 0 };
 function gameProbabilities(impacts, explosion) {
+    const total = impacts.length;
     let kills = 0;
     let wounds = 0;
     for (const impact of impacts) {
@@ -113,7 +179,7 @@ function gameProbabilities(impacts, explosion) {
         if (damage >= KILL_DAMAGE) kills++;
         if (damage >= WOUND_DAMAGE) wounds++;
     }
-    return { kill: kills / SHOTS, wound: wounds / SHOTS };
+    return { kill: kills / total, wound: wounds / total };
 }
 
 // The distribution itself: CDF of Phi / h at 0.1 ... 0.9 is the fraction itself (uniform in radius);
@@ -173,6 +239,53 @@ for (const { name, distance, shown, kill, wound } of cases) {
     const [killRounds, woundRounds] = rounds(squadcalc);
     const [gameKillRounds, gameWoundRounds] = rounds(game);
     check(`${label}: rounds to kill / wound for 90 %`, Math.abs(killRounds - gameKillRounds) <= 1 && Math.abs(woundRounds - gameWoundRounds) <= 1, `${killRounds} / ${woundRounds} vs game ${gameKillRounds} / ${gameWoundRounds}`);
+}
+
+// Direct-fire weapons with an explosion, three distances each (a plain grenade parabola, a boosted rocket, a capped
+// shell and an autocannon). The nominal shot must land on the target, and SquadCalc's kill / wound per round and the
+// rounds to fire must agree with the oracle.
+const DIRECT_SHOTS = 300000;
+const directCases = [
+    { name: "DF_M203_M320_GP_25_HK79_SL40", shell: 0, distances: [150, 300, 450] },
+    { name: "DF_MK19_PARS_III_RWS", shell: 0, distances: [300, 800, 1500] },
+    { name: "DF_RPG_7_PG_7V_HEAT_OG_7V", shell: 0, distances: [150, 400, 800] },
+    { name: "DF_RPG_7_PG_7V_HEAT_OG_7V", shell: 1, distances: [150, 400, 800] },
+    { name: "DF_SPG_9_FRAG", shell: 0, distances: [150, 400, 800] },
+    { name: "DF_Tank_HEAT_HE_M256_Rh120_2A46_ZPT98_2A20_M68A2", shell: 1, distances: [300, 800, 1500] },
+    { name: "DF_2A70_100mm_BMP_3_BMD_4_ZBD04A_FRAG", shell: 0, distances: [300, 800, 1500] },
+    // 300 m is a grazing shot (0.16 degrees): the range of a round fired below the line of sight goes with 1/angle,
+    // so the landing spots are skewed and the symmetric ellipse is off by 0.011 (0.350 against 0.339); 0.015 allowed there
+    { name: "DF_CTAS40_40mm_GP", shell: 0, distances: [300, 800, 1500], tolerance: { 300: 0.015 } },
+];
+for (const { name, shell: shellIndex, distances, tolerance = {} } of directCases) {
+    for (const distance of distances) {
+        const { weapon, shell, solution } = solve(name, distance, shellIndex);
+        const explosion = explosionOf(shell);
+        const elevation = solution.elevation.low.rad;
+        const label = `${name}/${shell.name} ${distance} m`;
+        const shot = weapon.getShot();
+        const start = { x: shot.muzzleForward * Math.cos(elevation) - shot.muzzleUp * Math.sin(elevation), z: shot.pivotHeight + shot.muzzleForward * Math.sin(elevation) + shot.muzzleUp * Math.cos(elevation) };
+        const landed = flySubsteps(shot, elevation, start.x, start.z);
+        check(`${label}: the nominal shot lands on the target`, Math.abs(landed - distance) <= 1, `${(landed - distance).toFixed(2)} m off`);
+
+        const game = gameProbabilities(substepImpacts(weapon, shell.moa, elevation, distance, seeded(distance + shellIndex), DIRECT_SHOTS), explosion);
+        const { lateral, along } = solution.getHitSpread("low");
+        const squadcalc = hitProbability(flat, explosion, lateral, along, 90);
+        check(`${label}: kill`, Math.abs(squadcalc.kill - game.kill) <= (tolerance[distance] ?? TOLERANCE), `${squadcalc.kill.toFixed(3)} vs game ${game.kill.toFixed(3)}`);
+        check(`${label}: wound`, Math.abs(squadcalc.wound - game.wound) <= (tolerance[distance] ?? TOLERANCE), `${squadcalc.wound.toFixed(3)} vs game ${game.wound.toFixed(3)}`);
+        const rounds = (probabilities) => [roundsNeeded(probabilities.kill), roundsNeeded(probabilities.wound)];
+        const [killRounds, woundRounds] = rounds(squadcalc);
+        const [gameKillRounds, gameWoundRounds] = rounds(game);
+        check(`${label}: rounds to kill / wound for 90 %`, Math.abs(killRounds - gameKillRounds) <= 1 && Math.abs(woundRounds - gameWoundRounds) <= 1, `${killRounds} / ${woundRounds} vs game ${gameKillRounds} / ${gameWoundRounds}`);
+    }
+}
+
+// A plain parabola keeps the closed-form spread (the Mortar's and the grenades' numbers above do not change)
+{
+    const { solution } = solve("DF_M203_M320_GP_25_HK79_SL40", 300);
+    const spread = solution.spreadParameters.low;
+    const hit = solution.getHitSpread("low");
+    check("plain parabola: hit spread is the closed form", hit.lateral === spread.semiMajorAxis / 2 && hit.along === spread.semiMinorAxis / 2, `${hit.lateral.toFixed(3)} / ${hit.along.toFixed(3)}`);
 }
 
 console.log(failures ? `${failures} hit probability checks failed` : "all hit probability checks passed");

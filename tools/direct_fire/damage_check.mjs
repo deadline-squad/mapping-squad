@@ -9,6 +9,7 @@
 // distribution against a 400,000-shot simulation of the game's cone).
 // Exits with 1 on any failure.
 import "./stub-app.mjs";
+import { readFileSync } from "node:fs";
 
 const root = process.argv[2];
 const { WEAPONS } = await import(`${root}/src/data/weapons.js`);
@@ -105,6 +106,55 @@ check("rounds: p = 0.5 -> 4", roundsNeeded(0.5) === 4, roundsNeeded(0.5));
 check("rounds: p = 0.9 -> 1", roundsNeeded(0.9) === 1, roundsNeeded(0.9));
 check("rounds: p = 0.1 -> 22", roundsNeeded(0.1) === 22, roundsNeeded(0.1));
 check("rounds: p = 0 -> never", roundsNeeded(0) === Infinity, roundsNeeded(0));
+
+// 8. Direct-fire weapons (deadline-squad/deadline-squadcalc#8): their explosion comes from the game files
+// (gen_squadcalc_weapons.py GAME_EXPLOSION, SQUADCALC_ONLY). Every shell of every one of them:
+const directFire = WEAPONS.filter((w) => w.type === "directFire");
+const NO_EXPLOSION_GUNS = ["DF_M2A1_50", "DF_M2A1_50_ACOG_emplacement", "DF_NSV", "DF_DShK_M", "DF_Kord_SPP_emplacement", "DF_KPVT_14_5mm", "DF_M242_Bushmaster_25mm_AP"];
+let zones = 0;
+for (const weapon of directFire) {
+    check(`${weapon.name}: every shell has a spread (MOA from the game files)`, weapon.shells.every((shell) => shell.moa > 0), weapon.shells.map((shell) => shell.moa).join(" / "));
+    for (const shell of weapon.shells) {
+        if (!(shell.explosionRadius[1] > 0)) continue;
+        zones++;
+        const label = `${weapon.name}/${shell.name}`;
+        const radii = [circles(shell, KILL_DAMAGE), circles(shell, WOUND_DAMAGE)];
+        if (!radii.every((radius) => Number.isFinite(radius) && radius >= 0)) {
+            check(`${label}: damage circles are finite`, false, radii.join(" / "));
+            continue;
+        }
+        const field = damageField(flat, explosionOf(shell), CELL);
+        const half = (field.size - 1) / 2;
+        const reach = (threshold) => {
+            let last = -1;
+            for (let col = half; col < field.size; col++) if (field.damage[half * field.size + col] >= threshold) last = col - half;
+            return last * CELL;
+        };
+        // A zone the circle does not have (an explosion too weak at head height) is empty in the field too
+        const ok = [[KILL_DAMAGE, radii[0]], [WOUND_DAMAGE, radii[1]]].every(([threshold, radius]) => radius === 0 ? reach(threshold) <= 0 : Math.abs(reach(threshold) - radius) <= CELL);
+        check(`${label}: flat kill / wound zone = damage circles`, ok, `field ${reach(KILL_DAMAGE)} / ${reach(WOUND_DAMAGE)} m, circles ${radii[0].toFixed(2)} / ${radii[1].toFixed(2)} m`);
+    }
+}
+check("direct fire: shells with an explosion", zones >= 60, `${zones}`);
+for (const name of NO_EXPLOSION_GUNS) {
+    const weapon = directFire.find((w) => w.name === name);
+    check(`${name}: kinetic round, no damage zone`, weapon.shells.every((shell) => shell.explosionRadius[1] === 0 && circles(shell, WOUND_DAMAGE) === 0), JSON.stringify(weapon.shells.map((shell) => shell.explosionRadius)));
+}
+
+// The SMAW's tandem warhead deals 80: it never kills, and its circle says so (it was a radius of infinity)
+const tandem = directFire.find((w) => w.name === "DF_MK153_SMAW").shells.find((shell) => shell.name === "Tandem");
+check("SMAW tandem (80 damage): no kill zone, a wound zone", circles(tandem, KILL_DAMAGE) === 0 && circles(tandem, WOUND_DAMAGE) > 7, `${circles(tandem, KILL_DAMAGE)} / ${circles(tandem, WOUND_DAMAGE).toFixed(2)}`);
+// The M72's blast is 100 within 1.5 m and its centre is 0.08 m above the ground: at head height (1.8 m) it falls short
+const law = directFire.find((w) => w.name === "DF_M72A7_LAW_RPG_26").shells[0];
+check("M72 (100 damage within 1.5 m): kill zone empty, not NaN", circles(law, KILL_DAMAGE) === 0, `${circles(law, KILL_DAMAGE)}`);
+
+// Shells a weapon offers are named in every language
+const names = new Set(directFire.flatMap((w) => (w.shells.length > 1 ? w.shells.map((shell) => shell.name) : [])));
+for (const language of ["en", "fr", "de", "ru", "uk", "zh"]) {
+    const locale = JSON.parse(readFileSync(`${root}/public/locales/${language}/weapons.json`, "utf8"));
+    const missing = [...names].filter((name) => !locale[name]);
+    check(`locale ${language}: shell names ${[...names].join(", ")}`, missing.length === 0, missing.length ? `missing ${missing}` : "all present");
+}
 
 console.log(failures ? `${failures} damage checks failed` : "all damage checks passed");
 process.exit(failures ? 1 : 0);
