@@ -4,9 +4,10 @@ SquadCalc's own heightmaps are 8-bit (up to 2.1 m per level). These are built fr
 dedicated server paks and served by the Deadline SquadCalc in `/heightmaps/<map>/`
 (`src/js/squadHeightmaps.js` falls back to the 8-bit ones when a map has none).
 
-Each `heightmap.png` is a 16-bit grayscale PNG on SquadCalc's grid (minimap bounds, 1 m per pixel,
-row = world Y min→max, col = world X min→max); height above the map's lowest point =
-`value * z_step_m` from `meta.json`, which also holds the sources and agreement statistics.
+Each `heightmap.png` is a 16-bit grayscale PNG on SquadCalc's grid (minimap bounds, `resolution_m` of `meta.json`
+per pixel: 1 m, 0.5 m for Chora and Kokan, see "Grid size" below; row = world Y min→max, col = world X min→max);
+height above the map's lowest point = `value * z_step_m` from `meta.json`, which also holds the sources and
+agreement statistics.
 
 ## WebP form
 
@@ -29,6 +30,31 @@ made from; the same step must match the PNG in every pixel, a coarsened one must
 `heightmaps.sh deploy-webp` copies the WebP files next to the PNGs (nothing changes for a page), and
 `heightmaps.sh switch-webp` then replaces each map's `meta.json`: the switch, last.
 In a browser, `tools/browser_check/heightmap_exact.mjs` compares the WebP and PNG paths of the site's worker.
+
+## Grid size
+
+The landscapes of Chora and Kokan have a vertex every 0.5 m (landscape scale 50); every other map's vertices are 1 m or
+more apart. `py/maps.py` holds the cell size of each map (`CELL_M`, default 1 m) and the pipeline builds the map on that
+grid: samples at the bounds' min corner and every cell from it (Chora 8129 x 8129, Kokan 4993 x 4993), the landscape and
+the static meshes sampled at those points, `meta.json` `resolution_m` 0.5. SquadHeight only exports a 1 m grid, so on a
+finer grid its surface is read as follows (`build_heightmap.upsample_surface`): over the landscape each cell takes the
+nearest SquadHeight sample's height above the terrain on top of its own terrain (a building keeps its height, a slope
+does not turn into steps); outside the landscape it is read along the game's triangles. `fuse` is the same code and its
+statistics keep their meaning (for example `terrain_rms_diff_m` is unchanged, the object cell counts are four times as
+many). SquadCalc takes the grid from `resolution_m` and the image size, so no page setting names the map.
+
+Against the landscape's own vertices (`py/compare_native_vertices.py`, terrain only, read with the page's triangle
+rule), 1 m grid against 0.5 m grid:
+
+| map | vertices | 1 m RMS / p99 / max | 0.5 m RMS / p99 / max |
+|---|---|---|---|
+| Chora | 22.0 M | 8.91 cm / 9.37 cm / 31.4 m | 0.000 / 0.000 / 0.00 cm |
+| Kokan | 23.6 M | 0.89 cm / 3.12 cm / 114 cm | 0.017 / 0.065 / 1.59 cm |
+
+The files are three times as big (heightmap.webp: Chora 4.9 → 14.2 MB, Kokan 2.6 → 6.4 MB; 171 → about 184 MB for the
+25 maps) and the worker decodes them in about three times the time (Chora 0.6 → 1.8 s, Kokan 0.2 → 0.7 s in Chromium),
+so a map is still loaded only when it is selected. `tools/browser_check/heightmap_native.mjs` loads these maps in the
+page and checks their grid, decode time and page heights at the game's vertices.
 
 ## Sources and fusion
 
@@ -118,6 +144,8 @@ verdicts for 1, 0.5 and 0.25 m grids written by `py/compare_resolution.py`.
 
 Files:
 
+* `py/compare_native_vertices.py` — the table above; `py/test_build_heightmap.py` — grid arithmetic tests
+  (`python -m unittest test_build_heightmap`);
 * `extractor/` — SquadExtract (C#, [CUE4Parse](https://github.com/FabianFG/CUE4Parse)): `list`,
   `landscape`/`extractall` (landscape collision), `statics` (static mesh placements and collision),
   `dumpall` (assets as JSON, for `tools/game_ballistics`), `features` (foliage, landscape splines and
