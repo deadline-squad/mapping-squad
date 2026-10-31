@@ -196,3 +196,14 @@ To look at a frame of a video, extract it with Playwright's ffmpeg (it decodes V
 ```sh
 ~/.cache/ms-playwright/ffmpeg-1011/ffmpeg-linux -ss 95 -i desktop.webm -frames:v 1 -c:v png -f image2 frame.png
 ```
+
+## a11y_check.mjs: accessibility of the controls
+
+```sh
+node a11y_check.mjs <site URL>
+```
+
+Reads Chromium's accessibility tree: every button, combobox, checkbox and slider is named (map page, settings and
+factions dialogs), ids are unique, the layer, help map, coverage and HD buttons carry `aria-pressed` in step with
+their `active` class, header selects and their select2 widgets are named, weapon and target markers are reached with
+Tab and opened with Enter or Space with the focus returning to them, and the map buttons are named in each language.
