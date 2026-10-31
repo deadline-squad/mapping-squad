@@ -27,6 +27,18 @@ Squad Ballistics' weapons.json aimed with the overlay is selected by its name an
 hold-laid ones show a hold time) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). Exits with 1 on any failure.
 
+## precision_browser.mjs: precision checks on the served build
+
+```sh
+node precision_browser.mjs <site URL> <SquadCalc checkout for node_modules/fast-png>
+```
+
+The audit's precision checks in the browser, against oracles computed from the served files: distance and
+bearing on a non-square map (Skorpo) from the world coordinates, the page's heights against the bilinear
+interpolation of the served 16-bit heightmap, mortar and UB-32 solutions in a simulation with the game's
+values, a session peer's height padding as a number, and the warning when the heightmaps fail to load.
+`tools/direct_fire/precision_check.mjs` holds the same checks on the modules, without a browser.
+
 ## perf_trace.mjs, cpu_profile.mjs: main-thread cost
 
 ```sh
