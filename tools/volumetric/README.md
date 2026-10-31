@@ -82,8 +82,9 @@ tools/heightmaps/heightmaps.sh extract
 #   SquadExtract <paks> foliage Maps/Fallujah_City/ out/foliage/fallujah
 # 1. one map, end to end (statics + foliage -> <slug>.vcol); ~1 h for a dense map
 tools/volumetric/build_map.sh fallujah 0.5 0.25
-# 2. all maps, smallest first
+# 2. all maps, smallest first (Skorpo's 1 100 m height range needs dz 0.5: build_all.sh 0.5 0.5 skorpo)
 tools/volumetric/build_all.sh 0.5 0.25
+python py/status_table.py                      # markdown table of built / running / failed / queued maps
 # 3. measurements
 python py/world_tris.py <statics dir> tris.npz
 python py/build_columns.py tris.npz <heightmap meta.json> out/fallujah_cols_0.5 0.5 0.25 visibility fallujah
