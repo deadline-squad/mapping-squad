@@ -90,6 +90,19 @@ Loads each map's heightmap in the site's worker through the WebP and through the
 page pixel by pixel (identical where the step is the same, within half a step where it was coarsened);
 `--dist` with `--fast-png` also checks the worker's PNG decode against fast-png's. Exits with 1 on a difference.
 
+## fonts_check.mjs: the fonts come from the site
+
+```sh
+node fonts_check.mjs <site URL> [--measure <runs>] [--shots <dir>]
+```
+
+In each of the six languages as a first-time visitor: no request to fonts.googleapis.com or fonts.gstatic.com, a clean
+console, the self-hosted Montserrat and Oswald loaded, the cyrillic subsets requested for ru and uk only, the two
+preloaded latin files fetched once, the precache holding the three latin files and no other font; then offline after a
+reload: a subset used before comes from the service worker's `fonts` cache, one never used is not available. `--measure`
+repeats a cold visit on Slow 4G with a 4x slower CPU and prints FCP and the font requests; `--shots` saves a screenshot
+of the page and of the settings dialog per language, to compare two builds. Exits with 1 on a failure.
+
 ## offline_check.mjs: the service worker's caches
 
 ```sh
