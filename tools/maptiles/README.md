@@ -56,6 +56,38 @@ rendered into `$DIST/maptiles/.<map>.tmp` and swapped in when complete; the page
 `?v=<meta.json generated>`, so the long cache lifetime set by Caddy never serves a stale tile.
 After a game patch: `heightmaps.sh extract build deploy`, then `maptiles.sh extract prep render check`.
 
+## Game colours (style `colour`)
+
+A second layer, "Detailed · game colours", draws the same data (hillshade, contours, roads, building footprints
+with heights, trees, water) with the colours of the game's own map. It is a style of `py/render.py`
+(`--style colour`, tiles in `/maptiles/<map>-colour/`, selectable in SquadCalc next to Detailed, maps with such tiles
+only); the Detailed layer itself is unchanged. The colours are fitted to the upstream basemap of the same map
+(`https://squadcalc.app/api/img/maps/<map>/basemap.webp`, the game's minimap texture, 1 m per pixel; it is read for the
+fit and is not redistributed by the tiles), kept in `py/styles/colour_<map>.json`:
+
+1. `fit_palette.py`: the map is rendered at about 1 m per pixel and each pixel is given the class of its top layer
+   (ground cover material, road class, water, tree class, building height band, shadow). Every class colour is multiplied
+   by the ratio of the basemap's mean on those pixels to the render's mean until they agree (the `palette` fit: one
+   colour per class for the whole map).
+2. `fit_fields.py`: the game's colours differ from region to region (sand and rock, a muddy river and a green pond, roofs),
+   so for the groups ground, water, road, object, conifer, deciduous and bush the basemap's own pixels of the group are
+   averaged under a Gaussian (2-3 px, filled from wider ones where the group is absent) into a colour field
+   (`prep/<map>/colour_field_<group>.npy`) that the renderer samples instead of the class colour. Ground pixels clearly
+   darker than their surroundings (the game's baked shadows) are left out of the ground field. Geometry, edges,
+   hillshade, contours, outlines and labels stay those of the Detailed layer at their own resolution.
+3. `fit_relief.py` reports the relief strength and the light direction of the render against the basemap on bare ground
+   (regression of the band-passed luminance on the terrain slope) and the direction of the game's building shadows. The
+   fitted style uses it for `SHADE_STRENGTH` and, where the relief and the shadows agree (Al Basrah: light from the west),
+   `LIGHT_FROM`; elsewhere the north-west light of the Detailed layer stays. The regression is weak (7-11 % of the basemap's
+   luminance variance) and on Gorodok and Fallujah it disagrees with the render, so relief there is the default.
+4. `colour_distance.py`: mean CIE76 and CIEDE2000 between the cell mean colours (cells of about 64 m) of a zoom 4 tile
+   mosaic (about 1 m per pixel) and the basemap, and the best per-channel linear grade; `--write-grade` stores it as the
+   style's `GRADE` (the fitted layers darken a few percent through contours, outlines and shadows: 14-25 % of the distance).
+
+Because the fields are taken from the basemap itself, the distance to it is small by construction; it shows that
+nothing is lost in the re-drawing, not that the colours generalise. Commands: `maptiles.sh colour-fit`, `colour-relief`,
+`colour-render`, `colour-distance`; the Python image is the one of `setup`.
+
 Files:
 
 * `maptiles.sh` — the steps above;
@@ -64,7 +96,8 @@ Files:
 * `py/prep.py` — per map: ground and cover on the 1 m grid, the 0.25 m object raster and its pyramid,
   building labels (reuses `tools/heightmaps/py`: landscape, objects, build_heightmap, maps);
 * `py/render.py` — the tile renderer: styles, contour and label placement, layer order;
-* `py/check_alignment.py` — the checks.
+* `py/check_alignment.py` — the checks;
+* `py/fit_palette.py`, `py/fit_fields.py`, `py/fit_relief.py`, `py/colour_distance.py`, `py/styles/` — the game colours above.
 
 Sizes (build 26005357): about 13 KB per tile; prepared rasters a few hundred MB to 3 GB per map in
 `$WORK/prep` (only needed to re-render).

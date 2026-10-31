@@ -65,6 +65,7 @@ SPLINE_STYLE = {
     "trench": ((96, 66, 40), None, 1.2),
     "hedge": ((70, 102, 50), None, 1.2),
 }
+ROAD_CLASSES = ("dirt", "pavement", "asphalt")  # spline classes coloured by the "road" field
 SPLINE_ORDER = ["dirt", "pavement", "asphalt", "rail", "trench", "hedge"]
 # Foliage: canopy colour and alpha, outline colour, by features.FOLIAGE_CLASSES
 FOLIAGE_STYLE = {
@@ -73,6 +74,7 @@ FOLIAGE_STYLE = {
     features.BUSH: ((128, 160, 86), 0.55, (78, 110, 52)),
     features.ROCK: ((150, 146, 140), 0.9, (92, 88, 84)),
 }
+FOLIAGE_GROUPS = {features.CONIFER: "conifer", features.DECIDUOUS: "deciduous", features.BUSH: "bush"}  # fields of fit_fields.py
 FOLIAGE_ORDER = [features.ROCK, features.BUSH, features.DECIDUOUS, features.CONIFER]
 TRUNK_RGB = (60, 44, 30)
 # Objects: colour ramp of structures by height above ground (m), other classes by colour
@@ -81,6 +83,12 @@ STRUCTURE_RAMP = [(0.3, (222, 214, 200)), (2.0, (196, 186, 170)), (5.0, (170, 15
 OBJECT_RGB = {features.WALL: (98, 92, 86), features.ROCK_OBJECT: (160, 154, 146), features.VEGETATION: (76, 108, 58)}
 OUTLINE_RGB = np.array((52, 48, 44), np.float32)
 SHADOW_FACTOR = 0.72
+# Relief and line strengths a style may change (see apply_style)
+STEEP_ALPHA = 0.4
+SHADE_STRENGTH = 0.7
+CONTOUR_ALPHA = (0.5, 0.85)  # minor, major contours
+GRADE = None  # final colour grade: {"gain": [r, g, b], "offset": [r, g, b]}
+FIELDS = {}  # colour fields of a style: {group: {"file": name in /prep/<map>, "cell_m": metres per cell}}
 OBJECT_MIN_M = 0.3
 LIGHT = np.array([-1.0, -1.0, math.sqrt(2.0)]) / 2.0  # from the north-west, 45 degrees up (image Y points south)
 CONTOUR_LADDER = [1, 2, 5, 10, 20, 50, 100, 200]
@@ -89,7 +97,57 @@ LABEL_CELL = 320
 LABEL_STEP = 8
 LABEL_HALF_PX = 14
 
+STYLES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles")
+FOLIAGE_NAMES = {"conifer": features.CONIFER, "deciduous": features.DECIDUOUS, "bush": features.BUSH, "rock": features.ROCK}
+OBJECT_NAMES = {"wall": features.WALL, "rock": features.ROCK_OBJECT, "vegetation": features.VEGETATION}
+
 _data = {}
+
+
+def apply_style(path):
+    """Replace the default palette and strengths by the ones of a style file (JSON, tools/maptiles/py/styles).
+
+    Keys, all optional: COVER_RGB {physical material: rgb}, NO_COVER_RGB, STEEP_RGB, WATER_RGB, WATER_DEEP_RGB,
+    SHORE_RGB, CONTOUR_RGB, CONTOUR_LABEL_RGB, SPLINE_FILL {spline class: rgb}, FOLIAGE_RGB {conifer, deciduous,
+    bush, rock: rgb}, FOLIAGE_ALPHA {the same names: opacity of the canopy colour}, STRUCTURE_RAMP [[height m, rgb]], OBJECT_RGB {wall, rock, vegetation: rgb}, SHADOW_FACTOR,
+    FIELDS {colour group: {file, cell_m}} (fit_fields.py: the game's regional colours of the ground, water, road, object,
+    conifer, deciduous and bush groups, sampled instead of the class colours), STEEP_ALPHA, SHADE_STRENGTH, LIGHT_FROM (azimuth of the light of the ground relief in degrees, image axes: x east,
+    y south, the default -135 is the north-west), CONTOUR_ALPHA [minor, major] and GRADE {gain, offset}. Unnamed colours stay
+    as in the default style. Every worker process applies the style after import.
+    """
+    style = json.load(open(path))
+    colour = lambda value: tuple(int(round(c)) for c in value)
+    vector = lambda value: np.array(value, np.float32)
+    for key in ("NO_COVER_RGB", "STEEP_RGB", "CONTOUR_LABEL_RGB"):
+        if key in style:
+            globals()[key] = colour(style[key])
+    for key in ("WATER_RGB", "WATER_DEEP_RGB", "SHORE_RGB", "CONTOUR_RGB"):
+        if key in style:
+            globals()[key] = vector(style[key])
+    if "LIGHT_FROM" in style:
+        light = math.radians(style["LIGHT_FROM"])
+        LIGHT[:] = (math.sqrt(0.5) * math.cos(light), math.sqrt(0.5) * math.sin(light), math.sqrt(0.5))
+    for key in ("SHADOW_FACTOR", "STEEP_ALPHA", "SHADE_STRENGTH"):
+        if key in style:
+            globals()[key] = float(style[key])
+    if "CONTOUR_ALPHA" in style:
+        globals()["CONTOUR_ALPHA"] = tuple(style["CONTOUR_ALPHA"])
+    if "FIELDS" in style:
+        FIELDS.clear()
+        FIELDS.update(style["FIELDS"])
+    if "GRADE" in style:
+        globals()["GRADE"] = {k: vector(v) for k, v in style["GRADE"].items()}
+    COVER_RGB.update({name: colour(rgb) for name, rgb in style.get("COVER_RGB", {}).items()})
+    for cls, rgb in style.get("SPLINE_FILL", {}).items():
+        SPLINE_STYLE[cls] = (colour(rgb),) + SPLINE_STYLE[cls][1:]
+    for name, rgb in style.get("FOLIAGE_RGB", {}).items():
+        FOLIAGE_STYLE[FOLIAGE_NAMES[name]] = (colour(rgb),) + FOLIAGE_STYLE[FOLIAGE_NAMES[name]][1:]
+    for name, rgb in style.get("OBJECT_RGB", {}).items():
+        OBJECT_RGB[OBJECT_NAMES[name]] = colour(rgb)
+    for name, alpha in style.get("FOLIAGE_ALPHA", {}).items():
+        FOLIAGE_STYLE[FOLIAGE_NAMES[name]] = FOLIAGE_STYLE[FOLIAGE_NAMES[name]][:1] + (float(alpha),) + FOLIAGE_STYLE[FOLIAGE_NAMES[name]][2:]
+    if "STRUCTURE_RAMP" in style:
+        STRUCTURE_RAMP[:] = [(float(h), colour(rgb)) for h, rgb in style["STRUCTURE_RAMP"]]
 
 
 def finest_zoom(size_m):
@@ -121,6 +179,7 @@ def load(slug):
     palette = np.array([COVER_RGB[name] for name in meta["physical_materials"]] + [NO_COVER_RGB] * (256 - len(meta["physical_materials"])), np.float32)
     palette[features.NO_COVER] = NO_COVER_RGB
     d["palette"] = palette
+    d["fields"] = {group: (np.load(os.path.join(base, spec["file"]), mmap_mode="r"), spec["cell_m"]) for group, spec in FIELDS.items()}
     ground = d["ground"]
     gy, gx = np.gradient(np.asarray(ground[::4, ::4], dtype=np.float64), 4.0)
     slope = np.hypot(gx, gy)
@@ -139,6 +198,14 @@ def load(slug):
     d["font_label"] = ImageFont.truetype(FONT_BOLD, 11)
     d["font_roof"] = ImageFont.truetype(FONT_BOLD, 10)
     return d
+
+
+def field_colour(d, group, frame):
+    """Colour field of a style group (fit_fields.py) at the block's pixels [H, W, 3], or None when the style has none."""
+    if group not in d["fields"]:
+        return None
+    array, cell = d["fields"][group]
+    return sample_grid(array, frame.u / cell - 0.5, frame.v / cell - 0.5, frame.px / cell, 1, np.float32, separable=True).astype(np.float32)
 
 
 def crop(array, r0, r1, c0, c1):
@@ -327,10 +394,17 @@ def draw_water(d, frame, h, rgb):
     if not water.any():
         return np.zeros(h.shape, np.float32)
     deep = smoothstep(0.0, 12.0, depth)[..., None]
-    colour = WATER_RGB * (1 - deep) + WATER_DEEP_RGB * deep
+    if d.get("trace") is not None:
+        d["trace"]["deep"] = deep[..., 0]
+    field = field_colour(d, "water", frame)
+    if field is None:
+        colour, shore = WATER_RGB * (1 - deep) + WATER_DEEP_RGB * deep, SHORE_RGB
+    else:
+        # The field is the colour of shallow water; the deep and shore colours keep the style's ratios to it
+        colour, shore = field * (1 - deep + deep * WATER_DEEP_RGB / WATER_RGB), field * (SHORE_RGB / WATER_RGB)
     blend(rgb, colour, water)
     edge = np.clip(ndimage.maximum_filter(water, 3) - ndimage.minimum_filter(water, 3), 0, 1) * water
-    blend(rgb, SHORE_RGB, edge * (0.6 if frame.px < 2 else 0.35))
+    blend(rgb, shore, edge * (0.6 if frame.px < 2 else 0.35))
     return water
 
 
@@ -361,9 +435,15 @@ def draw_splines(d, frame, rgb, water):
         if not lines:
             continue
         fill_rgb, casing_rgb, min_width = SPLINE_STYLE[cls]
+        field = field_colour(d, "road", frame) if cls in ROAD_CLASSES else None
+        if field is not None:
+            fill_rgb = field
+            casing_rgb = None if casing_rgb is None else field * 0.7
         mask = polygon_mask(frame, lines, box, min_width)
         if not mask.any():
             continue
+        if d.get("trace") is not None:
+            d["trace"]["splines"][cls] = mask
         if casing_rgb is not None and frame.px < 4:
             grown = ndimage.grey_dilation(mask, size=(3, 3))
             blend(rgb, casing_rgb, np.clip(grown - mask, 0, 1) * 0.85 * (1 - water))
@@ -503,6 +583,9 @@ def draw_foliage(d, frame, rgb, water):
     scale = 2
     for c in FOLIAGE_ORDER:
         fill_rgb, fill_alpha, line_rgb = FOLIAGE_STYLE[c]
+        field = field_colour(d, FOLIAGE_GROUPS[c], frame) if c in FOLIAGE_GROUPS else None
+        if field is not None:
+            fill_rgb, line_rgb = field, field * 0.7
         sel = cls == c
         if not sel.any():
             continue
@@ -540,6 +623,8 @@ def draw_foliage(d, frame, rgb, water):
                     draw_rim.ellipse(bbox, outline=255, width=rim_width)
             coverage = np.maximum(coverage, downsample(canvas, frame))
             outline = downsample(rim, frame)
+        if d.get("trace") is not None:
+            d["trace"]["foliage"][c] = coverage
         keep = 1 - water
         blend(rgb, fill_rgb, coverage * fill_alpha * keep)
         if outline.any():
@@ -585,23 +670,42 @@ def draw_objects(d, frame, rgb, water):
     rows, cols = axis_weights(vi - r0, v_win.shape[0], 1), axis_weights(ui - c0, v_win.shape[1], 1)
     alpha = (rows @ (cols @ v_win.T).T).astype(np.float32)
     alpha = np.clip(alpha, 0, 1) * (height >= OBJECT_MIN_M)
+    if d.get("trace") is not None:
+        d["trace"]["objects"] = (alpha, height, cls)
     # Work on the objects' bounding box (with room for their shadows); rgb is a view, written in place
     box = nonzero_box(alpha, 48)
     if box is None:
         return
+    field = field_colour(d, "object", frame)
     alpha, height, cls, water, rgb = alpha[box], height[box], cls[box], water[box], rgb[box]
-    # Shadows of the objects on the ground, sun from the north-west at 45 degrees
+    # Shadows of the objects on the ground: a pixel is in shadow when an object that many steps towards the
+    # light is taller than the ray's height there (the default light: north-west at 45 degrees)
     if frame.px <= 2:
         casting = np.where(alpha > 0, height, 0)
         shadow = np.zeros(alpha.shape, bool)
-        max_shift = int(min(40, math.ceil(float(casting.max()) / (frame.px * math.sqrt(2)))))
+        away = -LIGHT[:2] / math.hypot(LIGHT[0], LIGHT[1])
+        major = float(np.abs(away).max())
+        step_m = frame.px / major  # metres along the ray per step of one pixel along its major axis
+        tan_elevation = LIGHT[2] / math.hypot(LIGHT[0], LIGHT[1])
+        max_shift = int(min(40, math.ceil(float(casting.max()) / (tan_elevation * step_m))))
         for s in range(1, max_shift + 1):
-            shadow[s:, s:] |= casting[:-s, :-s] > s * frame.px * math.sqrt(2)
+            dx, dy = int(round(s * away[0] / major)), int(round(s * away[1] / major))
+            shifted = np.zeros_like(casting)
+            shifted[max(dy, 0):casting.shape[0] + min(dy, 0), max(dx, 0):casting.shape[1] + min(dx, 0)] = \
+                casting[max(-dy, 0):casting.shape[0] + min(-dy, 0), max(-dx, 0):casting.shape[1] + min(-dx, 0)]
+            shadow |= shifted > s * step_m * tan_elevation
         shadow = ndimage.gaussian_filter(shadow.astype(np.float32), 0.6) * (1 - alpha)
+        if d.get("trace") is not None:
+            full = np.zeros(d["trace"]["objects"][0].shape, np.float32)
+            full[box] = shadow
+            d["trace"]["shadow"] = full
         rgb *= (1 - shadow * (1 - SHADOW_FACTOR) * (1 - water))[..., None]
-    colour = structure_colour(height)
-    for c, value in OBJECT_RGB.items():
-        colour[cls == c] = value
+    if field is None:
+        colour = structure_colour(height)
+        for c, value in OBJECT_RGB.items():
+            colour[cls == c] = value
+    else:
+        colour = field[box]
     # Roof and rock relief: hillshade of the object top over the pixel grid
     top = ndimage.gaussian_filter(height, 0.7)
     gy, gx = np.gradient(top)
@@ -651,18 +755,28 @@ def render_block(d, z, bx, by):
     slope = np.hypot(gx / frame.px_x, gy / frame.px_y)
 
     # Material boundaries softened by 0.7 m (bilinear alone leaves diamond-shaped steps at fine zooms)
-    rgb = sample_grid(d["cover"], frame.u, frame.v, px, 1, np.float32, transform=lambda w: d["palette"][w],
-                      separable=True, smooth_m=0.7).astype(np.float32)
-    steep = smoothstep(0.6, 1.5, slope) * 0.4
-    blend(rgb, STEEP_RGB, steep.astype(np.float32))
+    rgb = field_colour(d, "ground", frame)
+    if rgb is None:
+        rgb = sample_grid(d["cover"], frame.u, frame.v, px, 1, np.float32, transform=lambda w: d["palette"][w],
+                          separable=True, smooth_m=0.7).astype(np.float32)
+        steep = smoothstep(0.6, 1.5, slope) * STEEP_ALPHA
+        blend(rgb, STEEP_RGB, steep.astype(np.float32))
 
     exaggeration = 1.0 if px <= 2 else min(4.0, 1.0 + 0.5 * math.log2(px / 2) * 1.5)
     sx = gx / frame.px_x * exaggeration
     sy = gy / frame.px_y * exaggeration
     normal_z = 1 / np.sqrt(1 + sx * sx + sy * sy)
     lam = (-sx * LIGHT[0] - sy * LIGHT[1] + LIGHT[2]) * normal_z
-    shade = np.clip(1 + 0.7 * (lam - LIGHT[2]), 0.6, 1.18)
+    shade = np.clip(1 + SHADE_STRENGTH * (lam - LIGHT[2]), 0.6, 1.18)
     rgb *= shade[..., None].astype(np.float32)
+    trace = d.get("trace")
+    if trace is not None:
+        trace.clear()
+        trace.update(splines={}, foliage={}, shade=shade, slope_x=gx / frame.px_x, slope_y=gy / frame.px_y)
+        cols = np.clip(np.floor(frame.u).astype(np.int64), 0, d["cover"].shape[1] - 1)
+        rows = np.clip(np.floor(frame.v).astype(np.int64), 0, d["cover"].shape[0] - 1)
+        window = np.asarray(d["cover"][rows.min():rows.max() + 1, cols.min():cols.max() + 1])
+        trace["cover"] = window[np.ix_(rows - rows.min(), cols - cols.min())]
 
     water = draw_water(d, frame, h, rgb)
     draw_splines(d, frame, rgb, water)
@@ -672,8 +786,8 @@ def render_block(d, z, bx, by):
     a_minor, level = contour_alpha(h, gx, gy, minor, 0.9 if px < 1 else 0.7)
     is_major = (np.abs(np.round(level / major) * major - level) < 1e-3)
     a_major, _ = contour_alpha(h, gx, gy, major, 1.5 if px < 4 else 1.1)
-    a_minor = np.where(is_major, 0, a_minor) * 0.5
-    a_major *= 0.85
+    a_minor = np.where(is_major, 0, a_minor) * CONTOUR_ALPHA[0]
+    a_major *= CONTOUR_ALPHA[1]
     contours = np.maximum(a_minor, a_major) * (1 - water)
     knockout(contours, labels)
     blend(rgb, CONTOUR_RGB, contours.astype(np.float32))
@@ -681,6 +795,10 @@ def render_block(d, z, bx, by):
     draw_foliage(d, frame, rgb, water)
     draw_objects(d, frame, rgb, water)
 
+    if trace is not None:
+        trace.update(water=water, rgb=rgb.copy())
+    if GRADE is not None:
+        rgb = rgb * GRADE["gain"] + GRADE["offset"]
     canvas = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
     for x, y, angle, text, _ in labels:
         paste(canvas, text_patch(text, d["font_label"], angle, CONTOUR_LABEL_RGB, HALO_RGB, 2), x, y)
@@ -688,7 +806,9 @@ def render_block(d, z, bx, by):
     return canvas.convert("RGB")
 
 
-def _init(slug, out_dir):
+def _init(slug, out_dir, style=None):
+    if style:
+        apply_style(style)
     _data.update(load(slug))
     _data["out"] = out_dir
 
@@ -728,6 +848,7 @@ def main():
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--zooms", type=int, nargs="*")
     parser.add_argument("--blocks", nargs="*", help="only these blocks, as z/bx/by (a test render)")
+    parser.add_argument("--style", help="style name: tools/maptiles/py/styles/<style>_<map>.json, tiles in /tiles/<map>-<style>")
     parser.add_argument("--out", help="output directory instead of /tiles/<map> (a test render)")
     args = parser.parse_args()
     slug = args.map
@@ -736,15 +857,17 @@ def main():
     finest = finest_zoom(b["max_x"] - b["min_x"])
     zooms = args.zooms if args.zooms else list(range(finest, -1, -1))
     blocks = [tuple(int(v) for v in s.split("/")) for s in args.blocks] if args.blocks else None
-    final = args.out or os.path.join("/tiles", slug)
-    staging = args.out or os.path.join("/tiles", f".{slug}.tmp")
+    folder = f"{slug}-{args.style}" if args.style else slug
+    style = os.path.join(STYLES_DIR, f"{args.style}_{slug}.json") if args.style else None
+    final = args.out or os.path.join("/tiles", folder)
+    staging = args.out or os.path.join("/tiles", f".{folder}.tmp")
     if not args.out and os.path.exists(staging):
         shutil.rmtree(staging)
     os.makedirs(staging, exist_ok=True)
     tasks = tasks_for(zooms, blocks)
     started = time.time()
     done = 0
-    with multiprocessing.Pool(args.workers, _init, (slug, staging)) as pool:
+    with multiprocessing.Pool(args.workers, _init, (slug, staging, style)) as pool:
         for i, count in enumerate(pool.imap_unordered(_render, tasks), 1):
             done += count
             if i % max(1, len(tasks) // 20) == 0:
@@ -754,6 +877,7 @@ def main():
     build = json.load(open(os.path.join("/heightmaps", slug, "meta.json")))["sources"]["terrain"].split(",")[0]
     json.dump({
         "map": slug,
+        "style": args.style or "detailed",
         "tileSize": TILE,
         "minNativeZoom": 0,
         "maxNativeZoom": finest,
@@ -766,7 +890,7 @@ def main():
         "seconds": round(time.time() - started),
     }, open(os.path.join(staging, "meta.json"), "w"), indent=1)
     if not args.out and not blocks and not args.zooms:
-        old = os.path.join("/tiles", f".{slug}.old")
+        old = os.path.join("/tiles", f".{folder}.old")
         if os.path.exists(final):
             os.rename(final, old)
         os.rename(staging, final)
