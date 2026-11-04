@@ -95,6 +95,9 @@ Verified by `extractor inventory` (export counts per level) and by reading the c
 * Damage of shells to player-built structures (FOB radio, HAB, HESCO, sandbags, bunkers): health, per-damage-type multipliers,
   ammunition fields and what the data lacks: [`docs/structure-damage.md`](docs/structure-damage.md) ([ru](docs/structure-damage.ru.md)),
   data in `data/structure_damage.json`.
+* Rules that are native C++ and were read from the dedicated-server binary (damage to a deployable, the explosion distance, the
+  weapon MOA path; what could not be recovered and the in-game measurement that would settle it): [`docs/native-rules.md`](docs/native-rules.md)
+  ([ru](docs/native-rules.ru.md)), formulas in `semantics/native_rules.py`, pinned by `tests/test_native_rules.py`.
 * Triangle winding is consistent (outward, signed volume > 0 on 332 of the 333 sampled meshes that enclose a volume; 65 more are open shells), which
   gives a free floor/ceiling/wall classification per sample.
 
