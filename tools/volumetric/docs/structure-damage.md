@@ -31,8 +31,8 @@ source. All asset names are `/Game/...` paths of the server package. Russian ver
 4. A calculation is supported and implemented: `damageToStructure` and `shellsToDestroy` in SquadCalc
    (`src/js/structureDamage.js`, data `src/data/structureDamage.js`, `tests/structureDamage.test.mjs`).
    The way the game combines the fields is native code, now read from the server binary (section 4,
-   [`native-rules.md`](native-rules.md)): the combination is VERIFIED from the code with the corrections listed in section 4;
-   it has not been measured in game.
+   [`native-rules.md`](native-rules.md)): the combination is VERIFIED from the code (section 4) and implemented in SquadCalc 45.25.0, except the
+   Blueprint-driven impact damage and secondary explosion (INFERRED); it has not been measured in game.
 
 ## 2. Structures: health and multipliers (VERIFIED values)
 
@@ -173,60 +173,66 @@ Also in the assets and not used by the calculation: `ExplosiveMinimumDamage`, `E
 damage), `ArmorPenetrationDepthMillimeters` and `TraceDistanceAfterPenetrationMeters` (bullet penetration),
 `SpecificImpactEffects` (a table keyed by physical material that holds only particles, sounds and decals).
 
-## 4. The calculation (VERIFIED from the server binary, see `native-rules.md`; the app still uses the earlier INFERRED form)
+## 4. The calculation (VERIFIED from the server binary, see `native-rules.md`; implemented in SquadCalc 45.25.0)
 
-For a structure with `maxHealth` and a table entry `t` for the shell's damage type (`modifier`, `direct`, `indirect`,
-`directRadial`), and `R(d)` the radial damage at distance `d` (full inside the inner radius, then
-`damage * (1 - (d - inner) / (outer - inner)) ^ falloff`, zero beyond the outer radius: the same law SquadCalc uses
-for soldiers, `squadDamage.js damageAtDistance`):
+For a deployable (`ASQDeployable::TakeDamage`, 0xa4970d0, and the engine's radial damage, [`native-rules.md`](native-rules.md)
+section 1; the instruction bytes are pinned by `tests/test_native_rules.py`). `t` is the structure's entry for the shell's
+damage type (`modifier`, `direct`, `indirect`, `onlyDirect`), `scale(d)` the engine's falloff law (1 up to the inner radius,
+`(1 - (d - inner) / (outer - inner)) ^ falloff` up to the outer radius, 0 beyond; `squadDamage.js damageAtDistance`):
 
-* direct hit on the structure: `impact * t.modifier * t.direct + R(d) * t.modifier * t.directRadial`
-* near miss: `R(d) * t.modifier * t.indirect`
-* plus the same radial term for the secondary explosion, with the modifier of the secondary's own damage type
-* a damage type not in the table: nothing (VERIFIED in the binary)
+* the first `AllowableDamageTypes` element whose class equals the damage type class **exactly** is used (no parent walk); no
+  element = no health change;
+* radial event (the explosion): `loss = Lerp(Min, Base * t.modifier * m, scale(d))` with `m = t.direct` on a direct hit and
+  `t.indirect` otherwise (0 on a near miss when `t.onlyDirect`); `Min` is the projectile's `ExplosiveMinimumDamage`, applied
+  after and **not multiplied by the modifier**; a structure outside the outer radius is not in the burst at all;
+* point event (the direct hit's impact): `loss = ImpactDamageToApply * t.modifier`, no hit multiplier;
+* `DirectHitRadialDamageMultiplier` is not read by deployables (only by vehicles and emplaced guns); the app's data no longer carries it;
+* `Health = clamp(Health - loss, 0, MaxHealth)`, so the shells to destroy are `ceil(MaxHealth / loss)`;
+* `d`: the explosion origin is the impact point moved `ExplosiveDamageDistanceFromImpactNormal` along the impact normal. A
+  direct hit therefore bursts that far off the struck surface (`d` = that distance); a near miss on level ground has a vertical
+  normal, so `d = hypot(distance on the ground, that distance)`, with the structure taken at ground level (an approximation of
+  the ray distance of native-rules.md section 3, which needs the structure's collision; occlusion is not modelled);
+* the secondary explosion (mortar family, Hell Cannon, BM-21) is one more radial event with the modifier of its own damage type, its own
+  `SecondaryExplosionMinDamage` and distance.
 
-Superseded by the binary (VERIFIED, [`native-rules.md`](native-rules.md) section 1; the instruction bytes are pinned by
-`tests/test_native_rules.py`). For a deployable (`ASQDeployable::TakeDamage`, 0xa4970d0):
+INFERRED (Blueprint bytecode, not in the binary): that a direct hit's `ImpactDamageToApply` is point damage of the projectile's
+damage type, and the secondary explosion's path to `TakeDamage`. Still UNVERIFIED: which actor class the emplaced guns' shells hit,
+health regeneration or repair, `bForwardDamageToSoldier`. No in-game measurement exists (native-rules.md section 6).
 
-* the first `AllowableDamageTypes` element whose class equals the damage type class exactly is used; no element = no
-  health change (the "not listed" rule above is VERIFIED);
-* radial event: `loss = Lerp(Min, Base * Modifier * m, scale(d))` with `m = DirectHitDamageMultiplier` on a direct hit and
-  `IndirectHitDamageMultiplier` otherwise (0 on a near miss when `bOnlyPassDamageIfDirectHit`); `scale` is the formula above;
-  `Min` is the projectile's `ExplosiveMinimumDamage`, applied after and not multiplied by the modifier; point event:
-  `loss = amount * Modifier`;
-* `DirectHitRadialDamageMultiplier` is not read by deployables; only the vehicle code (emplaced guns, vehicles) reads it;
-* `d` is the smallest distance from the explosion origin (impact point + `ExplosiveDamageDistanceFromImpactNormal` along the
-  normal) to the recorded impact points of the structure's components, found by a Visibility ray to each component's bounds
-  centre, or the component pivot inside `ExplosiveKillZoneRadius`; a shielded structure takes no radial damage.
-
-Where this differs from the bullets above: the radial term on a direct hit uses `direct`, not `directRadial`; the impact term
-has no `direct`; and `Min` is a floor (ten of the app's projectiles have `Min` > 0). The app's `structureDamage.js` (not changed
-here) still implements the earlier form; the direct-hit tables of this document (distance 0, inside every inner radius, so `Min` does not show) are unchanged where
-`direct = 1`, which is nearly every structure; the ammunition crates and emplacements are the exceptions. Still UNVERIFIED: how a direct hit's `ImpactDamageToApply` and the
-secondary explosion reach `TakeDamage` (Blueprint graphs, not native), and which actor class the emplaced guns' shells hit.
-
-Earlier reasoning, kept for the record (why it was INFERRED before): the property names and their values (modifier 0.01 for fragmentation against HESCO, 0.25 for explosives,
-1.0-1.75 for HEAT/HAT against the ammo crate, whose `DirectHitRadialDamageMultiplier` of 0 stops the radial damage
-from doubling the direct hit) fit this reading, but the C++ that applies them is not in the paks and no in-game
-measurement of structure health was made (the in-game tests were cancelled by the owner). Still UNVERIFIED after the binary was read: whether the secondary explosion
-damages a deployable the same way as a "mesh" (`SecondaryOnlyDamageMeshes` is a Blueprint variable), health regeneration or
-repair, and what `bForwardDamageToSoldier` does when a shell hits an emplacement with a gunner. The distance the game measures
-is resolved (native-rules.md section 3); the build state has no term in `TakeDamage`.
+What changed in the app against the earlier INFERRED form (45.24.0): the radial part of a direct hit used `directRadial` (zero on
+ammunition crates, so a crate took no radial damage; now full) and the impact term was multiplied by `direct`; `ExplosiveMinimumDamage`
+was ignored (ten projectiles have it > 0: 125 mm HEAT 35, which now makes a near miss at 10 m cost a HESCO barrier 27 health, not 0.5);
+a near miss of an `onlyDirect` type was not zero; the burst distance ignored `distanceFromImpact` (1 m for the mortar round, so a direct
+hit took 84 % of the explosion, not 100 %).
 
 Implementation: `damageToStructure(structure, ammo, {directHit, distance, secondary})` returns the damage by part and
-`shellsToDestroy(...)` the whole shells from full health (Infinity when the damage type is not listed). Pure
-functions, no UI, not wired into the map yet. `findStructure(className)` finds a structure by Blueprint class name.
+`shellsToDestroy(...)` the whole shells from full health (Infinity when the damage type is not listed or nothing is lost). Pure
+functions; `findStructure(className)` finds a structure by Blueprint class name. The data (`src/data/structureDamage.js`) is
+regenerated with `python3 semantics/structure_damage.py export data/structure_damage.json <SquadCalc>/src/data/structureDamage.js`
+(adds `minimum` and `onlyDirect`, drops `directRadial`; structures with identical health and used fields share an entry).
 
 ### Worked example (full health, `shellsToDestroy`)
 
 Mortar round (`BP_Mortarround4`: M252 / 2B14 / L16 / Type 63) on a direct hit against the FOB radio (300 health):
-impact 10 * 0.1 (Frag) = 1, explosion 350 * 0.1 = 35, secondary 250 * 0.5 (Explosives on the radio) = 125, total 161 per
-round, so **2 rounds**. Against a HAB (500): 0.1 + 3.5 + 25 = 28.6 per round, **18 rounds**. Against a HESCO barrier (200):
-0.1 + 3.5 + 62.5 = 66.1, **4 rounds**. A 125 mm HEAT round (1900 impact) hits a HAB for 1900 * 0.031579 = 60, plus 6.3 of
-explosion, 66 in all: **8 rounds**; the same round against a HESCO: 19 + 2, **10 rounds**. A near miss 3 m away needs far more
-(HAB: 81 mortar rounds, 80 tank HEAT rounds).
+impact 10 * 0.1 (Frag) = 1, explosion 350 * 0.1 * 0.838 (1 m off the surface, `(1 - 1/40)^7`) = 29.3, secondary 250 * 0.5 (Explosives on the
+radio, 0.5 m, inside its inner radius) = 125, total 155.3 per round, so **2 rounds**. Against a HAB (500): 0.1 + 2.9 + 25 = 28.0, **18 rounds**.
+Against a HESCO barrier (200): 0.1 + 2.9 + 62.5 = 65.5, **4 rounds**. A 125 mm HEAT round (1900 impact) hits a HAB for 1900 * 0.031579 = 60, plus 6.3 of
+explosion, 66 in all: **8 rounds**; the same round against a HESCO: 19 + 2, **10 rounds**.
 
-Shells to destroy, direct hit (`distance` 0):
+Shells to destroy, old form (45.24.0) against native rules (45.25.0), full health, one shell per count:
+
+| shell, structure | direct hit | 3 m | 5 m | 10 m |
+|---|---|---|---|---|
+| mortar, FOB radio | 2 / 2 | 8 / 8 | 22 / 22 | 65 / 65 |
+| mortar, HAB | 18 / 18 | 81 / 85 | 342 / 350 | 1071 / 1083 |
+| mortar, HESCO barrier | 4 / 4 | 17 / 17 | 126 / 129 | 429 / 434 |
+| 125 mm HEAT, FOB radio | 3 / 3 | 30 / 30 | 39 / 20 | 131 / 11 |
+| 125 mm HEAT, HAB | 8 / 8 | 80 / 80 | 103 / 40 | 344 / 18 |
+| 125 mm HEAT, HESCO barrier | 10 / 10 | 100 / 100 | 130 / 22 | 435 / 8 |
+
+(old / new). The HEAT near misses fall because `Min` 35 is a floor of its own beyond the 3.5 m inner radius.
+
+Shells to destroy, direct hit (native rules):
 
 | structure (HP) | Mortar 81/82 mm | Mortar 120 mm | Hell Cannon | UB-32 S-5 | BM-21 | Tank HEAT 125 | Tank HE 125 | RPG-7 HEAT | RPG-7 OG-7V | SPG-9 HEAT | Carl Gustav HE | 40 mm GL HEAT | 30 mm HE | ZiS-3 HEAT |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -234,20 +240,19 @@ Shells to destroy, direct hit (`distance` 0):
 | HAB (500) | 18 | 13 | 11 | 44 | 39 | 8 | 100 | 15 | 193 | 9 | 42 | 91 | 223 | 8 |
 | HESCO barrier (200) | 4 | 3 | 2 | 55 | 3 | 10 | 40 | 19 | 77 | 11 | 17 | 115 | 89 | 10 |
 | HESCO wall (420) | 7 | 5 | 4 | 116 | 6 | 20 | 84 | 39 | 162 | 23 | 35 | 240 | 187 | 20 |
-| Sandbag wall (250) | 9 | 7 | 8 | 7 | 1 | 2 | 10 | 3 | 20 | 2 | 5 | 15 | 23 | 2 |
+| Sandbag wall (250) | 10 | 7 | 8 | 7 | 1 | 2 | 10 | 3 | 20 | 2 | 5 | 15 | 23 | 2 |
 | Small bunker (500) | 8 | 6 | 5 | 137 | 7 | 24 | 100 | 46 | 193 | 27 | 42 | 286 | 223 | 24 |
 | M2 bunker (600) | 10 | 7 | 6 | 165 | 9 | 29 | 120 | 56 | 231 | 32 | 50 | 343 | 267 | 29 |
-| Observation tower (800) | 13 | 9 | 7 | 220 | 51 | 39 | 160 | 74 | 308 | 43 | 67 | 458 | 356 | 39 |
+| Observation tower (800) | 13 | 9 | 7 | 220 | 50 | 39 | 160 | 74 | 308 | 43 | 67 | 458 | 356 | 39 |
 | Razorwire (100) | 4 | 3 | 3 | 28 | 2 | 5 | 20 | 10 | 39 | 6 | 9 | 58 | 45 | 5 |
 | Concrete barrier (160) | 3 | 2 | 2 | 15 | 3 | 3 | 11 | 5 | 21 | 3 | 5 | 31 | 24 | 3 |
 | Vehicle repair station (500) | 3 | 2 | 2 | 14 | 2 | 3 | 5 | 5 | 10 | 3 | 3 | 29 | 12 | 3 |
-| Mortar emplacement (420) | 2 | 1 | 1 | 5 | 10 | 1 | 3 | 2 | 6 | 1 | 2 | 10 | 7 | 1 |
+| Mortar emplacement (420) | 2 | 1 | 1 | 5 | 11 | 1 | 3 | 2 | 6 | 1 | 2 | 10 | 7 | 1 |
 
 Classes used: `BP_FOBRadio_Woodland`, `US_Hab_Desert`, `BP_Hesco_USA_Desert`, `BP_HescoWall_DesertCam`,
 `BP_SandBagWall_2`, `BP_smallbunker_Desert`, `BP_M2_BAF_Bunker_Desert`, `BP_ObservationTower_ADF_Desert`,
 `BP_Razorwire_clean_2`, `BP_ConcreteBarrier`, `BP_vehicle_repair_ADF_Desert`, `BP_m252mortar_Deployable`. The full
-matrix (any class, any distance) is `shellsToDestroy` over `STRUCTURES` x `AMMO`. These counts use the app's earlier form of section 4;
-native-rules.md lists where the binary differs (direct-hit radial multiplier, minimum-damage floor, distance).
+matrix (any class, any distance) is `shellsToDestroy` over `STRUCTURES` x `AMMO`.
 
 ## 5. Material of each structure (VERIFIED)
 
@@ -286,14 +291,14 @@ structure multipliers do not follow them: sandbag (damage_absorbed 120) takes 0.
   from the binary (section 4, native-rules.md). The damage of AP and machine-gun bullets to structures (bullet damage is in the
   weapon, not in the projectile asset) remains UNVERIFIED. Not needed for the owner's HE/HEAT question.
 
-## 6b. In the SquadCalc UI (45.24.0, C7b)
+## 6b. In the SquadCalc UI (45.24.0, C7b; native rules since 45.25.0)
 
 * Clicking a deployable marker (FOB radio, HAB, mortar, HMG, GMG, AA gun, ammo crate, repair station) opens a popup with
   the shells of the selected ammunition that destroy the structure from full health; the target dialog shows the same line
   for a target within 5 m of such a marker (`src/js/structureInfo.js`). Each count is `shellsToDestroy` with a direct hit
   when the burst is within 1 m of the structure (`DIRECT_HIT_RADIUS`), else a near miss at the distance; one shell per count,
-  each landing where aimed, the spread is not included. The tooltip of the row says the combination is INFERRED and not
-  verified in game.
+  each landing where aimed, the spread is not included. The tooltip of the row says the combination is the game's, read from the
+  server code, except the direct hit's impact damage and the mortars' secondary explosion (INFERRED); nothing is measured in game.
 * The link from an app shell to a projectile is `src/data/structureLinks.js` (`SHELL_AMMO`: weapon name / shell name ->
   projectile of this document's section 3; `MARKER_STRUCTURES`: marker icon -> structure class). It was found by the weapon's
   ballistics label, then by the shell's explosion (damage, radii, falloff) against the projectile's, and kept only where the

@@ -214,9 +214,9 @@ def js_number(value):
     return repr(round(value, 6)).rstrip("0").rstrip(".") if isinstance(value, float) else str(value)
 
 
-def explosion_js(damage, inner_cm, outer_cm, falloff, height_cm, damage_type=None):
+def explosion_js(damage, minimum, inner_cm, outer_cm, falloff, height_cm, damage_type=None):
     typed = f", damageType: {json.dumps(damage_type)}" if damage_type else ""
-    return (f"{{ damage: {js_number(damage)}, inner: {js_number(inner_cm / 100)}, outer: {js_number(outer_cm / 100)}, "
+    return (f"{{ damage: {js_number(damage)}, minimum: {js_number(minimum)}, inner: {js_number(inner_cm / 100)}, outer: {js_number(outer_cm / 100)}, "
             f"falloff: {js_number(falloff)}, distanceFromImpact: {js_number(height_cm / 100)}{typed} }}")
 
 
@@ -227,28 +227,33 @@ def export_command(data_file, out):
     for name, row in sorted(data["deployables"].items()):
         if row["max_health"] is None or not row["damage_types"]:
             continue
-        key = json.dumps([row["max_health"], row["damage_types"]], sort_keys=True)
+        used = {t: [v["Modifier"], v["DirectHitDamageMultiplier"], v["IndirectHitDamageMultiplier"], bool(v.get("bOnlyPassDamageIfDirectHit"))]
+                for t, v in row["damage_types"].items()}
+        key = json.dumps([row["max_health"], used], sort_keys=True)
         groups[key].append(name)
     lines = [HEADER, "export const STRUCTURES = {"]
     for key, names in sorted(groups.items(), key=lambda kv: kv[1][0]):
         max_health, damage_types = json.loads(key)
+        damage_types = {t: {"Modifier": m, "DirectHitDamageMultiplier": d, "IndirectHitDamageMultiplier": i, "bOnlyPassDamageIfDirectHit": o}
+                        for t, (m, d, i, o) in damage_types.items()}
         lines.append(f'    "{names[0]}": {{')
         lines.append(f"        classes: {json.dumps(names)},")
         lines.append(f"        maxHealth: {js_number(max_health)},")
         lines.append("        damageTypes: {")
         for damage_type, v in damage_types.items():
+            only_direct = ", onlyDirect: true" if v.get("bOnlyPassDamageIfDirectHit") else ""
             lines.append(f'            "{damage_type}": {{ modifier: {js_number(v["Modifier"])}, direct: {js_number(v["DirectHitDamageMultiplier"])}, '
-                         f'indirect: {js_number(v["IndirectHitDamageMultiplier"])}, directRadial: {js_number(v["DirectHitRadialDamageMultiplier"])} }},')
+                         f'indirect: {js_number(v["IndirectHitDamageMultiplier"])}{only_direct} }},')
         lines += ["        },", "    },"]
     lines += ["};", "", AMMO_HEADER, "export const AMMO = {"]
     for name, row in sorted(data["projectiles"].items()):
         native = {**NATIVE_EXPLOSION, **{k: v for k, v in row.items() if k in NATIVE_EXPLOSION}}
         exploding = any(k.startswith("Explosive") for k in row)
-        primary = "null" if not exploding else explosion_js(native["ExplosiveBaseDamage"], native["ExplosiveDamageInnerRadius"], native["ExplosiveDamageOuterRadius"],
+        primary = "null" if not exploding else explosion_js(native["ExplosiveBaseDamage"], row.get("ExplosiveMinimumDamage", 0.0), native["ExplosiveDamageInnerRadius"], native["ExplosiveDamageOuterRadius"],
                                native["ExplosiveDamageFalloff"], native["ExplosiveDamageDistanceFromImpactNormal"])
         secondary = "null"
         if native["bUseSecondaryExplosion"]:
-            secondary = explosion_js(row["SecondaryExplosionBaseDmg"], row["SecondaryExplosionInnerRadius"], row["SecondaryExplosionOuterRadius"],
+            secondary = explosion_js(row["SecondaryExplosionBaseDmg"], row.get("SecondaryExplosionMinDamage", 0.0), row["SecondaryExplosionInnerRadius"], row["SecondaryExplosionOuterRadius"],
                                      row["SecondaryExplosionDamageFalloff"], row["SecondaryExplosionDistanceFromImpact"],
                                      row["secondary_damage_type"])
         lines.append(f'    "{name}": {{')
@@ -273,15 +278,18 @@ HEADER = """/**
  * tools/volumetric/docs/structure-damage.md. Lengths in meters.
  *
  * STRUCTURES: deployables with the same health and multipliers are one entry, named after its first
- * class (`classes` lists all). `damageTypes[type]` is the game's FSQAllowableDamageType: `modifier`,
- * `direct` (DirectHitDamageMultiplier), `indirect` (IndirectHitDamageMultiplier), `directRadial`
- * (DirectHitRadialDamageMultiplier). A damage type that is not listed does not damage the structure.
+ * class (`classes` lists all). `damageTypes[type]` is the game's FSQDamageModifier as ASQDeployable::TakeDamage
+ * reads it (tools/volumetric/docs/native-rules.md): `modifier`, `direct` (DirectHitDamageMultiplier),
+ * `indirect` (IndirectHitDamageMultiplier) and `onlyDirect` (bOnlyPassDamageIfDirectHit, present only when true).
+ * DirectHitRadialDamageMultiplier is left out: deployables do not read it (vehicles do). A damage type that is not
+ * listed does not damage the structure.
  */
 """.replace("\n", "\n")
 AMMO_HEADER = """/**
  * AMMO: projectile class -> the damage type it applies, direct-hit damage (ImpactDamageToApply), the
- * explosion and, for mortars, rockets and the Hell Cannon, the secondary explosion with its own damage type
- * (SecondaryExplosionDamageType). A field the projectile
+ * explosion (`damage` = ExplosiveBaseDamage, `minimum` = ExplosiveMinimumDamage, 0 when the asset sets none) and,
+ * for mortars, rockets and the Hell Cannon, the secondary explosion with its own damage type
+ * (SecondaryExplosionDamageType, `minimum` = SecondaryExplosionMinDamage). A field the projectile
  * Blueprint does not override has the native default (`nativeDefaults` lists them): inferred, not in the paks.
  * A projectile with no explosion field at all (AP rounds, machine-gun bullets) has `explosion: null` and no
  * direct-hit damage: its bullet damage is not in its projectile asset.

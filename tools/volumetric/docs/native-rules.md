@@ -222,7 +222,7 @@ exact face distance needs the structure's collision, which is what the volumetri
 | Distance to a structure UNVERIFIED | **Resolved** (section 3): origin to the ray hit point on the structure's surface, or the pivot inside the kill zone |
 | Health regeneration, build-state effect, `bForwardDamageToSoldier` | Not touched by this work. `TakeDamage` has no build-state term; `bForwardDamageToSoldier` is read in the radial/point paths (UNVERIFIED how) |
 
-Numbers for the apps (the SquadCalc source was not edited): the game's per-event loss is
+Numbers for the apps (implemented in SquadCalc 45.25.0, `structureDamage.js`; the table above is the state before it): the game's per-event loss is
 `Lerp(Min, Base * Modifier * m, scale)` with `m = DirectHitDamageMultiplier` on a direct hit and `IndirectHitDamageMultiplier`
 otherwise for `ASQDeployable`; `Min` is non-zero for the projectiles in section 5. A mortar round (`BP_Mortarround4`, `Min` 0,
 modifiers 1) on a HESCO barrier is unchanged from the worked example (66.1 per round, 4 rounds).
