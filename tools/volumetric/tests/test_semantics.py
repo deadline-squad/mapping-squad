@@ -192,7 +192,7 @@ class StructureDamageTests(unittest.TestCase):
             text = open(target, newline="").read()
         self.assertIn('classes: ["A", "B"]', text)
         self.assertNotIn('"C"', text)
-        self.assertIn("explosion: { damage: 10, inner: 1, outer: 5, falloff: 1, distanceFromImpact: 0.08 }", text)
+        self.assertIn("explosion: { damage: 10, minimum: 0, inner: 1, outer: 5, falloff: 1, distanceFromImpact: 0.08 }", text)
         self.assertIn("\r\n", text)
 
 
