@@ -1,6 +1,6 @@
 """Judge the top-surface heightmap and the voxel columns against exact triangle ray tests on one map window.
 
-    python eval_los.py <tris.npz> <cols.npz> <heightmap dir> <terrain.npz> <out dir> [pairs] [window_m] [seed]
+    python eval_los.py <tris.npz (or shard base name)> <cols.npz> <heightmap dir> <terrain.npz> <out dir> [pairs] [window_m] [seed]
 
 Standable points (floors with 1.9 m headroom, found by vertical reference rays) are drawn in the densest
 window of the map; pairs 10-60 m apart get eye-level segments (floor + 1.6 m); the reference decides
@@ -9,9 +9,12 @@ Writes metrics.json and cases.csv (pairs where the heightmap is wrong) to the ou
 """
 
 import csv
+import glob
 import json
 import os
+import struct
 import sys
+import zipfile
 
 import numpy as np
 from PIL import Image
@@ -43,6 +46,49 @@ def is_grazing(index, land, p0, p1, truth, bit):
         x, y, z = models.march(p0 + shift, p1 + shift, 0.1)
         answers.append(bool(land.blocks(x, y, z).any()) or index.blocked(p0 + shift, p1 + shift, bit)[0])
     return any(a != truth for a in answers)
+
+
+def npz_memmaps(path):
+    """{name: memmap} of the arrays of an uncompressed npz (np.savez), without reading them."""
+    arrays = {}
+    with zipfile.ZipFile(path) as zf, open(path, "rb") as raw:
+        for info in zf.infolist():
+            raw.seek(info.header_offset)
+            name_len, extra_len = struct.unpack("<HH", raw.read(30)[26:30])
+            raw.seek(info.header_offset + 30 + name_len + extra_len)
+            version = np.lib.format.read_magic(raw)
+            shape, _, dtype = np.lib.format.read_array_header_1_0(raw) if version == (1, 0) else np.lib.format.read_array_header_2_0(raw)
+            arrays[info.filename[:-4]] = np.memmap(path, dtype=dtype, mode="r", offset=raw.tell(), shape=shape)
+    return arrays
+
+
+def shard_paths(path):
+    """[path] when it exists, else the shards ``<path minus .npz>.<i>.npz`` written by world_tris.py with a shard size."""
+    if os.path.exists(path):
+        return [path]
+    base = path[:-len(".npz")]
+    return sorted(glob.glob(f"{base}.*.npz"), key=lambda p: int(p[len(base) + 1:-len(".npz")]))
+
+
+def load_window(path, x0, y0, size, margin=10.0, chunk=2_000_000):
+    """(tris, mask, part) of the triangles whose bounding box touches the window, read in chunks.
+
+    ``path`` is an uncompressed npz or the base name of its shards (shard part indices are offset so that they stay unique).
+    """
+    out = {"tris": [], "mask": [], "part": []}
+    part_offset = 0
+    for shard in shard_paths(path):
+        arrays = npz_memmaps(shard)
+        for start in range(0, len(arrays["tris"]), chunk):
+            t = np.asarray(arrays["tris"][start:start + chunk])
+            lo, hi = t.min(axis=1), t.max(axis=1)
+            keep = (hi[:, 0] >= x0 - margin) & (lo[:, 0] <= x0 + size + margin) & (hi[:, 1] >= y0 - margin) & (lo[:, 1] <= y0 + size + margin)
+            out["tris"].append(t[keep])
+            out["mask"].append(np.asarray(arrays["mask"][start:start + chunk])[keep])
+            out["part"].append(np.asarray(arrays["part"][start:start + chunk])[keep] + part_offset)
+        part_offset += len(arrays["parts"])
+    return [np.concatenate(out[k]) for k in ("tris", "mask", "part")]
+
 
 
 def densest_window(occupied, grid, size_m):
@@ -82,14 +128,9 @@ def main():
 
     wx, wy = densest_window(occupied, grid, window)
     print("window", wx, wy, window, flush=True)
-    data = np.load(tris_path)
-    tris, mask, part = data["tris"], data["mask"], data["part"]
-    lo, hi = tris.min(axis=1), tris.max(axis=1)
-    inside = (hi[:, 0] >= wx - 10) & (lo[:, 0] <= wx + window + 10) & (hi[:, 1] >= wy - 10) & (lo[:, 1] <= wy + window + 10)
-    ids = np.nonzero(inside)[0]
-    print("triangles in window", len(ids), flush=True)
-    index = reference.TriangleIndex(tris[ids], mask[ids], wx - 10, wy - 10, window + 20, window + 20)
-    part_w = part[ids]
+    tris, mask, part = load_window(tris_path, wx, wy, window)
+    print("triangles in window", len(tris), flush=True)
+    index = reference.TriangleIndex(tris, mask, wx - 10, wy - 10, window + 20, window + 20)
 
     vis = collision.VISIBILITY
     in_window = (occupied >> columns.Z_BITS)
@@ -143,7 +184,7 @@ def main():
             ref_t, _, _ = index.hits(p0, p1, vis)
             rows.append(dict(grazing=int(graze), ax=a[0], ay=a[1], az=a[2], bx=b[0], by=b[1], bz=b[2], truth=int(truth), heightmap=int(h),
                              voxels=int(v), covered=int(covered), landscape=int(land_hit),
-                             blocker_part=int(part_w[tri_ids[0]]) if len(tri_ids) else -1,
+                             blocker_part=int(part[tri_ids[0]]) if len(tri_ids) else -1,
                              length=round(float(np.linalg.norm(p1 - p0)), 2), voxel_first_m=-1 if first is None else round(first, 2),
                              truth_first_m=round(float(ref_t[0]) * float(np.linalg.norm(p1 - p0)), 2) if len(ref_t) else -1))
     metrics = {}
@@ -153,7 +194,7 @@ def main():
             pairs=n, wrong=int(t[1] + t[2]), wrong_pct=round(100 * (t[1] + t[2]) / n, 2),
             wrong_not_grazing=int(t[1] + t[2] - t[4]), wrong_not_grazing_pct=round(100 * (t[1] + t[2] - t[4]) / n, 2),
             false_blocked=int(t[1]), false_clear=int(t[2]), truth_blocked=int(t[2] + t[3]))
-    metrics["window"] = dict(x=wx, y=wy, size=window, triangles=int(len(ids)), points=int(len(pts)), covered_points=int(pts[:, 4].sum()))
+    metrics["window"] = dict(x=wx, y=wy, size=window, triangles=int(len(tris)), points=int(len(pts)), covered_points=int(pts[:, 4].sum()))
     metrics["voxels"] = dict(cell=grid.cell, dz=grid.dz, occupied=int(len(occupied)))
     json.dump(metrics, open(os.path.join(out_dir, "metrics.json"), "w"), indent=1)
     with open(os.path.join(out_dir, "cases.csv"), "w", newline="") as f:
