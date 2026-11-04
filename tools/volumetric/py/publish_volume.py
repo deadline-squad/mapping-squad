@@ -38,6 +38,7 @@ def main():
     magic, _, _, cell, dz, z_min, _, _, columns = struct.unpack_from(VCOL_HEADER, raw, 0)
     if magic != b"VCOL1\0\0\0":
         raise SystemExit(f"{vcol}: not a VCOL1 file")
+    regions = meta.get("volume", {}).get("regions")
     shutil.copyfile(vcol, os.path.join(target, "volume.vcol"))
     shutil.copyfile(terrain, os.path.join(target, "terrain.bin"))
     meta["volume"] = {
@@ -45,6 +46,9 @@ def main():
         "cell": round(cell, 4), "dz": round(dz, 4), "z_min_m": round(z_min, 4), "columns": columns,
         "terrain": describe(os.path.join(target, "terrain.bin")),
     }
+    if regions:
+        # The precision regions (publish_regions.py) belong to the voxel file's frame, which a republish keeps
+        meta["volume"]["regions"] = regions
     meta.setdefault("generated", datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
     json.dump(meta, open(meta_path, "w"), indent=1)
     print(json.dumps(meta["volume"]))

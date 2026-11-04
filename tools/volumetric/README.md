@@ -214,6 +214,25 @@ files and the engine load, the parity segments of `volume_cases.json` (`py/pick_
 block, doorway and window openings pass), the landscape against the heightmap, the line of fire and the fire coverage with
 the layer, and a map without volume files.
 
+### Precision regions for the position heatmap
+
+A target of the reverse-position heatmap (SquadCalc 45.26.0, `engine/README.md` "Position heatmap") is traced with the exact
+triangles of its region (`RTRI1`, `py/build_region.py`, see the engine README) when `meta.json` lists one that holds it at least
+50 m from the edge of its square. `py/publish_regions.py` puts files next to the volume layer and lists them; it copies
+`meta.json` to `meta.json.bak.<date>-regions` first, reads the square from each file's header, and keeps the entries of the files
+it was not given (`publish_volume.py` keeps the list too):
+
+```sh
+python py/publish_regions.py <slug> ~/apps/squadcalc/dist/heightmaps <region.rtri> [<region.rtri> ...]   # no dependency, plain python
+```
+
+Under `/heightmaps/<slug>/regions/<file>`, requested as `?v=<generated>` and checked against `sha256` like the other files. Published:
+Jensen `region_221_-229.rtri` (1 931 297 bytes, 2026-11-04), the region the heatmap was validated with against the exact triangle
+tracer (`engine/tools/js/heatmap_validate.mjs`; `tools/browser_check/heatmap_check.mjs` repeats the comparison in the browser).
+A region costs its download and, in the worker, the build of the hierarchy of its triangles (Jensen's: 7 to 10 s in Chromium on a loaded host); build
+others only for targets someone validates: the densest Jensen square (`region_-29_-229.rtri`, 5.04 MB, 2.78 M triangles) took 31 s to load
+in Node's wasm on the same host.
+
 ## How the gain was judged (independent of the builder)
 
 `py/reference.py` shares no code with the builder: exact Moller-Trumbore tests of the segment against the

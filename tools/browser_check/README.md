@@ -55,6 +55,34 @@ formula is inferred, and the Russian locale has the strings. Screenshots (target
 the structure row with its tooltip, AP, Russian, the marker popup) go to `--shots` (default `./shots`). Exits with 1 on any
 failure.
 
+## heatmap_check.mjs: firing positions and the damage zone with cover
+
+```sh
+node heatmap_check.mjs <site URL> --reference <dir> [--shots <dir>]
+```
+
+(deadline-squad/deadline-squadcalc#22 C5, C6; a build with the engine, the volume files and the Jensen precision region under
+`/heightmaps/`; `--reference` is the output of SquadCalc's `engine/tools/js/heatmap_validate.mjs` for the Jensen target (127, -205)).
+The heatmap is off by default: no button in the target dialog without the volume layer or for a weapon that is not direct fire,
+and nothing of it (module, region) is requested before the button is pressed. On the target in a Jensen window the button loads the
+module on demand, the region is fetched and used (legend: *Exact triangles within 56 m of the target*), a target without region says
+*Voxels only*, and hiding, dragging, deleting the target and turning the volume layer off remove the image. The page's own run
+with the validation's parameters gives the validation's clear, blocked and out positions (at most 0.05 % flip on the last bit of a
+float) and, against the exact triangle tracer's output, no false clear and no false blocked position. The damage zone of the same
+target is computed by the layer's worker with the voxels as cover and differs from the heightmap's. Screenshots (the dialog button,
+the heatmap of the window, of a target on open ground, the damage zone) go to `--shots`. Exits with 1 on any failure.
+
+## heatmap_timing.mjs: how long the heatmap takes per map
+
+```sh
+node heatmap_timing.mjs <site URL> [--maps Jensen,Fallujah,...] [--ranges 600,2000] [--out timings.json]
+```
+
+(C9) On every map with volume files: a target inside a building nearest the map's centre, DF_M2A1_50, the heatmap at each range with
+the voxel walk and, where the target has a region, with it; prints the map's side, the voxel file's size, the positions, the
+wall time, the worker's trace time per position and the region load, and the load average of the host and the browser's WebGL
+renderer (this host has no GPU: SwiftShader, so there is no GPU timing). Results: SquadCalc `engine/README.md`, "Position heatmap".
+
 ## precision_browser.mjs: precision checks on the served build
 
 ```sh
