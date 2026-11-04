@@ -101,3 +101,20 @@ Files:
 
 Sizes (build 26005357): about 13 KB per tile; prepared rasters a few hundred MB to 3 GB per map in
 `$WORK/prep` (only needed to re-render).
+
+## Relief layer (PMTiles)
+
+A grayscale shaded relief of the precise heightmap alone, `$WORK/relief/<map>.pmtiles` (PMTiles v3, 256 px WebP tiles,
+the tile frame above, zooms 0 to the first whose pixel is no coarser than the grid cell, plus one: Fallujah 0-5, Chora 0-6),
+read by SquadCalc's lazy "Relief" layer with range requests (`src/js/squadReliefLayer.js`; serve it as
+`/maptiles/relief/<map>.pmtiles`). Pipeline `py/relief.py` (formulas in its docstring), run with `maptiles.sh relief-setup`
+and `maptiles.sh relief [map ...]` (`RELIEF_ARGS="--tint"` multiplies a hypsometric tint, `--extra-zoom N` sets the oversampling):
+
+* Horn gradients, hillshade at the four azimuths 360, 315, 270, 225 (sun 45 degrees), blended by the oblique weights
+  `sin^2(aspect - azimuth)` (Mark 1992; Esri's multidirectional hillshade) into the MDOW hillshade;
+* RVT anisotropic sky-view factor (level 1, direction 315, 16 directions, 25 m), stretched from its 1st percentile to 1;
+* Multiply at 50 % opacity of the SVF over the MDOW hillshade: `MDOW * (0.5 + 0.5 * SVF)`;
+* resampled with Lanczos to the finest zoom (heightmap samples on the frame's nodes), coarser zooms average 2 x 2 pixels.
+
+The Python image `py/Dockerfile.relief` installs `rvt-py` without its GDAL dependency (`vis.py` needs only numpy and scipy).
+Size: 1.8 to 4 MB for Fallujah, 3 to 11 MB for Chora, depending on the extra zoom.
