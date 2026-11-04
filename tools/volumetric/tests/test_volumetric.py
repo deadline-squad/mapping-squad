@@ -3,6 +3,7 @@
 import os
 import sys
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -15,6 +16,7 @@ import columns  # noqa: E402
 import models  # noqa: E402
 import reference  # noqa: E402
 import terrain_raster  # noqa: E402
+import world_tris  # noqa: E402
 
 BOX = np.array([[0, 2, 1], [1, 2, 3], [4, 5, 6], [5, 7, 6], [0, 1, 4], [1, 5, 4], [2, 6, 3], [3, 6, 7], [0, 4, 2], [2, 4, 6], [1, 3, 5], [3, 7, 5]])
 
@@ -112,3 +114,31 @@ class VolumetricTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WorldTrianglesShardTests(unittest.TestCase):
+    """Foliage of Kamdesh (378 M triangles) does not fit in memory at once; sharding must lose and duplicate nothing."""
+
+    def shards(self, max_triangles):
+        placed = {"1": [(np.eye(4), None), (np.eye(4), None)], "2": [(np.eye(4), None)]}
+        meshes = {"1": (np.zeros((12, 3, 3)), None, "complex"), "2": (np.ones((5, 3, 3)), None, "simple")}
+        with mock.patch.object(world_tris, "placements", return_value=placed), \
+                mock.patch.object(world_tris.objects, "mesh_triangles", side_effect=lambda path: meshes[os.path.basename(path)]), \
+                mock.patch.object(world_tris.collision, "block_mask", return_value=7):
+            return list(world_tris.iter_shards("map", max_triangles))
+
+    def test_one_shard_without_a_limit(self):
+        shards = self.shards(None)
+        self.assertEqual(len(shards), 1)
+        self.assertEqual(len(shards[0][0]), 29)
+        self.assertEqual(shards[0][4]["placements"], 3)
+
+    def test_shards_cover_every_triangle_once_and_respect_the_limit(self):
+        shards = self.shards(12)
+        self.assertEqual([len(s[0]) for s in shards], [12, 12, 5])
+        self.assertEqual(sum(len(s[0]) for s in shards), 29)
+        self.assertEqual(shards[-1][4]["triangles"], 29)
+        self.assertEqual(shards[-1][4]["placements"], 3)
+        for tris, mask, part, parts, _ in shards:
+            self.assertEqual(len(tris), len(mask))
+            self.assertTrue(set(part.tolist()) <= set(range(len(parts))))
