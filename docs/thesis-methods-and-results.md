@@ -310,17 +310,20 @@ Around one target, the voxels decide what is far from geometry, and the exact tr
 target decide what comes within 0.6 m of an occupied voxel. Same segments; 16 regions per map; target = end of the segment
 (`E-README`, "Precision pass", `SC:engine/tests/last-run-precision.txt`):
 
-| 100 000 segments | Jensen voxel -> precision | Kokan voxel -> precision | Label |
-|---|---|---|---|
-| false CLEAR | 129 -> 8 | 83 -> 4 | VERIFIED |
-| false BLOCKED | 3 948 -> 279 | 8 331 -> 858 | VERIFIED |
-| wrong, all / without grazing | 4.08 % / 1.43 % -> **0.29 % / 0.10 %** | 8.41 % / 4.57 % -> **0.86 % / 0.47 %** | VERIFIED |
-| sent to the exact pass | 42.0 % | 37.0 % | VERIFIED (not typical: the segments were chosen near geometry) |
-| region file min / median / max | 57 B / 100 KB / 5.0 MB | 1.04 / 2.48 / 3.52 MB | VERIFIED |
-| time per segment, one thread | 7.7 -> 8.9 us | 12.1 -> 14.4 us | VERIFIED, shared machine |
-| target at the segment start: wrong / without grazing | 0.00 % / 0.00 % | 0.10 % / 0.05 % | VERIFIED |
+| 100 000 segments | Jensen voxel -> precision | Kokan voxel -> precision | Fallujah voxel -> precision | Label |
+|---|---|---|---|---|
+| false CLEAR | 129 -> 8 | 83 -> 4 | 494 -> 35 | VERIFIED |
+| false BLOCKED | 3 948 -> 279 | 8 331 -> 858 | 5 609 -> 409 | VERIFIED |
+| wrong, all / without grazing | 4.08 % / 1.43 % -> **0.29 % / 0.10 %** | 8.41 % / 4.57 % -> **0.86 % / 0.47 %** | 6.10 % / 2.60 % -> **0.44 % / 0.17 %** | VERIFIED |
+| sent to the exact pass | 42.0 % | 37.0 % | 60.1 % | VERIFIED (not typical: the segments were chosen near geometry) |
+| region file min / median / max | 57 B / 100 KB / 5.0 MB | 1.04 / 2.48 / 3.52 MB | 6.48 / 15.9 / 26.0 MB | VERIFIED |
+| time per segment, one thread | 7.7 -> 8.9 us | 12.1 -> 14.4 us | 69.8 -> 50.0 us | VERIFIED, shared machine; Fallujah at load average ~20 and regions answered one at a time, not comparable with the other two |
+| target at the segment start: wrong / without grazing | 0.00 % / 0.00 % | 0.10 % / 0.05 % | 0.04 % / 0.02 % | VERIFIED |
 
-With the exact triangles of the whole window available the pass has 0 wrong answers at margin 0.6 m on both maps; 0.3 m
+Fallujah: statics + foliage (the voxel file holds both), densest 1 km window with 45.3 M triangles, 16 regions of 1.8 - 7.3 M
+triangles, every process under 3 GB (`E-README`, "Precision pass").
+
+With the exact triangles of the whole window available the pass has 0 wrong answers at margin 0.6 m on Jensen and Kokan (not run on Fallujah: 45.3 M triangles do not fit 3 GB); 0.3 m
 leaves one false clear on Kokan, which is why 0.6 m is kept (VERIFIED).
 
 ## 9. Structure damage for FOB and HAB
@@ -402,7 +405,6 @@ the AGS-17 group-size test is the smallest measurement that settles it.
 | Table | Content | Produced by | Status |
 |---|---|---|---|
 | Reverse-position heatmap checked against the exact tracer on a target inside a building: share of heatmap cells wrong, false clear / false blocked, time per heatmap | | `#22` item C5 | PENDING |
-| Fallujah precision pass (as section 8.2, on Fallujah and two further maps) | | `#22` item C10 | PENDING |
 | Map coverage: `.vcol` built / 25, build time and size per map, `build_all.log` without FAILED | 12 of 25 built as of section 4 | `#22` item B2 | PENDING |
 | Heatmap and DDA timings on a real GPU | | `#22` item C9 (a GPU on `tk104`, otherwise "not measured") | PENDING |
 | 2D damage/splash footprint on the live site | | `#22` item C6 | PENDING |

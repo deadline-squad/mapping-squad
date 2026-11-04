@@ -148,18 +148,19 @@ the sampling lost (false clear). `py/build_region.py` writes one small file per 
 `centre +- 150 m`, the Visibility triangles of the `world_tris.py` shards that a re-checked segment can hit, shared
 vertices at 0.1 mm, varint + gzip); the engine (`engine/src/precision.rs`) answers the parts of a segment outside the
 square by the voxels, and the part inside by the exact triangles when it comes within 0.6 m (whole voxels, rounded up)
-of an occupied voxel. Same 100 000 segments as above, 16 regions per map, target = end of the segment:
+of an occupied voxel. Same 100 000 segments as above, 16 regions per map, target = end of the segment (Fallujah: statics + foliage, 3 GB per process, regions answered one at a time, see `engine/README.md`):
 
-| 100 000 segments | Jensen voxel / precision | Kokan voxel / precision |
-|---|---|---|
-| false CLEAR | 129 / 8 | 83 / 4 |
-| false BLOCKED | 3 948 / 279 | 8 331 / 858 |
-| wrong, all / without grazing | 4.08 % / 1.43 % -> **0.29 % / 0.10 %** | 8.41 % / 4.57 % -> **0.86 % / 0.47 %** |
-| sent to the exact pass | - / 42.0 % | - / 37.0 % |
-| region file, min / median / max | 57 B / 100 KB / 5.0 MB | 1.04 / 2.48 / 3.52 MB |
+| 100 000 segments | Jensen voxel / precision | Kokan voxel / precision | Fallujah voxel / precision |
+|---|---|---|---|
+| false CLEAR | 129 / 8 | 83 / 4 | 494 / 35 |
+| false BLOCKED | 3 948 / 279 | 8 331 / 858 | 5 609 / 409 |
+| wrong, all / without grazing | 4.08 % / 1.43 % -> **0.29 % / 0.10 %** | 8.41 % / 4.57 % -> **0.86 % / 0.47 %** | 6.10 % / 2.60 % -> **0.44 % / 0.17 %** |
+| sent to the exact pass | - / 42.0 % | - / 37.0 % | - / 60.1 % |
+| region file, min / median / max | 57 B / 100 KB / 5.0 MB | 1.04 / 2.48 / 3.52 MB | 6.48 / 15.9 / 26.0 MB (total 239 MB) |
+| time per segment, one thread | 7.7 / 8.9 us | 12.1 / 14.4 us | 69.8 / 50.0 us (load average ~20, regions one at a time: not comparable with the others) |
 
-With the exact triangles of the whole window available the pass has 0 wrong answers at margin 0.6 m on both maps (0.3 m
-leaves 1 false clear on Kokan). Details, the margin table and how to run it: `engine/README.md`, "Precision pass".
+With the exact triangles of the whole window available the pass has 0 wrong answers at margin 0.6 m on Jensen and Kokan
+(0.3 m leaves 1 false clear on Kokan); on Fallujah this was not run (the window holds 45.3 M triangles, over the 3 GB cap). Details, the margin table and how to run it: `engine/README.md`, "Precision pass".
 
 ```sh
 python py/build_region.py <map>.vcol out/regions --centre X Y --centre X Y --radius 150 --margin 0.6 <tris.npz>...

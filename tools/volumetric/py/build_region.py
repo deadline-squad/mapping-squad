@@ -42,16 +42,29 @@ COARSE_XY = 4
 COARSE_Z = 4
 
 
-def _zigzag_varints(values):
-    """Bytes of the zigzag varints of an int64 array."""
-    zigzag = ((values << 1) ^ (values >> 63)).astype(np.uint64)
+def _zigzag_varints(values, chunk=1 << 20):
+    """Bytes of the zigzag varints of an int64 array (converted to Python ints a chunk at a time: a region of millions
+    of triangles has tens of millions of values)."""
     out = bytearray()
-    for v in zigzag.tolist():
-        while v >= 0x80:
-            out.append((v & 0x7F) | 0x80)
-            v >>= 7
-        out.append(v)
+    for start in range(0, len(values), chunk):
+        piece = values[start:start + chunk]
+        for v in ((piece << 1) ^ (piece >> 63)).astype(np.uint64).tolist():
+            while v >= 0x80:
+                out.append((v & 0x7F) | 0x80)
+                v >>= 7
+            out.append(v)
     return bytes(out)
+
+
+def _quantise(tris, origin, chunk=1 << 20):
+    """int32 [3n, 3]: the corners of `tris` relative to `origin` in units of QUANT (a chunk at a time, in float64)."""
+    corners = tris.reshape(-1, 3)
+    out = np.empty(corners.shape, np.int32)
+    for start in range(0, len(corners), 3 * chunk):
+        piece = np.rint((corners[start:start + 3 * chunk].astype(np.float64) - origin.astype(np.float64)) / QUANT)
+        assert np.abs(piece).max() < 2**31, "a corner is more than 214 km from the origin"
+        out[start:start + 3 * chunk] = piece
+    return out
 
 
 def encode(tris, bounds, margin):
@@ -59,20 +72,33 @@ def encode(tris, bounds, margin):
     origin = np.array([(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2, tris[..., 2].min() if len(tris) else 0.0], np.float32)
     if len(tris) == 0:
         return gzip.compress(struct.pack(HEADER, MAGIC, *[float(b) for b in bounds], float(margin), *[float(o) for o in origin], 0, 0), 9)
-    quantised = np.rint((tris.reshape(-1, 3).astype(np.float64) - origin.astype(np.float64)) / QUANT).astype(np.int64)
-    _, inverse = np.unique(quantised, axis=0, return_inverse=True)
+    quantised = _quantise(tris, origin)
+    distinct, inverse = np.unique(quantised, axis=0, return_inverse=True)
     corners = inverse.reshape(-1, 3)
+    del quantised, inverse
     # a triangle with a repeated corner cannot be hit; a repeated triangle (the same mesh placed twice) is stored once
     proper = (corners[:, 0] != corners[:, 1]) & (corners[:, 1] != corners[:, 2]) & (corners[:, 0] != corners[:, 2])
-    _, first_triangle = np.unique(np.sort(corners[proper], axis=1), axis=0, return_index=True)
-    kept = np.nonzero(proper)[0][np.sort(first_triangle)]
+    proper_index = np.nonzero(proper)[0]
+    sorted_corners = np.sort(corners[proper_index], axis=1)
+    by_corners = np.lexsort((sorted_corners[:, 2], sorted_corners[:, 1], sorted_corners[:, 0]))
+    ordered = sorted_corners[by_corners]
+    del sorted_corners
+    first_of_group = np.ones(len(ordered), bool)
+    first_of_group[1:] = (ordered[1:] != ordered[:-1]).any(axis=1)
+    del ordered
+    # lexsort is stable, so the first of a group of equal triangles is the one that comes first in the input
+    kept = proper_index[np.sort(by_corners[first_of_group])]
+    del by_corners, first_of_group, proper_index
+    kept_corners = corners[kept].reshape(-1)
+    del corners
     tris = tris[kept]
-    unique, first, inverse = np.unique(quantised.reshape(-1, 3, 3)[kept].reshape(-1, 3), axis=0, return_index=True, return_inverse=True)
+    used, first, inverse = np.unique(kept_corners, return_index=True, return_inverse=True)
+    del kept_corners
     inverse = inverse.reshape(-1)
     order = np.argsort(first, kind="stable")
     rank = np.empty(len(order), np.int64)
     rank[order] = np.arange(len(order))
-    vertices = unique[order]
+    vertices = distinct[used[order]].astype(np.int64)
     indices = rank[inverse]
     vertex_deltas = np.diff(vertices, axis=0, prepend=np.zeros((1, 3), np.int64)) if len(vertices) else vertices
     index_deltas = np.diff(indices, prepend=0)
