@@ -38,13 +38,27 @@ class TriangleIndex:
         self.start = np.searchsorted(tile[order], np.arange(self.nx * self.ny + 1))
 
     def tiles_on(self, p0, p1):
-        """Tile ids crossed by the horizontal projection of a segment (sampled at TILE_M / 4)."""
-        n = max(2, int(np.ceil(np.hypot(*(p1[:2] - p0[:2])) / (TILE_M / 4))) + 1)
-        t = np.linspace(0, 1, n)[:, None]
-        pts = p0[None, :2] + t * (p1[:2] - p0[:2])[None, :]
-        ix = np.clip(((pts[:, 0] - self.min_x) // TILE_M).astype(np.int64), 0, self.nx - 1)
-        iy = np.clip(((pts[:, 1] - self.min_y) // TILE_M).astype(np.int64), 0, self.ny - 1)
-        return np.unique(iy * self.nx + ix)
+        """Tile ids whose area the horizontal projection of a segment touches.
+
+        Exact up to over-cover: for every tile column the segment crosses, all tiles between the lowest and the
+        highest y that the segment reaches inside that column. Sampling the segment at fixed steps skipped tiles
+        that it only clips at a corner (22 of 20 000 random Fallujah segments missed a hit).
+        """
+        x0, y0, x1, y1 = (float(v) for v in (p0[0], p0[1], p1[0], p1[1]))
+        if x0 > x1:
+            x0, y0, x1, y1 = x1, y1, x0, y0
+        col_lo = int(np.clip((x0 - self.min_x) // TILE_M, 0, self.nx - 1))
+        col_hi = int(np.clip((x1 - self.min_x) // TILE_M, 0, self.nx - 1))
+        slope = (y1 - y0) / (x1 - x0) if x1 > x0 else 0.0
+        tiles = []
+        for col in range(col_lo, col_hi + 1):
+            xa = max(x0, self.min_x + col * TILE_M)
+            xb = min(x1, self.min_x + (col + 1) * TILE_M)
+            ya, yb = (y0 + slope * (xa - x0), y0 + slope * (xb - x0)) if x1 > x0 else (y0, y1)
+            row_lo = int(np.clip((min(ya, yb) - self.min_y) // TILE_M, 0, self.ny - 1))
+            row_hi = int(np.clip((max(ya, yb) - self.min_y) // TILE_M, 0, self.ny - 1))
+            tiles.extend(row * self.nx + col for row in range(row_lo, row_hi + 1))
+        return np.unique(np.array(tiles, np.int64))
 
     def candidates(self, p0, p1, bit):
         tiles = self.tiles_on(p0, p1)
