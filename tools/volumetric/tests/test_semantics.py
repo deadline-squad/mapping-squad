@@ -17,6 +17,7 @@ import building_interiors  # noqa: E402
 import class_table  # noqa: E402
 import window_demo  # noqa: E402
 import materials  # noqa: E402
+import primitive_counts  # noqa: E402
 import projectile_profiles  # noqa: E402
 import static_semantics  # noqa: E402
 
@@ -159,3 +160,30 @@ class WindowDemoTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PrimitiveCountsTests(unittest.TestCase):
+    """BodySetup primitives weighted by placement."""
+
+    def write_map(self, directory, bodies, instances):
+        os.makedirs(os.path.join(directory, "bodies"))
+        for mesh, body in bodies.items():
+            json.dump({"path": "/Game/" + mesh, "body": body}, open(os.path.join(directory, "bodies", mesh + ".json"), "w"))
+        with open(os.path.join(directory, "instances.ndjson"), "w") as handle:
+            for item in instances:
+                handle.write(json.dumps(item) + "\n")
+
+    def test_counts_are_weighted_by_placements_and_instances(self):
+        with tempfile.TemporaryDirectory() as directory:
+            body = {"Properties": {"AggGeom": {"BoxElems": [{}, {}], "SphylElems": [{}], "ConvexElems": [{}]}}}
+            self.write_map(directory, {"1": body, "2": {"Properties": {}}}, [
+                {"mesh": "1", "instances": [{}, {}, {}]},
+                {"mesh": "1"},
+                {"mesh": "2"},
+                {"mesh": "3"},
+            ])
+            result = primitive_counts.summarize(directory)
+        self.assertEqual(result["totals"], {"box": 8, "sphere": 0, "capsule": 4, "convex": 4})
+        self.assertEqual([m["mesh"] for m in result["meshes"]], ["1"])
+        self.assertEqual(result["meshes"][0]["placements"], 4)
+        self.assertEqual([e["mesh"] for e in result["errors"]], ["3"])

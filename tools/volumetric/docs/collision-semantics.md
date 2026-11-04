@@ -233,6 +233,39 @@ test do 5 repetitions and note hit or pass for every repetition.
 Pass criteria: a test settles the labelled item when 5 of 5 repetitions agree. Disagreement is itself evidence of
 randomness (spread, penetration chance) and is recorded.
 
+### Simple-collision primitives per map
+
+Primitives of every BodySetup `AggGeom` multiplied by the mesh placements (`semantics/primitive_counts.py`, VERIFIED, all 25 maps; the last column counts distinct meshes that have any shape). Totals are in `data/primitives.json`; the per-mesh rows (path, placements, shapes) are written to `~/data/volumetric/primitives/<map>.json`. Spheres are almost absent and convex hulls dominate.
+
+| map | box | sphere | capsule | convex | meshes |
+|---|---:|---:|---:|---:|---:|
+| albasrah | 166445 | 2 | 370 | 1392624 | 11989 |
+| anvil | 16536 | 6 | 1359 | 76939 | 3395 |
+| blackcoast | 18161 | 2 | 105 | 145315 | 2663 |
+| chora | 5507 | 0 | 396 | 64719 | 6301 |
+| fallujah | 69546 | 2 | 59 | 250916 | 3415 |
+| foolsroad | 2521 | 0 | 15 | 10123 | 623 |
+| goosebay | 11243 | 0 | 32 | 60865 | 1401 |
+| gorodok | 8288 | 0 | 547 | 108795 | 1687 |
+| harju | 48538 | 2 | 59 | 166611 | 4413 |
+| jensen | 2424 | 0 | 39 | 7536 | 519 |
+| kamdesh | 1662 | 0 | 2 | 59655 | 3992 |
+| kohat | 2442 | 0 | 817 | 28025 | 2210 |
+| kokan | 7037 | 0 | 374 | 10805 | 738 |
+| lashkar | 4049 | 5 | 1210 | 70959 | 3083 |
+| logar | 1883 | 5 | 111 | 24572 | 957 |
+| manicouagan | 17902 | 0 | 33 | 122328 | 3583 |
+| mestia | 1515 | 0 | 109 | 27125 | 787 |
+| mutaha | 8562 | 0 | 1109 | 59790 | 4871 |
+| narva | 48393 | 0 | 79 | 98148 | 4164 |
+| pacific | 366 | 2 | 0 | 1529 | 42 |
+| sanxian | 24701 | 0 | 89 | 731115 | 2918 |
+| skorpo | 8152 | 0 | 87 | 111154 | 7348 |
+| sumari | 15300 | 2 | 973 | 32691 | 3302 |
+| tallil | 15864 | 0 | 665 | 64624 | 1172 |
+| yehorivka | 14498 | 0 | 83 | 340220 | 3642 |
+
+
 ## 8. Reproduction
 
 All commands run from `tools/volumetric/semantics` (`./py.sh` is a Docker wrapper over the `squadcalc-heightmaps-py`
@@ -244,6 +277,7 @@ image, with `~/data` at `/data`; heavy runs under `nice`). Data are in `~/data/s
 | Blueprint projectile profiles | `projectile_profiles.py` |
 | Static and foliage response table | `static_semantics.py <statics dir> <out>` |
 | Trace flag and shape counts | `mesh_collision_kinds.py <statics dir> <out>` |
+| Simple primitives per map | `primitive_counts.py <statics dir> <out.json>` |
 | Glass sections | extractor `meshsections`, `section_materials.py` |
 | Class triangle table | `class_table.py kinds_fallujah.json classes_fallujah.json` |
 | Window exact tracer | `window_demo.py <statics dir> <sections.ndjson> <mesh path> <out>` |

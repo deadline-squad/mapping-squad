@@ -1,0 +1,202 @@
+{
+ "albasrah": {
+  "box": 166445,
+  "sphere": 2,
+  "capsule": 370,
+  "convex": 1392624,
+  "meshes_with_shapes": 11989,
+  "meshes_unreadable": 0
+ },
+ "anvil": {
+  "box": 16536,
+  "sphere": 6,
+  "capsule": 1359,
+  "convex": 76939,
+  "meshes_with_shapes": 3395,
+  "meshes_unreadable": 0
+ },
+ "blackcoast": {
+  "box": 18161,
+  "sphere": 2,
+  "capsule": 105,
+  "convex": 145315,
+  "meshes_with_shapes": 2663,
+  "meshes_unreadable": 0
+ },
+ "chora": {
+  "box": 5507,
+  "sphere": 0,
+  "capsule": 396,
+  "convex": 64719,
+  "meshes_with_shapes": 6301,
+  "meshes_unreadable": 0
+ },
+ "fallujah": {
+  "box": 69546,
+  "sphere": 2,
+  "capsule": 59,
+  "convex": 250916,
+  "meshes_with_shapes": 3415,
+  "meshes_unreadable": 0
+ },
+ "foolsroad": {
+  "box": 2521,
+  "sphere": 0,
+  "capsule": 15,
+  "convex": 10123,
+  "meshes_with_shapes": 623,
+  "meshes_unreadable": 0
+ },
+ "goosebay": {
+  "box": 11243,
+  "sphere": 0,
+  "capsule": 32,
+  "convex": 60865,
+  "meshes_with_shapes": 1401,
+  "meshes_unreadable": 0
+ },
+ "gorodok": {
+  "box": 8288,
+  "sphere": 0,
+  "capsule": 547,
+  "convex": 108795,
+  "meshes_with_shapes": 1687,
+  "meshes_unreadable": 0
+ },
+ "harju": {
+  "box": 48538,
+  "sphere": 2,
+  "capsule": 59,
+  "convex": 166611,
+  "meshes_with_shapes": 4413,
+  "meshes_unreadable": 0
+ },
+ "jensen": {
+  "box": 2424,
+  "sphere": 0,
+  "capsule": 39,
+  "convex": 7536,
+  "meshes_with_shapes": 519,
+  "meshes_unreadable": 0
+ },
+ "kamdesh": {
+  "box": 1662,
+  "sphere": 0,
+  "capsule": 2,
+  "convex": 59655,
+  "meshes_with_shapes": 3992,
+  "meshes_unreadable": 0
+ },
+ "kohat": {
+  "box": 2442,
+  "sphere": 0,
+  "capsule": 817,
+  "convex": 28025,
+  "meshes_with_shapes": 2210,
+  "meshes_unreadable": 0
+ },
+ "kokan": {
+  "box": 7037,
+  "sphere": 0,
+  "capsule": 374,
+  "convex": 10805,
+  "meshes_with_shapes": 738,
+  "meshes_unreadable": 0
+ },
+ "lashkar": {
+  "box": 4049,
+  "sphere": 5,
+  "capsule": 1210,
+  "convex": 70959,
+  "meshes_with_shapes": 3083,
+  "meshes_unreadable": 0
+ },
+ "logar": {
+  "box": 1883,
+  "sphere": 5,
+  "capsule": 111,
+  "convex": 24572,
+  "meshes_with_shapes": 957,
+  "meshes_unreadable": 0
+ },
+ "manicouagan": {
+  "box": 17902,
+  "sphere": 0,
+  "capsule": 33,
+  "convex": 122328,
+  "meshes_with_shapes": 3583,
+  "meshes_unreadable": 0
+ },
+ "mestia": {
+  "box": 1515,
+  "sphere": 0,
+  "capsule": 109,
+  "convex": 27125,
+  "meshes_with_shapes": 787,
+  "meshes_unreadable": 0
+ },
+ "mutaha": {
+  "box": 8562,
+  "sphere": 0,
+  "capsule": 1109,
+  "convex": 59790,
+  "meshes_with_shapes": 4871,
+  "meshes_unreadable": 0
+ },
+ "narva": {
+  "box": 48393,
+  "sphere": 0,
+  "capsule": 79,
+  "convex": 98148,
+  "meshes_with_shapes": 4164,
+  "meshes_unreadable": 0
+ },
+ "pacific": {
+  "box": 366,
+  "sphere": 2,
+  "capsule": 0,
+  "convex": 1529,
+  "meshes_with_shapes": 42,
+  "meshes_unreadable": 0
+ },
+ "sanxian": {
+  "box": 24701,
+  "sphere": 0,
+  "capsule": 89,
+  "convex": 731115,
+  "meshes_with_shapes": 2918,
+  "meshes_unreadable": 0
+ },
+ "skorpo": {
+  "box": 8152,
+  "sphere": 0,
+  "capsule": 87,
+  "convex": 111154,
+  "meshes_with_shapes": 7348,
+  "meshes_unreadable": 0
+ },
+ "sumari": {
+  "box": 15300,
+  "sphere": 2,
+  "capsule": 973,
+  "convex": 32691,
+  "meshes_with_shapes": 3302,
+  "meshes_unreadable": 0
+ },
+ "tallil": {
+  "box": 15864,
+  "sphere": 0,
+  "capsule": 665,
+  "convex": 64624,
+  "meshes_with_shapes": 1172,
+  "meshes_unreadable": 0
+ },
+ "yehorivka": {
+  "box": 14498,
+  "sphere": 0,
+  "capsule": 83,
+  "convex": 340220,
+  "meshes_with_shapes": 3642,
+  "meshes_unreadable": 0
+ }
+}
