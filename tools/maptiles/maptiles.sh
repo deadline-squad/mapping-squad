@@ -11,6 +11,9 @@
 #   maptiles.sh colour-relief [map ...] relief strength and light direction of the style against the basemap (report)
 #   maptiles.sh colour-render [map ...] webp tiles of the style into $DIST/maptiles/<map>-colour
 #   maptiles.sh colour-distance map tilesdir [args]  mean colour distance of a tile folder to the basemap (zoom 4)
+#   maptiles.sh relief-setup           Python image of the relief layer (numpy, scipy, Pillow, RVT, pmtiles)
+#   maptiles.sh relief [map ...]       shaded relief PMTiles (MDOW hillshade + anisotropic SVF) into $WORK/relief/<map>.pmtiles;
+#                                      RELIEF_ARGS adds options of py/relief.py (--tint, --extra-zoom N)
 #
 # Without maps every map of ../heightmaps/py/maps.py is processed.
 # Environment (defaults in brackets):
@@ -38,6 +41,7 @@ WORKERS=${WORKERS:-3}
 BASEMAPS=${BASEMAPS:-$WORK/basemaps}
 DOTNET_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
 PY_IMAGE=squadcalc-maptiles-py
+RELIEF_IMAGE=squadcalc-relief-py
 USER_FLAGS="--user $(id -u):$(id -g) -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp"
 
 maps() {
@@ -135,6 +139,17 @@ colour-relief)
 colour-render)
     shift
     for slug in $(maps "$@"); do colour_tool render.py "$slug" --style colour --workers "$WORKERS"; done
+    ;;
+relief-setup)
+    docker build -q -t "$RELIEF_IMAGE" -f "$HERE/py/Dockerfile.relief" "$HERE/py"
+    ;;
+relief)
+    shift
+    mkdir -p "$WORK/relief"
+    # shellcheck disable=SC2086
+    nice -n 10 docker run --rm $USER_FLAGS -e PYTHONPATH=/py:/hmpy -v "$HERE/py:/py:ro" -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" \
+        -v "$DIST/heightmaps:/heightmaps:ro" -v "$DIST/maptiles:/tiles:ro" -v "$WORK/relief:/out" -w /py "$RELIEF_IMAGE" \
+        python -W ignore relief.py /heightmaps /tiles /out $(maps "$@") ${RELIEF_ARGS:-}
     ;;
 colour-distance)
     shift

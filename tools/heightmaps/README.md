@@ -158,3 +158,12 @@ Files:
   `py/compare_*.py` — the checks above.
 * `py/audit_ground_truth.py`, `log_points.awk`, `py/compare_interpolation.py`, `py/compare_resolution.py`: the
   checks above.
+
+## Topographic metrics
+
+`py/topometrics.py` computes slope, aspect, profile and plan curvature, TPI, TRI, roughness, sky-view factor and openness
+per cell from a heightmap (float64; Horn gradients and Zevenbergen-Thorne second derivatives, definitions and sign
+conventions in its docstring); `py/topometrics_cli.py` writes `topometrics/<map>.json` (min, max, mean, std, percentiles,
+slope class shares) and the Markdown tables `topometrics/README.md`. `py/test_topometrics.py` checks every metric against
+a plane, a paraboloid and a sphere patch with exact slope, aspect and curvature (relative error below 1e-6):
+`python -m unittest test_topometrics` in `py/` (numpy, scipy, Pillow; sky metrics need `rvt-py`, see `../maptiles/py/Dockerfile.relief`).
