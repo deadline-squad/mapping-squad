@@ -106,7 +106,8 @@ Verified by `extractor inventory` (export counts per level) and by reading the c
 * Terrain: unchanged landscape heights (+ the hole flag), 1 m.
 * Objects: **sparse voxel columns**. A voxel is occupied when a collision triangle blocking the query class
   has a sample point inside it (barycentric lattice at 0.45 x the smallest voxel edge, so thin walls and open
-  shells mark the voxels they cross; no closed mesh is needed). Voxels that lie entirely at or under the
+  shells mark the voxels they cross; no closed mesh is needed). Triangles outside the grid are skipped and large
+  ones sampled only where they cross it, so meshes reaching tens of km beyond the map (Tallil mesh 774) cost nothing. Voxels that lie entirely at or under the
   landscape + 0.1 m are dropped. Up-facing samples are kept as a second set (floors) for standable surfaces.
 * File `VCOL1` (`py/codec.py`): per occupied column the z-runs, varint packed, gzip. Browser decode with
   `DecompressionStream("gzip")` and about 40 lines (`js/vcol.mjs`, ~100 MB of typed arrays for Fallujah 0.5 m).
