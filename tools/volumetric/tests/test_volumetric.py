@@ -50,6 +50,11 @@ class VolumetricTests(unittest.TestCase):
         self.assertFalse(self.voxels.blocked(a, b))
         self.assertTrue(self.heightmap.blocked(a, b))
 
+    def test_tile_walk_includes_a_tile_that_the_segment_only_clips_at_its_corner(self):
+        tiles = self.index.tiles_on(np.array([0.5, 15.55, 1.6]), np.array([15.55, 0.5, 1.6]))
+        corner_tile = 1 * self.index.nx + 1
+        self.assertIn(corner_tile, tiles)
+
     def test_ray_through_the_deck_is_blocked_everywhere(self):
         a, b = (20.0, 3.0, 1.6), (20.0, 3.0, 9.0)
         self.assertTrue(self.index.blocked(a, b, collision.VISIBILITY)[0])
