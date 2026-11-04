@@ -138,6 +138,30 @@ False blocked: a marked voxel can be entered up to a voxel diagonal from the sur
 triangle). False clear: the voxel at the exact hit is empty in the file (the sample lattice missed a clipped corner).
 Reproduce and details: `engine/README.md`, section "Voxel columns".
 
+## Precision pass: exact triangles near a target
+
+The voxel walk blocks segments that pass up to a voxel diagonal from a surface (false blocked) and misses hits in voxels
+the sampling lost (false clear). `py/build_region.py` writes one small file per target (`RTRI1`: the square
+`centre +- 150 m`, the Visibility triangles of the `world_tris.py` shards that a re-checked segment can hit, shared
+vertices at 0.1 mm, varint + gzip); the engine (`engine/src/precision.rs`) answers the parts of a segment outside the
+square by the voxels, and the part inside by the exact triangles when it comes within 0.6 m (whole voxels, rounded up)
+of an occupied voxel. Same 100 000 segments as above, 16 regions per map, target = end of the segment:
+
+| 100 000 segments | Jensen voxel / precision | Kokan voxel / precision |
+|---|---|---|
+| false CLEAR | 129 / 8 | 83 / 4 |
+| false BLOCKED | 3 948 / 279 | 8 331 / 858 |
+| wrong, all / without grazing | 4.08 % / 1.43 % -> **0.29 % / 0.10 %** | 8.41 % / 4.57 % -> **0.86 % / 0.47 %** |
+| sent to the exact pass | - / 42.0 % | - / 37.0 % |
+| region file, min / median / max | 57 B / 100 KB / 5.0 MB | 1.04 / 2.48 / 3.52 MB |
+
+With the exact triangles of the whole window available the pass has 0 wrong answers at margin 0.6 m on both maps (0.3 m
+leaves 1 false clear on Kokan). Details, the margin table and how to run it: `engine/README.md`, "Precision pass".
+
+```sh
+python py/build_region.py <map>.vcol out/regions --centre X Y --centre X Y --radius 150 --margin 0.6 <tris.npz>...
+```
+
 ## Reproduce
 
 Python runs in the `squadcalc-heightmaps-py` image (`docker build tools/heightmaps/py`), the extractor in the
