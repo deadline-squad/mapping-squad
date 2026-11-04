@@ -30,7 +30,9 @@ source. All asset names are `/Game/...` paths of the server package. Russian ver
    sandbags 0.05 / 0.05; metal tripods 0.3 / 1.0).
 4. A calculation is supported and implemented: `damageToStructure` and `shellsToDestroy` in SquadCalc
    (`src/js/structureDamage.js`, data `src/data/structureDamage.js`, `tests/structureDamage.test.mjs`).
-   The way the game combines the fields is native code: the formula is INFERRED (section 4) and has not been checked in game.
+   The way the game combines the fields is native code, now read from the server binary (section 4,
+   [`native-rules.md`](native-rules.md)): the combination is VERIFIED from the code with the corrections listed in section 4;
+   it has not been measured in game.
 
 ## 2. Structures: health and multipliers (VERIFIED values)
 
@@ -106,7 +108,7 @@ the data has a health but no damage-type table, so what damages them is UNVERIFI
 
 Lengths in metres (the assets are in centimetres), merged along each Blueprint's `Super` chain
 (`tools/game_ballistics/resolve.py`). `*` = a field the Blueprint does not override, taken from the C++ default that
-`tools/game_ballistics/gamecheck.py` (`NATIVE_EXPLOSION`) infers (115 damage, 5-15 m, falloff 1): INFERRED for that
+`tools/game_ballistics/gamecheck.py` (`NATIVE_EXPLOSION`) infers (115 damage, 5-15 m, falloff 1): this was INFERRED, since read from the constructor of the native projectile class (native-rules.md 1.3) and VERIFIED for that
 field only. "none" = no explosion field in the asset (AP rounds, machine guns): they do not explode and their bullet
 damage is not in the projectile asset, so no structure damage is computed for them (consistent with the owner's
 statement that AP does not damage structures).
@@ -171,7 +173,7 @@ Also in the assets and not used by the calculation: `ExplosiveMinimumDamage`, `E
 damage), `ArmorPenetrationDepthMillimeters` and `TraceDistanceAfterPenetrationMeters` (bullet penetration),
 `SpecificImpactEffects` (a table keyed by physical material that holds only particles, sounds and decals).
 
-## 4. The calculation (INFERRED combination of VERIFIED fields)
+## 4. The calculation (VERIFIED from the server binary, see `native-rules.md`; the app still uses the earlier INFERRED form)
 
 For a structure with `maxHealth` and a table entry `t` for the shell's damage type (`modifier`, `direct`, `indirect`,
 `directRadial`), and `R(d)` the radial damage at distance `d` (full inside the inner radius, then
@@ -181,15 +183,35 @@ for soldiers, `squadDamage.js damageAtDistance`):
 * direct hit on the structure: `impact * t.modifier * t.direct + R(d) * t.modifier * t.directRadial`
 * near miss: `R(d) * t.modifier * t.indirect`
 * plus the same radial term for the secondary explosion, with the modifier of the secondary's own damage type
-* a damage type not in the table: nothing (INFERRED from the name `AllowableDamageTypes`)
+* a damage type not in the table: nothing (VERIFIED in the binary)
 
-Why INFERRED: the property names and their values (modifier 0.01 for fragmentation against HESCO, 0.25 for explosives,
+Superseded by the binary (VERIFIED, [`native-rules.md`](native-rules.md) section 1; the instruction bytes are pinned by
+`tests/test_native_rules.py`). For a deployable (`ASQDeployable::TakeDamage`, 0xa4970d0):
+
+* the first `AllowableDamageTypes` element whose class equals the damage type class exactly is used; no element = no
+  health change (the "not listed" rule above is VERIFIED);
+* radial event: `loss = Lerp(Min, Base * Modifier * m, scale(d))` with `m = DirectHitDamageMultiplier` on a direct hit and
+  `IndirectHitDamageMultiplier` otherwise (0 on a near miss when `bOnlyPassDamageIfDirectHit`); `scale` is the formula above;
+  `Min` is the projectile's `ExplosiveMinimumDamage`, applied after and not multiplied by the modifier; point event:
+  `loss = amount * Modifier`;
+* `DirectHitRadialDamageMultiplier` is not read by deployables; only the vehicle code (emplaced guns, vehicles) reads it;
+* `d` is the smallest distance from the explosion origin (impact point + `ExplosiveDamageDistanceFromImpactNormal` along the
+  normal) to the recorded impact points of the structure's components, found by a Visibility ray to each component's bounds
+  centre, or the component pivot inside `ExplosiveKillZoneRadius`; a shielded structure takes no radial damage.
+
+Where this differs from the bullets above: the radial term on a direct hit uses `direct`, not `directRadial`; the impact term
+has no `direct`; and `Min` is a floor (ten of the app's projectiles have `Min` > 0). The app's `structureDamage.js` (not changed
+here) still implements the earlier form; the direct-hit tables of this document (distance 0, inside every inner radius, so `Min` does not show) are unchanged where
+`direct = 1`, which is nearly every structure; the ammunition crates and emplacements are the exceptions. Still UNVERIFIED: how a direct hit's `ImpactDamageToApply` and the
+secondary explosion reach `TakeDamage` (Blueprint graphs, not native), and which actor class the emplaced guns' shells hit.
+
+Earlier reasoning, kept for the record (why it was INFERRED before): the property names and their values (modifier 0.01 for fragmentation against HESCO, 0.25 for explosives,
 1.0-1.75 for HEAT/HAT against the ammo crate, whose `DirectHitRadialDamageMultiplier` of 0 stops the radial damage
 from doubling the direct hit) fit this reading, but the C++ that applies them is not in the paks and no in-game
-measurement of structure health was made (the in-game tests were cancelled by the owner). UNVERIFIED: the distance
-the game measures to a structure (nearest collision point or origin), whether the secondary explosion damages a
-deployable the same way as a "mesh" (`SecondaryOnlyDamageMeshes`), health regeneration or repair, the build state's
-effect on damage, and what `bForwardDamageToSoldier` does when a shell hits an emplacement with a gunner.
+measurement of structure health was made (the in-game tests were cancelled by the owner). Still UNVERIFIED after the binary was read: whether the secondary explosion
+damages a deployable the same way as a "mesh" (`SecondaryOnlyDamageMeshes` is a Blueprint variable), health regeneration or
+repair, and what `bForwardDamageToSoldier` does when a shell hits an emplacement with a gunner. The distance the game measures
+is resolved (native-rules.md section 3); the build state has no term in `TakeDamage`.
 
 Implementation: `damageToStructure(structure, ammo, {directHit, distance, secondary})` returns the damage by part and
 `shellsToDestroy(...)` the whole shells from full health (Infinity when the damage type is not listed). Pure
@@ -224,8 +246,8 @@ Shells to destroy, direct hit (`distance` 0):
 Classes used: `BP_FOBRadio_Woodland`, `US_Hab_Desert`, `BP_Hesco_USA_Desert`, `BP_HescoWall_DesertCam`,
 `BP_SandBagWall_2`, `BP_smallbunker_Desert`, `BP_M2_BAF_Bunker_Desert`, `BP_ObservationTower_ADF_Desert`,
 `BP_Razorwire_clean_2`, `BP_ConcreteBarrier`, `BP_vehicle_repair_ADF_Desert`, `BP_m252mortar_Deployable`. The full
-matrix (any class, any distance) is `shellsToDestroy` over `STRUCTURES` x `AMMO`. These counts hold only as far as
-section 4's combination does (INFERRED).
+matrix (any class, any distance) is `shellsToDestroy` over `STRUCTURES` x `AMMO`. These counts use the app's earlier form of section 4;
+native-rules.md lists where the binary differs (direct-hit radial multiplier, minimum-damage floor, distance).
 
 ## 5. Material of each structure (VERIFIED)
 
@@ -260,9 +282,9 @@ structure multipliers do not follow them: sandbag (damage_absorbed 120) takes 0.
   SpecificImpactEffects (cosmetic), ...`; `lethality_modifier` and `splash_radius_modifier` do not exist (`materials.json`).
 * No per-material structure damage multiplier, and no separate "structure damage" or "vehicle damage" multiplier in the
   damage types or projectiles beyond the per-structure table above.
-* The way `Modifier` and the three multipliers are combined, the distance used for a structure, and the damage of
-  AP and machine-gun bullets to structures (bullet damage is in the weapon, not in the projectile asset): native code or
-  other assets, UNVERIFIED. Not needed for the owner's HE/HEAT question except the combination.
+* The way `Modifier` and the three multipliers are combined and the distance used for a structure were native code: now read
+  from the binary (section 4, native-rules.md). The damage of AP and machine-gun bullets to structures (bullet damage is in the
+  weapon, not in the projectile asset) remains UNVERIFIED. Not needed for the owner's HE/HEAT question.
 
 ## 6b. In the SquadCalc UI (45.24.0, C7b)
 
