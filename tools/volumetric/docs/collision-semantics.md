@@ -195,7 +195,8 @@ and on the roof/ceiling being solid (it is, in the complex mesh).
   A doorway is a hole in the wall mesh. VERIFIED. Owner: doors in enterable buildings are either fully open or absent, so the doorway is open.
 * Operable or destructible door actors in gameplay layers and destructible blueprints were not examined: UNVERIFIED
   (T4, T5). `PhysMat_*` entries with `damage_parent_actor` (17 materials) mark parts that damage their parent actor.
-* The Destruction/Coop destructible blueprints' collision profiles are not part of this data set.
+* The Destruction/Coop destructible blueprints' collision profiles are not part of this data set. Their health and the
+  deployables' health and damage-type multipliers are in [`structure-damage.md`](structure-damage.md).
 
 ## 6. Materials and landscape
 
