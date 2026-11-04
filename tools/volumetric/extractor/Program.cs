@@ -11,6 +11,8 @@ using Newtonsoft.Json;
 //   dump <package> <out.json> [type ...] exports of a package (all, or only the given export types) as JSON
 //   props <package> <type> <max>         first <max> exports of a type with their property names
 //   foliage <path filter> <outdir>      foliage placements with collision on, in the layout of the repo's statics mode
+//   meshsections <list.txt> <out.ndjson> per static mesh object path (one per line): LOD0 sections (material slot,
+//                                        triangles, bEnableCollision), materials with the physical material they resolve to
 var paks = args[0];
 var mode = args[1];
 OodleHelper.Initialize(Path.Combine(AppContext.BaseDirectory, OodleHelper.OodleFileName));
@@ -88,6 +90,37 @@ else if (mode == "foliage")
     }
     File.WriteAllText(Path.Combine(outDir, "meshes.json"), JsonConvert.SerializeObject(meshes, Formatting.Indented));
 }
+else if (mode == "meshsections")
+{
+    using var output = new StreamWriter(args[3]);
+    foreach (var meshPath in File.ReadLines(args[2]).Where(l => l.Length > 0))
+    {
+        try
+        {
+            var mesh = provider.LoadPackageObject<CUE4Parse.UE4.Assets.Exports.StaticMesh.UStaticMesh>(meshPath);
+            var sections = mesh.RenderData?.LODs?.FirstOrDefault()?.Sections ?? [];
+            var materials = (mesh.StaticMaterials ?? []).Select(m => new
+            {
+                slot = m.MaterialSlotName.Text,
+                material = m.MaterialInterface?.ResolvedObject?.GetPathName(),
+                physMaterial = ResolvePhysMaterial(m.MaterialInterface),
+            }).ToArray();
+            var body = mesh.BodySetup?.Load<CUE4Parse.UE4.Objects.PhysicsEngine.UBodySetup>();
+            output.WriteLine(JsonConvert.SerializeObject(new
+            {
+                path = meshPath,
+                traceFlag = body?.GetOrDefault<string>("CollisionTraceFlag"),
+                bodyPhysMaterial = body?.GetOrDefault<FPackageIndex>("PhysMaterial")?.ResolvedObject?.GetPathName(),
+                sections = sections.Select(s => new { s.MaterialIndex, s.NumTriangles, s.bEnableCollision }),
+                materials,
+            }));
+        }
+        catch (Exception e)
+        {
+            output.WriteLine(JsonConvert.SerializeObject(new { path = meshPath, error = e.Message }));
+        }
+    }
+}
 else if (mode == "props")
 {
     var package = provider.LoadPackage(args[2]);
@@ -131,3 +164,17 @@ static void DumpBody(DefaultFileProvider provider, string meshPath, string prefi
     }
 }
 
+
+// Physical material of a material interface: its own PhysMaterial, else the nearest parent's.
+static string? ResolvePhysMaterial(FPackageIndex? materialInterface)
+{
+    var node = materialInterface?.Load();
+    for (var depth = 0; node != null && depth < 16; depth++)
+    {
+        var physical = node.GetOrDefault<FPackageIndex>("PhysMaterial");
+        if (physical != null && !physical.IsNull) return physical.ResolvedObject?.GetPathName();
+        var parent = node.GetOrDefault<FPackageIndex>("Parent");
+        node = parent == null || parent.IsNull ? null : parent.Load();
+    }
+    return null;
+}
