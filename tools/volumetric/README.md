@@ -92,6 +92,9 @@ Verified by `extractor inventory` (export counts per level) and by reading the c
   question (the Steam EULA forbids decompiling and deriving works) and was not done.
 * What the collision means for projectiles (channels, glass and windows, interiors, materials, in-game test
   protocol): [`docs/collision-semantics.md`](docs/collision-semantics.md) ([ru](docs/collision-semantics.ru.md)).
+* Damage of shells to player-built structures (FOB radio, HAB, HESCO, sandbags, bunkers): health, per-damage-type multipliers,
+  ammunition fields and what the data lacks: [`docs/structure-damage.md`](docs/structure-damage.md) ([ru](docs/structure-damage.ru.md)),
+  data in `data/structure_damage.json`.
 * Triangle winding is consistent (outward, signed volume > 0 on 332 of the 333 sampled meshes that enclose a volume; 65 more are open shells), which
   gives a free floor/ceiling/wall classification per sample.
 

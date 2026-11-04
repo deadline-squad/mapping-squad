@@ -20,6 +20,7 @@ import materials  # noqa: E402
 import primitive_counts  # noqa: E402
 import projectile_profiles  # noqa: E402
 import static_semantics  # noqa: E402
+import structure_damage  # noqa: E402
 
 
 def response(channel, value):
@@ -156,6 +157,43 @@ class WindowDemoTest(unittest.TestCase):
                             {"MaterialIndex": 0, "NumTriangles": 6, "bEnableCollision": True}],
                "materials": [{"physMaterial": "/x/PhysMat_Brick"}, {"physMaterial": "/x/PhysMat_GlassWindow"}]}
         self.assertEqual(window_demo.section_ranges(row), [(0, 4, True), (4, 10, False)])
+
+class StructureDamageTests(unittest.TestCase):
+    def test_short_names_a_blueprint_and_a_native_class(self):
+        self.assertEqual(structure_damage.short({"ObjectName": "BlueprintGeneratedClass'BP_X_C'", "ObjectPath": "/Game/Gameplay/DamageTypes/BP_X.0"}), "BP_X")
+        self.assertEqual(structure_damage.short({"ObjectName": "Class'SQDamageType_Thermite'", "ObjectPath": "/Script/Squad"}), "SQDamageType_Thermite")
+        self.assertIsNone(structure_damage.short(None))
+
+    def test_damage_table_keeps_the_multipliers_of_each_type(self):
+        entry = {"DamageTypeClass": {"ObjectName": "x", "ObjectPath": "/Game/Gameplay/DamageTypes/BP_Kinetic_DamageType.0"},
+                 "Modifier": 0.005, "DirectHitDamageMultiplier": 1.0, "IndirectHitDamageMultiplier": 0.2, "DirectHitRadialDamageMultiplier": 0.0, "Unrelated": 3}
+        table = structure_damage.damage_table({"AllowableDamageTypes": [entry]})
+        self.assertEqual(table, {"BP_Kinetic_DamageType": {"Modifier": 0.005, "DirectHitDamageMultiplier": 1.0,
+                                                            "IndirectHitDamageMultiplier": 0.2, "DirectHitRadialDamageMultiplier": 0.0}})
+        self.assertEqual(structure_damage.damage_table({}), {})
+
+    def test_physical_triangles_apply_the_slot_material_then_the_body_material(self):
+        mesh = {"sections": [{"MaterialIndex": 0, "NumTriangles": 30}, {"MaterialIndex": 1, "NumTriangles": 10}],
+                "materials": [{"physMaterial": "/Game/PhysicalMaterials/PhysMat_Sandbag.PhysMat_Sandbag"}, {"physMaterial": None}],
+                "bodyPhysMaterial": "/Game/PhysicalMaterials/PhysMat_Dirt.PhysMat_Dirt"}
+        self.assertEqual(dict(structure_damage.physical_triangles("/nonexistent", mesh, [])), {"PhysMat_Sandbag": 30, "PhysMat_Dirt": 10})
+
+    def test_export_groups_structures_with_the_same_table_and_skips_those_without_one(self):
+        entry = {"Modifier": 0.5, "DirectHitDamageMultiplier": 1.0, "IndirectHitDamageMultiplier": 1.0, "DirectHitRadialDamageMultiplier": 1.0}
+        row = {"max_health": 100.0, "damage_types": {"BP_Fragmentation_DamageType": entry}}
+        data = {"deployables": {"A": row, "B": dict(row), "C": {"max_health": 100.0, "damage_types": {}}, "D": {"max_health": None, "damage_types": {}}},
+                "projectiles": {"BP_P": {"weapons": ["W"], "damage_type": "BP_Fragmentation_DamageType", "native_defaults_used": [], "ExplosiveBaseDamage": 10.0,
+                                         "ExplosiveDamageInnerRadius": 100.0, "ExplosiveDamageOuterRadius": 500.0, "ExplosiveDamageFalloff": 1.0,
+                                         "ExplosiveDamageDistanceFromImpactNormal": 8.0, "ImpactDamageToApply": 5.0}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = os.path.join(tmp, "in.json"), os.path.join(tmp, "out.js")
+            json.dump(data, open(source, "w"))
+            structure_damage.export_command(source, target)
+            text = open(target, newline="").read()
+        self.assertIn('classes: ["A", "B"]', text)
+        self.assertNotIn('"C"', text)
+        self.assertIn("explosion: { damage: 10, inner: 1, outer: 5, falloff: 1, distanceFromImpact: 0.08 }", text)
+        self.assertIn("\r\n", text)
 
 
 if __name__ == "__main__":
