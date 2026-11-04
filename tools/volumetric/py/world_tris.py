@@ -7,6 +7,11 @@ placement maths and cooked-Chaos triangle reader are reused) and writes one ``.n
     part    int32   [n]        index into ``parts`` (one per mesh placement)
     parts   int32   [p, 2]     (mesh id, 0 complex / 1 simple collision)
 Unlike the heightmap rasteriser this keeps every triangle (not only the top-most hit per cell).
+
+    python world_tris.py <statics dir> <out.npz> [max triangles per shard]
+
+With the third argument the output is split into ``<out minus .npz>.<i>.npz`` files of about that many triangles
+and the printed JSON lists them under ``shards``.
 """
 
 import json
@@ -37,10 +42,22 @@ def placements(directory):
     return by_mesh
 
 
-def build(directory):
-    """Return (tris, mask, part, parts, stats) for the map in ``directory``."""
+def iter_shards(directory, max_triangles=None):
+    """Yield (tris, mask, part, parts, stats) shards of the map in ``directory``.
+
+    With ``max_triangles`` a shard is closed as soon as it holds at least that many triangles, so a map whose
+    placements do not fit in memory at once (Kamdesh foliage: 378 M triangles, 13.6 GB as float32) is processed in
+    pieces. Without it the whole map is one shard. ``stats`` is the same dict for every shard and keeps growing.
+    """
     all_tris, all_mask, all_part, parts = [], [], [], []
+    held = 0
     stats = {"placements": 0, "meshes_without_collision": 0, "triangles": 0, "blocked_by_mask": {}}
+
+    def shard():
+        tris = np.concatenate(all_tris)
+        stats["triangles"] += int(len(tris))
+        return tris, np.concatenate(all_mask), np.concatenate(all_part), np.array(parts, np.int32), stats
+
     for mesh, placed in placements(directory).items():
         found = objects.mesh_triangles(os.path.join(directory, "bodies", str(mesh)))
         if found is None:
@@ -59,13 +76,26 @@ def build(directory):
             all_mask.append(np.full(len(world), mask, np.uint8))
             all_part.append(np.full(len(world), len(parts), np.int32))
             parts.append((int(mesh.lstrip("s") or 0) + (1_000_000 if mesh.startswith("s") else 0), 0 if source == "complex" else 1))
-    tris = np.concatenate(all_tris)
-    stats["triangles"] = int(len(tris))
-    return tris, np.concatenate(all_mask), np.concatenate(all_part), np.array(parts, np.int32), stats
+            held += len(world)
+            if max_triangles and held >= max_triangles:
+                yield shard()
+                all_tris, all_mask, all_part, parts, held = [], [], [], [], 0
+    if all_tris:
+        yield shard()
+
+
+def build(directory):
+    """Return (tris, mask, part, parts, stats) for the whole map in ``directory`` as one shard."""
+    return next(iter_shards(directory))
 
 
 if __name__ == "__main__":
     directory, out = sys.argv[1:3]
-    tris, mask, part, parts, stats = build(directory)
-    np.savez(out, tris=tris, mask=mask, part=part, parts=parts)
-    print(json.dumps(stats))
+    max_triangles = int(sys.argv[3]) if len(sys.argv) > 3 else None
+    base = out[:-len(".npz")] if out.endswith(".npz") else out
+    written = []
+    for index, (tris, mask, part, parts, stats) in enumerate(iter_shards(directory, max_triangles)):
+        path = out if max_triangles is None else f"{base}.{index}.npz"
+        np.savez(path, tris=tris, mask=mask, part=part, parts=parts)
+        written.append(path)
+    print(json.dumps(dict(stats, shards=written)))
