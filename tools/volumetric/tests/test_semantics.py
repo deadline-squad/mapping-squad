@@ -15,6 +15,7 @@ sys.path.insert(0, os.environ.get("HEIGHTMAPS_PY", os.path.join(HERE, "..", ".."
 
 import building_interiors  # noqa: E402
 import class_table  # noqa: E402
+import window_demo  # noqa: E402
 import materials  # noqa: E402
 import projectile_profiles  # noqa: E402
 import static_semantics  # noqa: E402
@@ -130,6 +131,30 @@ class ClassTableTest(unittest.TestCase):
         self.assertEqual((row["meshes"], row["placements"]), (2, 4))
         self.assertEqual((row["complex_triangles_placed"], row["simple_triangles_placed"]), (35, 6))
         self.assertEqual(row["flag_UseDefault"], 1)
+
+
+class WindowDemoTest(unittest.TestCase):
+    @staticmethod
+    def quad(y0, y1):
+        a, b, c, d = [0, y0, 0], [0, y1, 0], [0, y1, 2], [0, y0, 2]
+        return [[a, b, c], [a, c, d]]
+
+    def test_glass_blocks_and_wall_is_open_behind_it(self):
+        walls = self.quad(-3, -1) + self.quad(1, 3)
+        glass = self.quad(-1, 1)
+        tris = np.array(walls + glass, float) * 100.0
+        ranges = [(0, 4, False), (4, 6, True)]
+        result = window_demo.run(tris, ranges, None)
+        self.assertEqual(result["glass_triangles"], 2)
+        self.assertEqual(result["glass_triangles_blocking"], 2)
+        self.assertEqual(result["segments_through_open_wall"], 2)
+        self.assertEqual(result["segments_with_wall_hit"], 0)
+
+    def test_section_ranges_follow_listed_order(self):
+        row = {"sections": [{"MaterialIndex": 1, "NumTriangles": 4, "bEnableCollision": True},
+                            {"MaterialIndex": 0, "NumTriangles": 6, "bEnableCollision": True}],
+               "materials": [{"physMaterial": "/x/PhysMat_Brick"}, {"physMaterial": "/x/PhysMat_GlassWindow"}]}
+        self.assertEqual(window_demo.section_ranges(row), [(0, 4, True), (4, 10, False)])
 
 
 if __name__ == "__main__":
