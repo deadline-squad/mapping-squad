@@ -49,6 +49,8 @@ Verified by `extractor inventory` (export counts per level) and by reading the c
 * Missing against the client: texture pixels (`.ubulk` absent), so no landscape layer weights. Collision and
   meshes are complete for what the server simulates. Reading the client pak would be a different licence
   question (the Steam EULA forbids decompiling and deriving works) and was not done.
+* What the collision means for projectiles (channels, glass and windows, interiors, materials, in-game test
+  protocol): [`docs/collision-semantics.md`](docs/collision-semantics.md) ([ru](docs/collision-semantics.ru.md)).
 * Triangle winding is consistent (outward, signed volume > 0 on 332 of the 333 sampled meshes that enclose a volume; 65 more are open shells), which
   gives a free floor/ceiling/wall classification per sample.
 
