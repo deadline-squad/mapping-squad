@@ -18,9 +18,7 @@ too, so that the page's JavaScript can be compared to both. Writes the cases wit
 
 import json
 import os
-import struct
 import sys
-import zipfile
 
 import numpy as np
 
@@ -39,34 +37,6 @@ CEILING_M = 6.0
 STOREY_M = 1.5
 SHIFTS_M = (0.1, 0.25, 0.5)
 LANDSCAPE_ROOT = "/data/squad-extract/landscapes"
-
-
-def npz_memmaps(path):
-    """{name: memmap} of the arrays of an uncompressed npz (np.savez), without reading them."""
-    arrays = {}
-    with zipfile.ZipFile(path) as zf, open(path, "rb") as raw:
-        for info in zf.infolist():
-            raw.seek(info.header_offset)
-            name_len, extra_len = struct.unpack("<HH", raw.read(30)[26:30])
-            raw.seek(info.header_offset + 30 + name_len + extra_len)
-            version = np.lib.format.read_magic(raw)
-            shape, _, dtype = np.lib.format.read_array_header_1_0(raw) if version == (1, 0) else np.lib.format.read_array_header_2_0(raw)
-            arrays[info.filename[:-4]] = np.memmap(path, dtype=dtype, mode="r", offset=raw.tell(), shape=shape)
-    return arrays
-
-
-def load_window(path, x0, y0, size, margin=10.0, chunk=2_000_000):
-    """(tris, mask, part) of the triangles whose bounding box touches the window, read in chunks."""
-    arrays = npz_memmaps(path)
-    out = {"tris": [], "mask": [], "part": []}
-    for start in range(0, len(arrays["tris"]), chunk):
-        t = np.asarray(arrays["tris"][start:start + chunk])
-        lo, hi = t.min(axis=1), t.max(axis=1)
-        keep = (hi[:, 0] >= x0 - margin) & (lo[:, 0] <= x0 + size + margin) & (hi[:, 1] >= y0 - margin) & (lo[:, 1] <= y0 + size + margin)
-        out["tris"].append(t[keep])
-        out["mask"].append(np.asarray(arrays["mask"][start:start + chunk])[keep])
-        out["part"].append(np.asarray(arrays["part"][start:start + chunk])[keep])
-    return [np.concatenate(out[k]) for k in ("tris", "mask", "part")]
 
 
 def landscape(slug, meta):
@@ -113,7 +83,7 @@ def main():
                         int(statics["height"]) * float(statics["cell"]), float(statics["cell"]), float(statics["dz"]), float(statics["z_min"]))
     wx, wy = eval_los.densest_window(statics["occupied"], grid, window)
     print("window", wx, wy, flush=True)
-    tris, mask, part = load_window(tris_path, wx, wy, window)
+    tris, mask, part = eval_los.load_window(tris_path, wx, wy, window)
     print("triangles in window", len(tris), flush=True)
     index = reference.TriangleIndex(tris, mask, wx - 10, wy - 10, window + 20, window + 20)
 

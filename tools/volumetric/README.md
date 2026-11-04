@@ -12,13 +12,54 @@ client pak is not used and no game client is needed.
 
 | | status quo: 1 m top-surface heightmap | voxel columns 1.0 m x 0.25 m | voxel columns 0.5 m x 0.25 m |
 |---|---|---|---|
-| LOS pairs judged wrong by the exact reference (3 000 eye-level pairs, 10-60 m, 600 m window) | 9.5 % | 8.4 % | **6.2 %** |
+| LOS pairs judged wrong by the exact reference (3 000 eye-level pairs, 10-60 m, 600 m window) | 9.5 % | 8.4 % | **6.1 %** |
 | same, ignoring pairs that flip when the segment moves 0.25 m ("grazing") | 5.1 % | 4.0 % | **1.9 %** |
 | false CLEAR (shot/sight passes a wall, building, deck that is there) | 144 | **2** | 16 |
-| false BLOCKED (blocked where it is clear) | 141 | 251 | 169 |
+| false BLOCKED (blocked where it is clear) | 140 | 250 | 168 |
 
 The 1.0 m and 0.5 m columns are separate runs on different random pairs; the heightmap column is the 0.5 m run
-(the 1.0 m run: heightmap 8.7 % / 5.2 % grazing-free, 134 false clear, 127 false blocked).
+(the 1.0 m run: heightmap 8.7 % / 5.2 % grazing-free, 135 false clear, 127 false blocked).
+
+Rerun on 2026-11-04 with the fixed `py/reference.py` (commit 9852b75; the earlier tracer skipped tiles that a segment
+only clips at a corner, 22 of 20 000 Fallujah segments). Same inputs and seeds as the first run (3 000 pairs, 600 m
+window, `fallujah_terrain_check.npz`). Only five counts moved, each by one pair: 0.5 m run, exact tracer blocks 2 217
+pairs instead of 2 216, heightmap false BLOCKED 141 -> 140, voxels 0.5 m false BLOCKED 169 -> 168 (6.17 % -> 6.13 %
+wrong); 1.0 m run, heightmap false CLEAR 134 -> 135, voxels 1.0 m false BLOCKED 251 -> 250. Every other figure above is unchanged,
+so the conclusions stand. (With the landscape sampled from the extracted heights instead, `terrain/fallujah_exact.npz`, the
+0.5 m run gives heightmap 9.6 % / 5.7 % grazing-free, voxels 5.6 % / 1.5 %, false clear 147 / 12; the tracer fix itself changes
+nothing there either: old and new `reference.py` give identical `cases.csv`.)
+
+Two more maps with a `.vcol`, statics columns 0.5 x 0.25 m, same method (3 000 pairs, 600 m window around the densest
+columns, `terrain` sampled from the extracted landscape), fixed tracer. Kohat is dense (8 792 statics placements, 4.3 M
+triangles), Logar is open rural terrain (4 098 placements, 2.6 M triangles):
+
+| | Kohat heightmap | Kohat voxels | Logar heightmap | Logar voxels |
+|---|---|---|---|---|
+| pairs judged wrong | 2.3 % | 2.2 % | 7.9 % | 6.4 % |
+| ignoring grazing pairs | 0.7 % | 0.5 % | 4.2 % | 2.0 % |
+| false CLEAR | 40 | 3 | 76 | 2 |
+| false BLOCKED | 28 | 63 | 162 | 190 |
+
+The fix moves nothing on Kohat and on Fallujah (identical `cases.csv` before and after); on Logar it flips the grazing
+flag of one pair (grazing-free 4.23 % -> 4.20 % heightmap, 2.00 % -> 1.97 % voxels).
+
+### Windows, doorways and interiors (`py/eval_openings.py`)
+
+Eye-level segments between points found by vertical reference rays (inside = floor with a ceiling within 6 m and the served
+top surface above it, outside = open sky), decided by the exact tracer; up to 120 cases per category, seed 11, 600 m window,
+voxels = the full `.vcol` of the map (statics and trees). Share of cases on which the model gives the reference answer:
+
+| category (truth) | Fallujah heightmap / voxels | Kohat heightmap / voxels | Logar heightmap / voxels |
+|---|---|---|---|
+| opening: inside -> outside, clear | 0 % / 49 % (105) | 0 % / 35 % (51) | 0 % / 12 % (101) |
+| room_clear: same roof, clear | 0 % / 73 % (78) | 0 % / 84 % (120) | 0 % / 65 % (120) |
+| wall: inside -> outside, blocked | 100 % / 100 % (120) | 100 % / 99 % (120) | 100 % / 100 % (120) |
+| room_partition: same storey, blocked | 100 % / 99 % (120) | 100 % / 98 % (120) | 100 % / 99 % (120) |
+| room_floor: other storey, blocked | 100 % / 100 % (120) | 100 % / 100 % (120) | 100 % / 100 % (120) |
+
+(n in brackets.) The heightmap treats every roofed space as solid, so it never sees a window or doorway; the voxels find
+about half of the openings on Fallujah and fewer on Kohat and Logar. No openings numbers had been recorded before this rerun; the evaluation with the old `reference.py` gives
+byte-identical case files on all three maps, so the tracer fix changed none of them.
 
 | file (gzip), whole map | 7.5 MB PNG | 1.6 MB | 4.7 MB (+ trees) |
 | decode (Node 26) / one 40 m segment test | - | - | 322 ms / 28 us |
@@ -113,9 +154,10 @@ tools/volumetric/build_map.sh fallujah 0.5 0.25
 tools/volumetric/build_all.sh 0.5 0.25
 python py/status_table.py                      # markdown table of built / running / failed / queued maps
 # 3. measurements
-python py/world_tris.py <statics dir> tris.npz
+python py/world_tris.py <statics dir> tris.npz       # statics: one file; add a triangle count (e.g. 20000000) to write shards tris.<i>.npz
 python py/build_columns.py tris.npz <heightmap meta.json> out/fallujah_cols_0.5 0.5 0.25 visibility fallujah
 python py/eval_los.py tris.npz out/fallujah_cols_0.5.npz <served heightmap dir> terrain.npz out/eval 3000 600
+python py/eval_openings.py <slug> tris.npz out/<slug>_cols.npz <slug>.vcol <served heightmap dir> out/openings.json
 python py/cases_report.py out/eval/cases.csv tris.npz <statics dir> <served heightmap dir> 10
 python py/size_table.py out/fallujah_cols_0.5.npz <heightmaps dir> fallujah
 python py/check_ground_truth.py <markers.txt> Fallujah out/fallujah_cols_0.5.npz <heightmap dir> terrain.npz
