@@ -13,6 +13,7 @@ OUT=${OUT:-$HOME/data/volumetric/maps}
 HM=${HM:-$HOME/data/squad-heightmaps}
 SHARD_TRIANGLES=${SHARD_TRIANGLES:-40000000}
 mkdir -p "$OUT/$slug"
+if [ -s "$OUT/$slug/$slug.vcol" ] && [ -z "${FORCE:-}" ]; then echo "$slug.vcol exists, skipping (FORCE=1 rebuilds)" >&2; exit 0; fi
 exec 2>>"$OUT/$slug/build.log"
 py() { WORKTREE=${WORKTREE:-$(cd "$HERE/../.." && pwd)} "${PY_SH:-$HOME/data/volumetric/py.sh}" "$@"; }
 root=$(python3 -I -c "import sys; sys.path.insert(0, '$HOME/agl/tools/heightmaps/py'); import maps; print(maps.statics_root('$slug'))")
