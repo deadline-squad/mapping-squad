@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "py"))
 sys.path.insert(0, os.environ.get("HEIGHTMAPS_PY", os.path.join(HERE, "..", "..", "heightmaps", "py")))
 
 import building_interiors  # noqa: E402
+import class_table  # noqa: E402
 import materials  # noqa: E402
 import projectile_profiles  # noqa: E402
 import static_semantics  # noqa: E402
@@ -113,6 +114,22 @@ class BuildingInteriorsTest(unittest.TestCase):
         self.assertAlmostEqual(found[0]["width"], 1.0, delta=0.4)
         self.assertAlmostEqual(found[0]["height"], 1.0, delta=0.4)
         self.assertAlmostEqual(found[0]["sill"], 1.0, delta=0.4)
+
+
+class ClassTableTest(unittest.TestCase):
+    def test_classify_and_weighting(self):
+        self.assertEqual(class_table.classify("/Game/Environments/MiddleEast/Buildings/A/SM_X.SM_X"), "buildings")
+        self.assertEqual(class_table.classify("/Game/Environments/Roads/Meshes/R.R"), "roads_and_pavements")
+        self.assertEqual(class_table.classify("/Game/Unknown/Q.Q"), "other")
+        kinds = {"meshes": [
+            {"path": "/Game/Environments/MiddleEast/Buildings/A.A", "trace_flag": "UseDefault",
+             "complex_triangles": 10, "simple_triangles": 2, "placements": 3},
+            {"path": "/Game/Environments/MiddleEast/Buildings/B.B", "trace_flag": "UseComplexAsSimple",
+             "complex_triangles": 5, "simple_triangles": 0, "placements": 1}]}
+        row = class_table.build(kinds)["buildings"]
+        self.assertEqual((row["meshes"], row["placements"]), (2, 4))
+        self.assertEqual((row["complex_triangles_placed"], row["simple_triangles_placed"]), (35, 6))
+        self.assertEqual(row["flag_UseDefault"], 1)
 
 
 if __name__ == "__main__":
