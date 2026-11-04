@@ -13,7 +13,7 @@ Russian version is `collision-semantics.ru.md`.
 
 ## 1. Answers in short
 
-> **Owner decisions (2026-11-04):** no penetration or through-obstacle calculation is made (armour-piercing rounds do not damage structures; HE and HEAT explode on them). Windows and doors in Squad are either open (no glass, no door leaf) where players can enter, or belong to non-playable apartments and are closed: an open window or doorway is a hole in the geometry and stays one, a closed window or door is solid. The in-game tests T1-T9 of section 7 are not planned. Sections 4-6 stay as the record of what the game files contain.
+> **Owner decisions (2026-11-04):** no penetration or through-obstacle calculation is made (armour-piercing rounds do not damage structures; HE and HEAT explode on them). Windows in Squad are either open (no glass) where players can enter, or belong to non-playable apartments and are closed: an open window is a hole in the geometry and stays one, a closed window is solid. A door is either swung fully open or absent, so a doorway is always a hole; door leaves are not modelled. The in-game tests T1-T9 of section 7 are not planned. Sections 4-6 stay as the record of what the game files contain.
 
 
 | Question | Answer | Label |
@@ -192,7 +192,7 @@ and on the roof/ceiling being solid (it is, in the complex mesh).
 
 * The non-gameplay levels contain 73 door/gate/shutter meshes (2038 placements), all static, `UseDefault`
   (e.g. `ME_WallStd_WallDoor_Medium`: 66 simple, 3246 complex triangles; `ME_WallStd_WallDoor_Small`: 12 and 1183).
-  A doorway is a hole in the wall mesh. VERIFIED.
+  A doorway is a hole in the wall mesh. VERIFIED. Owner: doors in enterable buildings are either fully open or absent, so the doorway is open.
 * Operable or destructible door actors in gameplay layers and destructible blueprints were not examined: UNVERIFIED
   (T4, T5). `PhysMat_*` entries with `damage_parent_actor` (17 materials) mark parts that damage their parent actor.
 * The Destruction/Coop destructible blueprints' collision profiles are not part of this data set.
