@@ -3,7 +3,7 @@
 Question (owner, 2026-11-04, plan item C7 of deadline-squad/deadline-squadcalc#22): how much damage do shells do to
 **the structures players build** (FOB radio, HAB, and what is built at them: HESCO, sandbags, bunkers, emplacements,
 wire), by material and by ammunition. Armour-piercing rounds are not fired at structures and no penetration
-calculation is wanted. Map buildings are a short separate section (B).
+calculation is wanted.
 
 Labels: **VERIFIED** = read from the cooked dedicated-server assets (the client pak was not used; nothing was
 decrypted or circumvented); **INFERRED** = follows from verified field names or values but the rule that
@@ -264,25 +264,7 @@ structure multipliers do not follow them: sandbag (damage_absorbed 120) takes 0.
   AP and machine-gun bullets to structures (bullet damage is in the weapon, not in the projectile asset): native code or
   other assets, UNVERIFIED. Not needed for the owner's HE/HEAT question except the combination.
 
-## 7. Reading B and map buildings
-
-**Map buildings (static meshes).** Not destructible in the server data: the export inventory of all levels
-(`~/data/semantics/inventory_maps.json`, 3398 levels) has no destructible or geometry-collection component type and no health
-on static mesh actors; the only destructible actors are `BP_Coop_Destructable_C` (5), `_AmmoCache_C` (78), `_MortarCache_C` (10),
-`_AAGun_C` (3), `Destructable_RadioSet_C` (3, tutorial). Static buildings are rigid collision (collision-semantics.md
-section 3), so no shell damages them. VERIFIED. Coop destructibles (`/Game/Coop/Blueprints/BP_Coop_Destructable`,
-`_AAGun` 150 health, `_AmmoCache` 100, `_MortarCache` 125, `BP_HedgehogTankTrap_Coop` 150, `BP_Tirefire_Coop` 200) have a
-`Health` and, for the caches, an explosion on death (`ExplosionBaseDamage` 200, 5-25 m); no damage-type table: how shells
-damage them is UNVERIFIED.
-
-**Attenuation of explosion damage by a wall for a player behind it.** The game data has no material-based reduction:
-no field in the projectile, damage type or physical material assets scales explosion damage by what lies between
-explosion and soldier (`damage_absorbed` and `armor_thickness_mm` are read for bullets, section 5). What exists is a
-binary rule of the engine, `UGameplayStatics::ApplyRadialDamage` visibility (a component is damaged only if a trace
-from the explosion reaches it): SquadCalc already models it as cover in `squadDamage.js isCovered` (INFERRED, existing).
-Nothing in the data supports a per-material attenuation, so none was implemented.
-
-## 8. Reproduction
+## 7. Reproduction
 
 Extractor: `tools/heightmaps/extractor` modes `list` and `dumpall` (and `tools/volumetric/extractor` `meshsections`),
 dedicated-server package only. Work dir `~/data/structdmg` (outside the repo), memory capped at 3 GB per container.
@@ -290,7 +272,7 @@ dedicated-server package only. Work dir `~/data/structdmg` (outside the repo), m
 | Result | Command |
 |---|---|
 | Every pak path | `SquadExtract <paks> list ""` > `files.txt` |
-| Deployable, FOB, damage-type Blueprints | `dumpall 'Content/Gameplay/(DamageTypes\|Deployables)/\|Gameplay/FOBs/\|Coop/Blueprints/BP_(Coop_Destr\|Hedgehog\|Tirefire)' dump` |
+| Deployable, FOB, damage-type Blueprints | `dumpall 'Content/Gameplay/(DamageTypes\|Deployables)/\|Gameplay/FOBs/' dump` |
 | Projectile Blueprints | the `dump` of `tools/game_ballistics` (README) merged into the same directory |
 | Mesh and override materials | `python3 structure_damage.py meshes dump files.txt out`, then `meshsections out/meshes.txt sections.ndjson` and `dumpall` of `out/materials.txt` and their parent instances |
 | Data file | `python3 structure_damage.py build dump files.txt sections.ndjson ../data/materials.json ballistics.json ../data/structure_damage.json` |

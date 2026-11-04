@@ -3,7 +3,7 @@
 Вопрос владельца (2026-11-04, пункт C7 плана deadline-squad/deadline-squadcalc#22): сколько урона наносят снаряды
 **сооружениям, которые строят игроки** (радио FOB, HAB и то, что строят рядом: HESCO, мешки с песком, бункеры,
 позиции, колючая проволока), по материалам и боеприпасам. Бронебойные снаряды по сооружениям не стреляют, расчёт
-пробития не нужен. Здания карты вынесены в короткий отдельный раздел (B).
+пробития не нужен.
 
 Метки: **VERIFIED** — прочитано из собранных ассетов серверного пакета (клиентский пак не использовался, ничего не
 расшифровывалось и не обходилось); **INFERRED** — следует из проверенных имён и значений полей, но правило их
@@ -258,24 +258,7 @@ HAT и взрывчатки: снарядами практически не ра
   сооружениям (урон пули хранит оружие, не ассет снаряда) — нативный код или другие ассеты, UNVERIFIED. Для вопроса
   владельца про HE/HEAT нужно только сочетание.
 
-## 7. Чтение B и здания карты
-
-**Здания карты (статические меши).** В серверных данных не разрушаются: инвентарь экспортов всех уровней
-(`~/data/semantics/inventory_maps.json`, 3398 уровней) не содержит типов компонентов разрушения или geometry collection и
-здоровья у статических мешей; разрушаемые акторы — только `BP_Coop_Destructable_C` (5), `_AmmoCache_C` (78), `_MortarCache_C` (10),
-`_AAGun_C` (3), `Destructable_RadioSet_C` (3, обучение). VERIFIED. Coop-разрушаемые (`/Game/Coop/Blueprints/BP_Coop_Destructable`,
-`_AAGun` 150 здоровья, `_AmmoCache` 100, `_MortarCache` 125, `BP_HedgehogTankTrap_Coop` 150, `BP_Tirefire_Coop` 200) имеют
-`Health`, а склады — взрыв при уничтожении (`ExplosionBaseDamage` 200, 5–25 м); таблицы типов урона нет, как их
-повреждают снаряды — UNVERIFIED.
-
-**Ослабление урона взрыва стеной для игрока за ней.** Материальной зависимости в данных нет: ни одно поле ассетов снаряда,
-типа урона или физматериала не масштабирует урон взрыва тем, что стоит между взрывом и солдатом (`damage_absorbed` и
-`armor_thickness_mm` читаются для пуль, раздел 5). Есть только бинарное правило движка — видимость в
-`UGameplayStatics::ApplyRadialDamage` (компонент получает урон, если трассировка от взрыва до него проходит); SquadCalc уже
-моделирует его как укрытие в `squadDamage.js isCovered` (INFERRED, уже существует). Данные не поддерживают ослабление
-по материалу, поэтому оно не реализовано.
-
-## 8. Воспроизведение
+## 7. Воспроизведение
 
 Экстрактор: `tools/heightmaps/extractor`, режимы `list` и `dumpall` (и `meshsections` из `tools/volumetric/extractor`),
 только пакет выделенного сервера. Рабочая папка `~/data/structdmg` (вне репозитория), память контейнера до 3 ГБ.
@@ -283,7 +266,7 @@ HAT и взрывчатки: снарядами практически не ра
 | Результат | Команда |
 |---|---|
 | Все пути пака | `SquadExtract <paks> list ""` > `files.txt` |
-| Blueprint сооружений, FOB, типов урона | `dumpall 'Content/Gameplay/(DamageTypes\|Deployables)/\|Gameplay/FOBs/\|Coop/Blueprints/BP_(Coop_Destr\|Hedgehog\|Tirefire)' dump` |
+| Blueprint сооружений, FOB, типов урона | `dumpall 'Content/Gameplay/(DamageTypes\|Deployables)/\|Gameplay/FOBs/' dump` |
 | Blueprint снарядов | `dump` из `tools/game_ballistics` (README), слитый в ту же папку |
 | Меши и материалы-переопределения | `python3 structure_damage.py meshes dump files.txt out`, затем `meshsections out/meshes.txt sections.ndjson` и `dumpall` для `out/materials.txt` и их родителей |
 | Файл данных | `python3 structure_damage.py build dump files.txt sections.ndjson ../data/materials.json ballistics.json ../data/structure_damage.json` |
