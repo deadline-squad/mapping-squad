@@ -205,10 +205,10 @@ and on the roof/ceiling being solid (it is, in the complex mesh).
   (e.g. Sand to `PhysMat_Sand`, Soil to `PhysMat_Dirt`, Asphalt to `PhysMat_Asphalt`, Reeds to
   `PhysMat_GrassTall_Rustle`). VERIFIED.
 * Weightmaps: the dedicated-server levels contain only landscape heightfield collision (see
-  `~/data/semantics/inventory_maps.json`, section 8), no `LandscapeComponent` weightmap textures. Therefore no
+  `~/data/semantics/inventory_maps.json`, section 8), no `LandscapeComponent` weightmap textures: across the 3398 non-gameplay levels of all maps the export inventory
+  counts 0 `LandscapeComponent` and 9240 `LandscapeHeightfieldCollisionComponent` (34 levels). Therefore no
   `~/data/materials/<map>/` rasters can be extracted from the server files: absent. Per-position terrain
-  material is unavailable; only the layer-to-material legend exists. VERIFIED absence (see the inventory counts in the
-  appendix of the issue comment).
+  material is unavailable; only the layer-to-material legend exists. VERIFIED absence.
 * Landscape collision response: INFERRED Block (heightfield collision with the default `BlockAll` landscape profile),
   UNVERIFIED as a table (T1).
 
@@ -248,6 +248,7 @@ image, with `~/data` at `/data`; heavy runs under `nice`). Data are in `~/data/s
 | Class triangle table | `class_table.py kinds_fallujah.json classes_fallujah.json` |
 | Window exact tracer | `window_demo.py <statics dir> <sections.ndjson> <mesh path> <out>` |
 | Interiors and openings | `building_interiors.py <statics dir> kinds_fallujah.json 'MiddleEast/Buildings/' <out>` |
+| Landscape export inventory | extractor `inventory /Maps/ <out.json>` |
 | Materials | `materials.py` writing `data/materials.json` |
 | Tests | `./py.sh -m unittest discover -s ../tests -p 'test_semantics.py'` |
 

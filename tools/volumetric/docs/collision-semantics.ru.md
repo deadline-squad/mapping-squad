@@ -206,7 +206,8 @@ VERIFIED как измерения запечённого меша; крайни
 * Слои ландшафта: 157 ассетов слоёв в 27 пакетах ландшафта сопоставляют слой с физматериалом (например Sand с
   `PhysMat_Sand`, Soil с `PhysMat_Dirt`, Asphalt с `PhysMat_Asphalt`, Reeds с `PhysMat_GrassTall_Rustle`). VERIFIED.
 * Весовые карты: уровни выделенного сервера содержат только heightfield-коллизию ландшафта (инвентаризация
-  `~/data/semantics/inventory_maps.json`, раздел 8), текстур весовых карт `LandscapeComponent` нет. Поэтому растры
+  `~/data/semantics/inventory_maps.json`, раздел 8), текстур весовых карт `LandscapeComponent` нет: по 3398 негеймплейным уровням всех карт инвентаризация экспортов даёт
+  0 `LandscapeComponent` и 9240 `LandscapeHeightfieldCollisionComponent` (в 34 уровнях). Поэтому растры
   `~/data/materials/<map>/` из файлов сервера извлечь нельзя: отсутствуют. Материал местности по позиции
   недоступен; есть только легенда слой-материал. VERIFIED отсутствие.
 * Отклик коллизии ландшафта: INFERRED Block (heightfield с профилем ландшафта по умолчанию), как таблица
@@ -248,6 +249,7 @@ VERIFIED как измерения запечённого меша; крайни
 | Таблица треугольников по классам | `class_table.py kinds_fallujah.json classes_fallujah.json` |
 | Точный трассировщик через окно | `window_demo.py <каталог statics> <sections.ndjson> <путь меша> <out>` |
 | Интерьеры и проёмы | `building_interiors.py <каталог statics> kinds_fallujah.json 'MiddleEast/Buildings/' <out>` |
+| Инвентаризация экспортов ландшафта | extractor `inventory /Maps/ <out.json>` |
 | Материалы | `materials.py`, запись в `data/materials.json` |
 | Тесты | `./py.sh -m unittest discover -s ../tests -p 'test_semantics.py'` |
 
