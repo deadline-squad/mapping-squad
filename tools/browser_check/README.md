@@ -27,6 +27,18 @@ Squad Ballistics' weapons.json aimed with the overlay is selected by its name an
 hold-laid ones show a hold time) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). Exits with 1 on any failure.
 
+## volume_check.mjs: the volume layer
+
+```sh
+node volume_check.mjs <site URL>
+```
+
+A build with `npm run build:engine` done and the maps' `volume.vcol` / `terrain.bin` under `/heightmaps/`. Nothing of the layer is
+requested before the setting is on; then the engine, the voxel file and the landscape file load, six walls block and six
+openings pass (`volume_cases.json`, Jensen and Kokan, from the engine's parity data), the layer's landscape equals the
+heightmap's on open ground, the line of fire and the fire coverage use it, Fallujah, Goose Bay and Kamdesh (the largest
+files) load, and a map without a volume entry keeps the heightmap with a clean console. Exits with 1 on any failure.
+
 ## precision_browser.mjs: precision checks on the served build
 
 ```sh
