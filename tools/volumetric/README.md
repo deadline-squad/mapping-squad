@@ -193,6 +193,24 @@ node js/bench.mjs out/fallujah.vcol 20000
 python -m unittest discover -s tests
 ```
 
+## Publishing to the site and the browser check
+
+The SquadCalc page (`src/js/volumeWorker.js`, setting *Object volumes in the line of fire*) reads two files per map from the
+served heightmaps directory, announced by a `volume` entry in the map's `meta.json`:
+
+```sh
+# landscape-only heights on the served heightmap's grid (terrain.bin, TER1), then both files and the meta.json entry
+python py/terrain_raster.py <slug> <served meta.json without the volume entry> <slug>/terrain.bin   # in the py image, as build_map.sh
+cp -a ~/apps/squadcalc/dist/heightmaps/<slug>/meta.json ~/apps/squadcalc/dist/heightmaps/<slug>/meta.json.bak.<date>-volume
+python py/publish_volume.py <slug> <slug>/<slug>.vcol <slug>/terrain.bin ~/apps/squadcalc/dist/heightmaps
+```
+
+The served `meta.json`, not the older one under `~/data/squad-heightmaps`, gives the grid (Kokan and Chora are 0.5 m there).
+`tools/browser_check/volume_check.mjs <site URL>` checks the result in Chromium: no request before the setting is on, the
+files and the engine load, the parity segments of `volume_cases.json` (`py/pick_volume_cases.py`: Jensen and Kokan, walls
+block, doorway and window openings pass), the landscape against the heightmap, the line of fire and the fire coverage with
+the layer, and a map without volume files.
+
 ## How the gain was judged (independent of the builder)
 
 `py/reference.py` shares no code with the builder: exact Moller-Trumbore tests of the segment against the
