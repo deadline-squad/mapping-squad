@@ -264,6 +264,28 @@ structure multipliers do not follow them: sandbag (damage_absorbed 120) takes 0.
   AP and machine-gun bullets to structures (bullet damage is in the weapon, not in the projectile asset): native code or
   other assets, UNVERIFIED. Not needed for the owner's HE/HEAT question except the combination.
 
+## 6b. In the SquadCalc UI (45.24.0, C7b)
+
+* Clicking a deployable marker (FOB radio, HAB, mortar, HMG, GMG, AA gun, ammo crate, repair station) opens a popup with
+  the shells of the selected ammunition that destroy the structure from full health; the target dialog shows the same line
+  for a target within 5 m of such a marker (`src/js/structureInfo.js`). Each count is `shellsToDestroy` with a direct hit
+  when the burst is within 1 m of the structure (`DIRECT_HIT_RADIUS`), else a near miss at the distance; one shell per count,
+  each landing where aimed, the spread is not included. The tooltip of the row says the combination is INFERRED and not
+  verified in game.
+* The link from an app shell to a projectile is `src/data/structureLinks.js` (`SHELL_AMMO`: weapon name / shell name ->
+  projectile of this document's section 3; `MARKER_STRUCTURES`: marker icon -> structure class). It was found by the weapon's
+  ballistics label, then by the shell's explosion (damage, radii, falloff) against the projectile's, and kept only where the
+  candidates agree on damage type, impact damage and secondary explosion; `tests/structureDamage.test.mjs` checks every entry
+  and lists the 22 shells without one (howitzers, rocket artillery, modded weapons, the 40 mm grenades that fit two
+  projectiles, three tank HE shells and the C90-CR, DZJ-08, RPG-28 and Type 63 whose class is not named in the data). Nothing
+  is shown for them.
+* A shell that does not explode (AP, APFSDS, machine guns: `explosionRadius [0, 0]`) says "no structure damage", which is
+  what the data gives (impact damage 0 for every kinetic projectile, section 3); so does a shell whose damage type the
+  structure does not list.
+* HAB markers are the 500-health HAB most factions build (the IMF and MEI ones have 400 and 300); the marker has no
+  faction. Markers without a table in the data (helipad, anti-tank, UB-32, Hell Cannon) show nothing.
+* Browser check: `tools/browser_check/targets_check.mjs`.
+
 ## 7. Reproduction
 
 Extractor: `tools/heightmaps/extractor` modes `list` and `dumpall` (and `tools/volumetric/extractor` `meshsections`),

@@ -39,6 +39,22 @@ openings pass (`volume_cases.json`, Jensen and Kokan, from the engine's parity d
 heightmap's on open ground, the line of fire and the fire coverage use it, Fallujah, Goose Bay and Kamdesh (the largest
 files) load, and a map without a volume entry keeps the heightmap with a clean console. Exits with 1 on any failure.
 
+## targets_check.mjs: target heights and structure damage
+
+```sh
+node targets_check.mjs <site URL> [--shots <dir>]
+```
+
+(deadline-squad/deadline-squadcalc#22 C3, C4, C7b; a build with the engine and the volume files). The *Object volumes*
+setting is off by default and the target dialog has no height control while it is off; with it on, a target inside a Jensen
+building lists the floors, ceilings, roof, windows and doorways of the vertical ray and the landscape under it, the chosen
+height changes the target height, the height difference, the dialog and popup, and the line-of-fire answer; dragging or
+turning the setting off puts the target back on the ground. A FOB and a HAB marker open the shells-to-destroy popup, a target
+on the FOB shows the row in its dialog (2 mortar rounds, "no structure damage" for AP ammunition), the tooltip says the
+formula is inferred, and the Russian locale has the strings. Screenshots (target dialog with the list, with a floor chosen,
+the structure row with its tooltip, AP, Russian, the marker popup) go to `--shots` (default `./shots`). Exits with 1 on any
+failure.
+
 ## precision_browser.mjs: precision checks on the served build
 
 ```sh
