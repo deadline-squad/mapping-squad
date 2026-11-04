@@ -13,6 +13,9 @@ Russian version is `collision-semantics.ru.md`.
 
 ## 1. Answers in short
 
+> **Owner decision (2026-11-04):** glass and doors do not let a projectile through, and no through-obstacle or penetration calculation is made. All static geometry counts as solid; the in-game tests T1-T9 of section 7 are not needed for this and are not planned. Sections 4-6 stay as the record of what the game files contain.
+
+
 | Question | Answer | Label |
 |---|---|---|
 | Channel of bullets, rockets, mortar/artillery shells | Collision profile `Projectile` (SQProjectile, SQMortarProjectile, SQGuidedProjectile) | VERIFIED for the profile name, INFERRED for what the profile contains |
