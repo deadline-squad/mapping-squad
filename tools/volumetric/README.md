@@ -64,10 +64,35 @@ Verified by `extractor inventory` (export counts per level) and by reading the c
 * File `VCOL1` (`py/codec.py`): per occupied column the z-runs, varint packed, gzip. Browser decode with
   `DecompressionStream("gzip")` and about 40 lines (`js/vcol.mjs`, ~100 MB of typed arrays for Fallujah 0.5 m).
 * Query: sample the segment every min(cell, dz)/3, test landscape then the column's runs (binary search of the
-  column id). A 3D DDA would be exact and cheaper; the sampling is what was measured.
+  column id). The measurements below use this sampling. An exact voxel-column DDA now exists in the engine
+  (`engine/src/voxel.rs`, WGSL twin `engine/wgsl/voxel.wgsl`); its parity is in the next section.
 
 Sizes (Fallujah statics only): 1.0 x 0.25 m 1.57 MB (8.4 M voxels); 1.0 x 0.5 m 1.16 MB; 2.0 x 0.5 m 0.40 MB;
 0.5 x 0.25 m 4.73 MB (20.1 M voxels); 0.5 x 0.5 m 3.44 MB. Trees add 0.44 M voxels at 1.0 m.
+
+## Exact voxel-column DDA (engine)
+
+`engine/src/voxel.rs` in the SquadCalc repository decodes `VCOL1` and answers a segment with the first occupied voxel
+by a 2D Amanatides-Woo walk over the columns (per column a jump to the first run in the segment's height range), in
+Rust (native and wasm) and in WGSL. It sees every voxel the segment touches; the sampled walk above steps over corners.
+Checked on 100 000 random segments per map, inside the densest 1 km window, at least 0.25 m above the landscape;
+exact = BVH over the Visibility triangles of the same layers (the voxel file and the triangles agree: 0 file voxels
+missing from a rebuild, 0 above-ground rebuilt voxels missing from the file). Grazing = the exact answer flips for a
+0.25 m shift.
+
+| 100 000 segments | Jensen (statics, 117 KB) | Kokan (statics + foliage, 789 KB) |
+|---|---|---|
+| DDA clear, sampled model blocked | 0 | 0 |
+| DDA blocked, sampled model clear (chord under one step) | 101 | 193 |
+| exact blocked / clear | 29 732 / 70 268 | 12 709 / 87 291 |
+| false CLEAR (14 / 9 grazing) | 129 | 83 |
+| false BLOCKED (2 637 / 3 840 grazing) | 3 948 | 8 331 |
+| wrong, all / without grazing | 4.08 % / 1.43 % | 8.41 % / 4.57 % |
+| WGSL f32 (SwiftShader) wrong, all / without grazing | 4.08 % / 1.43 % | 8.41 % / 4.56 % |
+
+False blocked: a marked voxel can be entered up to a voxel diagonal from the surface (every not-grazing case overlaps a
+triangle). False clear: the voxel at the exact hit is empty in the file (the sample lattice missed a clipped corner).
+Reproduce and details: `engine/README.md`, section "Voxel columns".
 
 ## Reproduce
 
