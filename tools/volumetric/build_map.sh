@@ -5,6 +5,7 @@
 # the extractor built by `volumetric.sh extractor` (foliage mode). Output: $OUT/<slug>/{<slug>.vcol,*.npz}.
 # An existing statics.npz is reused. The multi-GB triangle files are deleted after the build; nothing under ~/apps or ~/data/squad-extract is written.
 # Static and foliage triangles are cut into shards of SHARD_TRIANGLES (default 40 M, about 1.5 GB) so that the largest maps fit PY_MEM;
+# A slug listed in $SKIP_FILE (default ~/data/volumetric/skip.txt, one per line) is not built here: another host builds it.
 # stderr of the extractor and of every python step goes to $OUT/<slug>/build.log (a step killed by the memory cap exits 137).
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -13,6 +14,7 @@ OUT=${OUT:-$HOME/data/volumetric/maps}
 HM=${HM:-$HOME/data/squad-heightmaps}
 SHARD_TRIANGLES=${SHARD_TRIANGLES:-40000000}
 mkdir -p "$OUT/$slug"
+if grep -qx "$slug" "${SKIP_FILE:-$HOME/data/volumetric/skip.txt}" 2>/dev/null; then echo "$slug is built elsewhere (listed in the skip file)" >&2; exit 0; fi
 if [ -s "$OUT/$slug/$slug.vcol" ] && [ -z "${FORCE:-}" ]; then echo "$slug.vcol exists, skipping (FORCE=1 rebuilds)" >&2; exit 0; fi
 exec 2>>"$OUT/$slug/build.log"
 py() { WORKTREE=${WORKTREE:-$(cd "$HERE/../.." && pwd)} "${PY_SH:-$HOME/data/volumetric/py.sh}" "$@"; }
