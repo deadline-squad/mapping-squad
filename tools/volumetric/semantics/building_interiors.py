@@ -10,7 +10,7 @@ the floor. A mesh "has an interior" when its room floor area is >= 4 m^2.
 
 Openings: from up to SAMPLES room cells per mesh, rays are marched (0.1 m steps) over az 0..360 deg step 3 and
 elevation -15..+45 deg step 5. Rays that leave the grid are "escaped"; each connected group (az, el) of escaped
-rays is one opening (groups reaching 45 deg elevation are open sky or roof holes and are dropped), its size is the bounding box of the surface points hit by the blocked rays that surround it
+rays (gaps of one ray closed) is one opening (groups reaching 45 deg elevation are open sky or roof holes and are dropped), its size is the bounding box of the surface points hit by the blocked rays that surround it
 (width = largest horizontal extent, height = vertical extent), its sill is the lowest of those points above the
 floor. Sill <= 0.4 m is a door-like opening, otherwise a window-like one. Sizes are quantised by the 0.25 m grid.
 
@@ -118,13 +118,18 @@ def fan_openings(occ, origin, floor_z):
         if not np.isinf(hit_t).any():
             break
     escaped = (hit_t < 0).reshape(len(az), len(el))
-    labels, count = ndimage.label(escaped, structure=np.ones((3, 3)))
+    closed = ndimage.binary_closing(escaped, structure=np.ones((3, 3)), border_value=0) | escaped
     points = (origin + dirs * np.where(hit_t > 0, hit_t, 0)[:, None]).reshape(len(az), len(el), 3)
+    blocked_columns = np.nonzero(~closed.any(axis=1))[0]
+    if len(blocked_columns) == 0:
+        return []
+    shift = -int(blocked_columns[0])
+    escaped, closed, points = (np.roll(a, shift, axis=0) for a in (escaped, closed, points))
+    labels, count = ndimage.label(closed, structure=np.ones((3, 3)))
     found = []
     for label in range(1, count + 1):
         member = labels == label
-        ring = ndimage.binary_dilation(member, structure=np.ones((3, 3)), iterations=1, border_value=0) & ~escaped
-        ring = ring | (np.roll(ring, 0, axis=0) & False)
+        ring = ndimage.binary_dilation(member, structure=np.ones((3, 3)), iterations=1, border_value=0) & ~closed
         pts = points[ring]
         if len(pts) < 4 or np.rad2deg(el[np.nonzero(member.any(axis=0))[0].max()]) > 40:
             continue
