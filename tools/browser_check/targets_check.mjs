@@ -7,7 +7,7 @@
 //     height difference) and the line-of-fire answer, shows in the popup, and goes back to the ground;
 //   - a deployable marker (FOB radio, HAB) opens a popup with the shells that destroy it for the selected ammunition,
 //     the target dialog shows the same for a target on the marker, AP/machine-gun ammunition says "no structure damage",
-//     the inferred formula is labelled in the tooltip, and the Russian locale has the strings.
+//     the tooltip says which part is read from the server and which is inferred, and the Russian locale has the strings.
 // Screenshots go to the directory given by --shots (default ./shots).
 //
 //     node targets_check.mjs <site URL> [--shots <dir>]
@@ -256,7 +256,7 @@ const WEAPON_FROM = { x: 40, y: -200 };
         return page.$eval(".structurePopup .leaflet-popup-content", (element) => element.innerText.replace(/\s+/g, " ").trim());
     };
     const fob = await markerPopup("deployable_fob", 0);
-    check("a FOB marker opens a popup with the shells that destroy the radio (mortar round)", /Shells to destroy \(inferred\)/.test(fob) && /FOB radio: 2$/.test(fob), fob);
+    check("a FOB marker opens a popup with the shells that destroy the radio (mortar round)", /Shells to destroy/.test(fob) && !/inferred/.test(fob) && /FOB radio: 2$/.test(fob), fob);
     await page.screenshot({ path: `${shots}/structure-popup-fob.png` });
     await page.keyboard.press("Escape");
     await page.evaluate(() => document.querySelectorAll(".structurePopup .leaflet-popup-close-button").forEach((button) => button.click()));
@@ -283,11 +283,11 @@ const WEAPON_FROM = { x: 40, y: -200 };
     await page.waitForSelector("#calcInformation[open]");
     await page.waitForTimeout(300);
     const row = await page.evaluate(() => ({ hidden: document.getElementById("structureRow").hidden, text: document.querySelector("#structureRow .infStructure").textContent, label: document.querySelector("#structureRow td").textContent }));
-    check("a target on the FOB marker shows the shells in the dialog", !row.hidden && row.text === "FOB radio: 2" && /inferred/.test(row.label), JSON.stringify(row));
+    check("a target on the FOB marker shows the shells in the dialog", !row.hidden && row.text === "FOB radio: 2" && row.label === "Shells to destroy", JSON.stringify(row));
     await page.hover("#structureRow td.infStructureTooltip");
     await page.waitForSelector(".tippy-box", { timeout: 5000 });
     const tooltip = await page.$eval(".tippy-box", (element) => element.innerText);
-    check("the tooltip labels the combination formula as inferred", /inferred/.test(tooltip) && /not verified in game/.test(tooltip), tooltip.slice(0, 160));
+    check("the tooltip says the rules are read from the server and only the impact and secondary explosion are inferred", /read from the server/.test(tooltip) && /impact.*inferred/.test(tooltip) && !/not verified in game/.test(tooltip), tooltip.slice(0, 160));
     await page.screenshot({ path: `${shots}/target-dialog-structure.png` });
     await page.keyboard.press("Escape");
 
@@ -332,7 +332,7 @@ const WEAPON_FROM = { x: 40, y: -200 };
     await page.waitForSelector("#calcInformation[open]");
     await page.waitForTimeout(300);
     const russian = await page.evaluate(() => ({ label: document.querySelector("#structureRow td").textContent, text: document.querySelector("#structureRow .infStructure").textContent }));
-    check("Russian: the structure row is translated", russian.label === "Снарядов для уничтожения (расчётно)" && russian.text === "Радиостанция FOB: 2", JSON.stringify(russian));
+    check("Russian: the structure row is translated", russian.label === "Снарядов для уничтожения" && russian.text === "Радиостанция FOB: 2", JSON.stringify(russian));
     await page.screenshot({ path: `${shots}/target-dialog-structure-ru.png` });
     await page.keyboard.press("Escape");
     check("console and requests are clean", problems.length === 0, problems.join(" | ") || "no errors, warnings or failed requests");
