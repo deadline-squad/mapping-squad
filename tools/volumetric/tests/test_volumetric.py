@@ -14,6 +14,7 @@ import collision  # noqa: E402
 import columns  # noqa: E402
 import models  # noqa: E402
 import reference  # noqa: E402
+import terrain_raster  # noqa: E402
 
 BOX = np.array([[0, 2, 1], [1, 2, 3], [4, 5, 6], [5, 7, 6], [0, 1, 4], [1, 5, 4], [2, 6, 3], [3, 6, 7], [0, 4, 2], [2, 4, 6], [1, 3, 5], [3, 7, 5]])
 
@@ -89,6 +90,19 @@ class VolumetricTests(unittest.TestCase):
         self.assertEqual(collision.block_mask(ignore_all, {"CollisionProfileName": "BlockAll"}), 0)
         overlap_projectile = {"CollisionResponses": {"ResponseArray": [{"Channel": "Projectile", "Response": "ECR_Overlap"}]}}
         self.assertEqual(collision.block_mask(overlap_projectile, None), collision.VISIBILITY | collision.PAWN)
+
+    def test_terrain_raster_round_trip_keeps_heights_holes_and_gaps(self):
+        rng = np.random.default_rng(3)
+        z = np.cumsum(rng.normal(0, 0.3, (30, 40)), axis=1) + np.cumsum(rng.normal(0, 0.3, (30, 40)), axis=0) - 20.0
+        z[4, 5:9] = np.nan
+        hole = np.zeros(z.shape, bool)
+        hole[10, 3] = hole[29, 39] = True
+        out, out_hole, header = terrain_raster.decode(terrain_raster.encode(z, hole, -100.0, 50.0, 0.5))
+        self.assertEqual(out.shape, z.shape)
+        np.testing.assert_array_equal(np.isnan(out), np.isnan(z))
+        self.assertLessEqual(float(np.nanmax(np.abs(out - z))), header["step"] / 2 + 1e-6)
+        np.testing.assert_array_equal(out_hole, hole)
+        self.assertEqual((header["min_x"], header["min_y"], header["cell"]), (-100.0, 50.0, 0.5))
 
 
 if __name__ == "__main__":
