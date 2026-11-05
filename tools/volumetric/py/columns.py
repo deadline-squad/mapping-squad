@@ -180,23 +180,51 @@ def _cell_voxels(grid, a, b, c, facing, tri, row, col_first, col_count, max_pair
         start = stop
 
 
-def build_keys(tris_iter, grid, chunk=1_000_000):
-    """Occupied voxel keys and, aligned by facing, the sorted unique (key, facing) pairs of the triangles.
+FACING_BITS = 2
+MERGE_MIN_KEYS = 8_000_000
+
+
+def _union(known, fresh):
+    """Sorted unique union of two sorted unique int64 arrays, built with one copy of `known` (no concatenate and re-sort)."""
+    if len(known) == 0:
+        return fresh
+    at = np.searchsorted(known, fresh)
+    new = known[np.minimum(at, len(known) - 1)] != fresh
+    return np.insert(known, at[new], fresh[new])
+
+
+def build_keys(tris_iter, grid, chunk=1_000_000, keep=None):
+    """Occupied voxel keys and the voxel keys of the up- and down-facing triangles.
 
     `tris_iter` yields float32 [n, 3, 3] arrays. Returns (occupied keys, up-facing keys, down-facing keys),
     each a sorted unique int64 array.
+
+    `keep`, when given, maps an array of voxel keys to a boolean mask of the voxels to retain. It is applied to each
+    block as it arrives, so voxels it rejects (for example those under the terrain, which on a large map are most of
+    them) never take part in the accumulation. It must depend on the key alone: the result then equals filtering the
+    returned arrays afterwards.
+
+    Memory is bounded by the number of distinct voxels, not by the voxels yielded (a map has hundreds of millions of
+    duplicates): every (key, facing) pair is packed into one int64, ``key << FACING_BITS | facing``, deduplicated per
+    block, collected until about max(MERGE_MIN_KEYS, a quarter of the known pairs) are pending, and only then merged
+    into the sorted unique array of known pairs.
     """
-    buckets = {UP: [], DOWN: [], WALL: []}
+    known = np.empty(0, np.int64)
+    pending, pending_keys = [], 0
     for tris in tris_iter:
         for start in range(0, len(tris), chunk):
             for keys, facing in surface_voxels(tris[start:start + chunk], grid):
-                for kind in buckets:
-                    sel = facing == kind
-                    if sel.any():
-                        buckets[kind].append(np.unique(keys[sel]))
-        for kind, parts in buckets.items():
-            if len(parts) > 16:
-                buckets[kind] = [np.unique(np.concatenate(parts))]
-    merged = {kind: (np.unique(np.concatenate(parts)) if parts else np.empty(0, np.int64)) for kind, parts in buckets.items()}
-    occupied = np.unique(np.concatenate(list(merged.values())))
-    return occupied, merged[UP], merged[DOWN]
+                packed = np.unique((keys << FACING_BITS) | facing)
+                if keep is not None:
+                    packed = packed[keep(packed >> FACING_BITS)]
+                pending.append(packed)
+                pending_keys += len(packed)
+                if pending_keys >= max(MERGE_MIN_KEYS, len(known) // 4):
+                    known = _union(known, np.unique(np.concatenate(pending)))
+                    pending, pending_keys = [], 0
+    if pending:
+        known = _union(known, np.unique(np.concatenate(pending)))
+    keys, facing = known >> FACING_BITS, known & ((1 << FACING_BITS) - 1)
+    first_of_key = np.ones(len(keys), bool)
+    first_of_key[1:] = keys[1:] != keys[:-1]
+    return keys[first_of_key], keys[facing == UP], keys[facing == DOWN]
