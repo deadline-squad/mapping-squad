@@ -218,3 +218,68 @@ conventions in its docstring); `py/topometrics_cli.py` writes `topometrics/<map>
 slope class shares) and the Markdown tables `topometrics/README.md`. `py/test_topometrics.py` checks every metric against
 a plane, a paraboloid and a sphere patch with exact slope, aspect and curvature (relative error below 1e-6):
 `python -m unittest test_topometrics` in `py/` (numpy, scipy, Pillow; sky metrics need `rvt-py`, see `../maptiles/py/Dockerfile.relief`).
+
+
+## Minimap corners and the grid (audit of 2026-11-05)
+
+The in-game map grid starts (A1) at the north-west corner of the minimap. The corners are the two actors named by `MapTextureCornerZero` and `MapTextureCornerOne` in the `SQWorldSettings` of every gameplay layer (`Content/Maps/<map>/Gameplay_Layers/*.umap`); their root component's `RelativeLocation` is the corner in cm (UE axes: +X east, +Y south). `py/minimap_corners.py dump` reads them for the 219 layers of build 26005357, `table` reduces them to metres per map (`py/test_minimap_corners.py`). The game's grid lines have three levels, `W_SQMapGridLines` `GridLineLevels` scale factors 1, 3 and 9 (`UI/Widgets/Map/Grids/`), which is SquadCalc's 300 m keypad, 100 m and 33.3 m sub-keypads; the widget `W_SQMapBody` has a function `Map Corner Bounds`, the grid is laid out from the corners.
+
+Game corners (min / max, m) against SquadCalc's image corners (`SDK_data.minimap.corner0/corner1`, normalised to min / max), the difference of each of the four edges (game minus image) and the verdict. "Layers that differ" are layers whose corners are not the map's usual ones (their own, smaller minimap for Skirmish and Seed layers, or a metre of difference).
+
+| Map | Game min / max | maps.js min / max | Difference W / N / E / S, m | Largest, m | Verdict | Layers that differ |
+|---|---|---|---|---|---|---|
+| AlBasrah | -2000, -2000 / 2000, 2000 | -2000, -2000 / 2000, 2000 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| Anvil | -2040, -2040 / 1020, 1020 | -2040, -2040 / 1020, 1020 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| BlackCoast | -2300, -2127.47 / 2299.98, 2472.51 | -2299, -2127 / 2299, 2472 | -1.00 / -0.47 / 0.98 / 0.51 | 1.00 | image corners are the game's, rounded | Seed_v1 |
+| Chora | -2464, -2664 / 1599.9, 1400 | -2464, -2664 / 1600, 1400 | 0.00 / 0.00 / -0.10 / 0.00 | 0.10 | image corners are the game's, rounded | Skirmish_v1 |
+| Fallujah | -1315, -1545 / 1690, 1460 | -1315, -1545 / 1690, 1460 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| FoolsRoad | -1325.77, -1325.77 / 448.05, 448.05 | -1326, -1326 / 448, 448 | 0.23 / 0.23 / 0.05 / 0.05 | 0.23 | image corners are the game's, rounded | - |
+| GooseBay | -2016.58, -2016.75 / 2015.23, 2015.03 | -2016, -2016 / 2015, 2015 | -0.58 / -0.75 / 0.23 / 0.03 | 0.75 | image corners are the game's, rounded | Seed_v1 |
+| Gorodok | -2031.99, -2032 / 2032.01, 2032 | -2032, -2032 / 2032, 2032 | 0.01 / 0.00 / 0.01 / 0.00 | 0.01 | image corners are the game's, rounded | - |
+| Harju | -2016, -2016 / 2016, 2016 | -2016, -2016 / 2016, 2016 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| Jensen | -2004, -2004 / 2004, 2004 | -2004, -2004 / 2004, 2004 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| Kamdesh | -2016, -2016 / 2016, 2016 | -2016, -2016 / 2016, 2016 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| Kohat | -2300, -2300 / 2317, 2317 | -2300, -2300 / 2317, 2317 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| Kokan | -1076.35, -1075.67 / 1420.14, 1420.14 | -1076, -1076 / 1420, 1420 | -0.35 / 0.33 / 0.14 / 0.14 | 0.35 | image corners are the game's, rounded | - |
+| Lashkar | -2167, -2167 / 2167, 2167 | -2167, -2167 / 2167, 2167 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| Logar | -881.45, -1132.39 / 879.78, 629.22 | -881, -1132 / 880, 629 | -0.45 / -0.39 / -0.22 / 0.22 | 0.45 | image corners are the game's, rounded | - |
+| Manicouagan | -2016.58, -2016.75 / 2015.23, 2015.03 | -2016, -2016 / 2015, 2015 | -0.58 / -0.75 / 0.23 / 0.03 | 0.75 | image corners are the game's, rounded | RAAS_v1, RAAS_v2, Seed_v1 |
+| Mestia | -1200, -1100 / 1200, 1300 | -1200, -1100 / 1200, 1300 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| Mutaha | -935, -1140 / 1820, 1615 | -935, -1140 / 1820, 1615 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | Seed_v1, Skirmish_v1 |
+| Narva | -1389.71, -1402.07 / 1410.29, 1397.93 | -1390, -1402 / 1410, 1398 | 0.29 / -0.07 / 0.29 / -0.07 | 0.29 | image corners are the game's, rounded | - |
+| Pacific | -2016, -2016 / 2016, 2016 | -2016, -2016 / 2016, 2016 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| Sanxian | -2300, -2050 / 2300, 2550 | -2300, -2050 / 2300, 2550 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | - |
+| Skorpo | -3601.5, -3293 / 3248.5, 3576.08 | -3611, -3293 / 3238, 3576 | 9.50 / 0.00 / 10.50 / 0.08 | 10.50 | DIFFERENT: image fitted, grid uses the game's | Skirmish_v1 |
+| Sumari | -639.74, -447.28 / 660.34, 852.97 | -640, -447 / 660, 853 | 0.26 / -0.28 / 0.34 / -0.03 | 0.34 | image corners are the game's, rounded | Insurgency_v1, Seed_v1, Skirmish_v1 |
+| Tallil | -2340, -2340 / 2340, 2340 | -2340, -2340 / 2340, 2340 | 0.00 / 0.00 / 0.00 / 0.00 | 0.00 | image corners are the game's, rounded | Seed_v1, Skirmish_v1, Skirmish_v2 |
+| Yehorivka | -3301.97, -3301.99 / 3048.03, 3048 | -3302, -3302 / 3048, 3048 | 0.03 / 0.01 / 0.03 / 0.00 | 0.03 | image corners are the game's, rounded | - |
+
+Result: 24 maps' image corners are the game's, rounded or truncated to whole metres (largest 1.00 m, Black Coast). **Skorpo** is 9.5 m (west edge) and 10.5 m (east edge) off: its image corners were fitted to the upstream image (`maps.js` comment "perfect for setting map assets, but the ingame grid is more ..."), so the grid used to be 9.5 m west of the game's. The image, heightmap and volume stay on the image corners (they are keyed to them); the grid starts at `SDK_data.minimap.game`, and at the layer's own corners once a layer is loaded (SquadCalc 45.30.0).
+
+What cannot be checked from the dedicated server package, and why:
+
+* The extent of the upstream map images (basemap, terrain, topographic maps): they are client renders; the minimap `Texture2D` assets keep their metadata (for example `Anvil_Minimap` 4096 x 4096) but no pixels (the server cook strips the mips; the package has two `.ubulk` files in 88727 entries). A cross-correlation of the upstream terrain image with our heightmap resolves about 15 m (Anvil, whose corners are exact, reads 12 m), so it cannot tell a 10 m shift on Skorpo.
+* How the image is oriented when the game's `Corner0` is not the north-west one (Fools Road, Gorodok, Jensen, Kokan, Lashkar, Logar, Mestia, Mutaha, Narva, Skorpo, Yehorivka list it swapped on some or all layers): needs the pixels.
+* The 300 m cell and the lettering rule: the grid widget's cell size and `MapLocationToGridCoordinateString` / `GetNumGridLines` are native C++ functions; the Blueprint dumps give the scale factors 1, 3, 9 only, the Kismet bytecode was not read. 300 m, A to the east and 1 to the south from the corner are the behaviour SquadCalc shipped, consistent with the files, not read from them.
+
+Playable area (`SQMapBoundary.XYBoundary`, spline control points of the first regular layer of each map that has one; width x height of their bounding box and the longest distance between two points, m):
+
+| Layer | Box | Longest |
+|---|---|---|
+| Anvil_AAS_v1 | 2966 x 2868 | 3860 |
+| Fallujah_AAS_v1 | 2963 x 2700 | 3572 |
+| GooseBay_AAS_v1 | 3942 x 4024 | 5566 |
+| Gorodok_AAS_v1 | 3975 x 3958 | 5322 |
+| Kamdesh_AAS_v1 | 3525 x 3479 | 4201 |
+| Kohat_AAS_v1 | 3900 x 3447 | 4817 |
+| Lashkar_AAS_v1 | 4036 x 3735 | 4698 |
+| Manicouagan_AAS_v1 | 4020 x 3991 | 5664 |
+| Mutaha_AAS_v1 | 2805 x 2810 | 3970 |
+| Narva_AAS_v1 | 2661 x 2514 | 3014 |
+| Skorpo_Invasion_v1 | 6427 x 4495 | 6503 |
+| Tallil_AAS_v1 | 4078 x 4187 | 5803 |
+| Yehorivka_AAS_v1_WP | 4980 x 4980 | 7043 |
+| AlBasrah_AAS_v1 | 3785 x 3709 | 4923 |
+| BlackCoast_AAS_v1 | 4044 x 4593 | 5877 |
+| Harju_AAS_v1 | 3959 x 3950 | 5582 |
+| Sanxian_AAS_v1 | 4925 x 4373 | 6425 |

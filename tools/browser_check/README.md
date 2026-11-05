@@ -27,6 +27,16 @@ Squad Ballistics' weapons.json aimed with the overlay is selected by its name an
 hold-laid ones show a hold time) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). Exits with 1 on any failure.
 
+## grid_check.mjs: the grid starts at the game's corner
+
+```sh
+node grid_check.mjs <site URL>
+```
+
+Skorpo without a layer: the grid starts 9.5 m east of the map image (`SDK_data.minimap.game`); Chora with the layer
+`Chora_Skirmish_v1` (needs the layer API): 1007 m east and 1222 m south of it, the corner of the layer's own minimap; clearing
+the layer returns it to the map's corner. Exits with 1 on any failure.
+
 ## volume_check.mjs: the volume layer
 
 ```sh
