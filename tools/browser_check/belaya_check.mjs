@@ -101,6 +101,15 @@ check("the relief button is offered and the archive is read", relief.available &
 const basemap = requests.find((request) => /\/img\/maps\/belaya\/basemap\.webp/.test(request.url));
 check("the map image (upstream basemap) loads", basemap?.status === 200, `${basemap?.url} ${basemap?.status}`);
 
+const detailedBefore = requests.length;
+const detailed = await page.evaluate(async () => {
+    document.querySelector("#mapLayerMenu .btn-detailed").click();
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    return document.querySelector("#mapLayerMenu .btn-detailed").classList.contains("active");
+});
+const tileRequests = requests.slice(detailedBefore).filter((request) => /\/maptiles\/belaya\//.test(request.url));
+check("the Detailed layer shows the upstream topographic map without asking for tiles", detailed && tileRequests.length === 0 && requests.slice(detailedBefore).some((request) => /\/img\/maps\/belaya\/topomap\.webp/.test(request.url)), `${tileRequests.length} tile requests`);
+
 const before = requests.length;
 await page.evaluate(() => window.__App.userSettings.set("volumeLayer", true));
 await page.waitForFunction(() => !["loading", "idle"].includes(window.__App.minimap.volume.state), null, { timeout: 60000 });

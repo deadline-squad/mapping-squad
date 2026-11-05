@@ -27,6 +27,20 @@ Squad Ballistics' weapons.json aimed with the overlay is selected by its name an
 hold-laid ones show a hold time) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). Exits with 1 on any failure.
 
+## belaya_check.mjs: Belaya Pass, the terrain-only map
+
+```sh
+node belaya_check.mjs <site URL>
+```
+
+A build with `/heightmaps/belaya/` and `/maptiles/relief/belaya.pmtiles`. Belaya's `meta.json` states its provenance and has
+no `volume` entry; the map is listed (26 options) with the community-data notice as its tooltip; its heightmap is SquadHeight's
+3906 x 3905 grid and heights at nine grid nodes (`belaya_points.json`, read from the export) agree within the WebP's step;
+the notice shows on load; the Relief archive and the upstream map image load; the Detailed layer shows the topographic map
+without asking for tiles; with *Object volumes in the line of fire* on the layer is unavailable, no volume or engine file is
+requested and the heightmap is kept; the console stays clean. `browser_check.mjs --maps` expects Belaya to have no Detailed
+tiles. Exits with 1 on any failure.
+
 ## volume_check.mjs: the volume layer
 
 ```sh
