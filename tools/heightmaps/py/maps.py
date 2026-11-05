@@ -1,7 +1,7 @@
 """SquadCalc map folder -> SquadHeight export name and the game levels holding its landscape.
 
 Level paths are relative to the SquadExtract output root (the umap path without extension).
-Belaya is absent: it is not in the current game build and SquadHeight covers other bounds than SquadCalc.
+Belaya is absent: the server package (build 26005357) configures it but ships no level, landscape or layer for it, see README.md.
 """
 
 MAPS = {
