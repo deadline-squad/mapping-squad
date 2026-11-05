@@ -195,6 +195,14 @@ damage type (`modifier`, `direct`, `indirect`, `onlyDirect`), `scale(d)` the eng
 * the secondary explosion (mortar family, Hell Cannon, BM-21) is one more radial event with the modifier of its own damage type, its own
   `SecondaryExplosionMinDamage` and distance.
 
+**Known deviation of the app (SquadCalc 45.27.0).** The engine's `InternalTakeRadialDamage` returns `Lerp(Min, Damage, scale)` with
+`scale = 0` at and beyond the outer radius ([`native-rules.md`](native-rules.md) 1.2), i.e. `Min`, not 0. Which structures it is called for
+is decided on the distance from the burst to the structure's collision (box), while `d` in the formula is the distance to the closest
+point the ray hit on its components. A structure whose box is inside the outer radius but whose ray hit point is beyond it therefore takes
+`Min` in the game. The app has neither collision nor ray, only the ground distance, and returns 0 for `reach >= outer`; for the ten
+projectiles with `Min > 0` ([`native-rules.md`](native-rules.md) section 5) the game can deal up to `Min` (125 mm HEAT: 35) where the app shows nothing, at the edge of the
+radius. Kept as is: the case needs the structure's collision shape, which the data does not hold, and no in-game measurement exists.
+
 INFERRED (Blueprint bytecode, not in the binary): that a direct hit's `ImpactDamageToApply` is point damage of the projectile's
 damage type, and the secondary explosion's path to `TakeDamage`. Still UNVERIFIED: which actor class the emplaced guns' shells hit,
 health regeneration or repair, `bForwardDamageToSoldier`. No in-game measurement exists (native-rules.md section 6).
