@@ -2,7 +2,9 @@
 
 import os
 import sys
+import tracemalloc
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -133,6 +135,64 @@ class ConservativeVoxelsTest(unittest.TestCase):
         tall = np.array([[[0, 0, 5000], [3, 0, 5000], [0, 3, 5000]]], np.float32)
         occupied, up, down = columns.build_keys([tall], g)
         self.assertEqual((len(occupied), len(up), len(down)), (0, 0, 0))
+
+
+class BuildKeysMemoryTest(unittest.TestCase):
+    def test_union_merges_sorted_unique_arrays(self):
+        rng = np.random.default_rng(4)
+        for known_size, fresh_size in ((0, 50), (50, 0), (500, 700), (3, 3000)):
+            known = np.unique(rng.integers(0, 1000, known_size))
+            fresh = np.unique(rng.integers(0, 1000, fresh_size))
+            np.testing.assert_array_equal(columns._union(known, fresh), np.union1d(known, fresh))
+
+    def test_merging_in_small_steps_gives_the_same_keys_as_one_pass(self):
+        g = grid()
+        tris = random_triangles(400, 4.0, 5)
+        one_pass = columns.build_keys([tris], g)
+        reference = {kind: np.unique(np.concatenate([keys[facing == kind] for keys, facing in columns.surface_voxels(tris, g)]))
+                     for kind in (columns.UP, columns.DOWN, columns.WALL)}
+        np.testing.assert_array_equal(one_pass[1], reference[columns.UP])
+        np.testing.assert_array_equal(one_pass[2], reference[columns.DOWN])
+        np.testing.assert_array_equal(one_pass[0], np.unique(np.concatenate(list(reference.values()))))
+        with mock.patch.object(columns, "MERGE_MIN_KEYS", 50):
+            stepped = columns.build_keys([tris[:150], tris[150:]], g, chunk=17)
+        for got, want in zip(stepped, one_pass):
+            np.testing.assert_array_equal(got, want)
+
+    def test_keep_filter_equals_filtering_the_result(self):
+        g = grid()
+        tris = random_triangles(300, 4.0, 6)
+
+        def not_in_odd_columns(keys):
+            return (keys >> columns.Z_BITS) % 2 == 0
+
+        occupied, up, down = columns.build_keys([tris], g)
+        with mock.patch.object(columns, "MERGE_MIN_KEYS", 50):
+            kept = columns.build_keys([tris[:100], tris[100:]], g, chunk=13, keep=not_in_odd_columns)
+        for got, want in zip(kept, (occupied, up, down)):
+            np.testing.assert_array_equal(got, want[not_in_odd_columns(want)])
+        self.assertGreater(len(kept[0]), 0)
+
+    def test_repeated_voxels_do_not_accumulate(self):
+        """100 blocks of the same 200 000 voxels hold 160 MB if kept until the end; merged as they come they stay near 10 MB."""
+        keys = np.arange(200_000, dtype=np.int64) << 3
+        facing = np.full(len(keys), columns.UP, np.int8)
+        tris = np.zeros((100, 3, 3), np.float32)
+
+        def repeated_blocks(block_tris, grid, **_):
+            yield keys.copy(), facing
+
+        with mock.patch.object(columns, "surface_voxels", repeated_blocks), mock.patch.object(columns, "MERGE_MIN_KEYS", 500_000):
+            tracemalloc.start()
+            try:
+                occupied, up, down = columns.build_keys([tris], grid(), chunk=1)
+                peak = tracemalloc.get_traced_memory()[1]
+            finally:
+                tracemalloc.stop()
+        np.testing.assert_array_equal(occupied, keys)
+        np.testing.assert_array_equal(up, keys)
+        self.assertEqual(len(down), 0)
+        self.assertLess(peak, 40_000_000)
 
 
 if __name__ == "__main__":

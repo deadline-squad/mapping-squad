@@ -49,23 +49,22 @@ def main():
     if (meta["z_max_m"] + OBJECT_HEIGHT_M - z_min) / dz >= (1 << columns.Z_BITS):
         raise SystemExit(f"{slug}: z range {z_min}..{meta['z_max_m']} m does not fit {1 << columns.Z_BITS} steps of {dz} m; use a larger dz")
     grid = columns.Grid(b["min_x"], b["min_y"], b["max_x"] - b["min_x"], b["max_y"] - b["min_y"], cell, dz, z_min)
-    occupied, up, down = columns.build_keys(triangle_chunks(tris_path, collision.CHANNELS[channel.capitalize()]), grid)
-    print("voxels before ground filter", len(occupied), "up", len(up), "down", len(down), flush=True)
     actors = load_terrain([f"{LANDSCAPE_ROOT}/{level}" for level in maps.MAPS[slug][1]])
+    seen = 0
 
     def above_ground(keys):
+        nonlocal seen
+        seen += len(keys)
         x, y, z = grid.voxel_center(keys)
         ground, hole = terrain.sample(actors, x, y)
         top = z + grid.dz / 2
         return np.isnan(ground) | hole | (top > ground + LAND_MARGIN_M)
 
-    if len(occupied) == 0:
+    # Filtering each block before it is accumulated keeps the buried voxels, most of a big map, out of memory.
+    occupied, up, down = columns.build_keys(triangle_chunks(tris_path, collision.CHANNELS[channel.capitalize()]), grid, keep=above_ground)
+    if seen == 0:
         raise SystemExit(f"{slug}: no collision voxel inside the grid")
-    keep = np.concatenate([above_ground(occupied[i:i + 5_000_000]) for i in range(0, len(occupied), 5_000_000)])
-    occupied = occupied[keep]
-    up = up[np.isin(up, occupied)]
-    down = down[np.isin(down, occupied)]
-    print("voxels", len(occupied), "up", len(up), "down", len(down))
+    print("voxels", len(occupied), "up", len(up), "down", len(down), "of", seen, "block voxels tested")
     np.savez(out, occupied=occupied, up=up, down=down, min_x=grid.min_x, min_y=grid.min_y, cell=cell, dz=dz,
              z_min=grid.z_min, width=grid.width, height=grid.height)
 
