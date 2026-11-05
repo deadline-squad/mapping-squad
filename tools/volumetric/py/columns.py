@@ -1,9 +1,11 @@
 """Sparse voxel columns: the volumetric collision of a map as occupied (x, y, z) cells.
 
-A voxel is occupied when a collision triangle of the chosen query class has a sample point inside it. Points
-are laid on every triangle on a barycentric lattice no coarser than ``SAMPLE_FRACTION`` of the smallest voxel
-edge, so thin walls and sheet-like roofs mark the voxels they cross (a heightmap cannot hold them) and
-nothing needs a closed or consistently wound mesh. Each sample also records which way its triangle faces
+A voxel is occupied when a collision triangle of the chosen query class intersects it (conservative surface
+voxelisation: every voxel the triangle passes through is marked, however small the part of the triangle inside
+it, vertices and edges included), so thin walls and sheet-like roofs mark the voxels they cross (a heightmap
+cannot hold them) and nothing needs a closed or consistently wound mesh. A voxel is the half-open box
+[low, high) on every axis, the same cell ``Grid.keys`` assigns a point to, so a triangle lying exactly on a
+voxel face belongs to the voxel above/beside it only. Each triangle also records which way it faces
 (up: floor-like, normal.z > FLOOR_NORMAL_Z; down: ceiling-like; else wall-like) so floors can be listed.
 
 Voxel key = ((row * width + col) << Z_BITS) | z_index with z_index = floor((z - z_min) / dz), the column
@@ -13,10 +15,9 @@ number row * width + col, and the facing kept apart in ``facing_keys``.
 import numpy as np
 
 Z_BITS = 12
-SAMPLE_FRACTION = 0.45
 FLOOR_NORMAL_Z = 0.5
-CLIP_DIVISIONS = 1000
-CLIP_MARGIN_M = 1e-3
+HIGH_EDGE_M = 1e-9
+TOLERANCE = 1e-11
 UP, DOWN, WALL = 1, 2, 0
 
 
@@ -50,84 +51,133 @@ class Grid:
                 (zi + 0.5) * self.dz + self.z_min)
 
 
-def surface_samples(tris, spacing, max_points=4_000_000, box=None):
-    """Yield (points [m, 3] float64, facing [m] int8) covering the triangles `tris` [n, 3, 3].
+def _edge_cut(p, q, axis, value):
+    """Where the segment p -> q crosses the plane coordinate[axis] == value: (t in [0, 1] clamped, crosses mask)."""
+    delta = q[:, axis] - p[:, axis]
+    moving = delta != 0
+    t = np.where(moving, (value - p[:, axis]) / np.where(moving, delta, 1.0), -1.0)
+    return np.clip(t, 0.0, 1.0), moving & (t >= -TOLERANCE) & (t <= 1 + TOLERANCE)
 
-    A triangle whose longest edge is L gets the lattice with n = ceil(L / spacing) divisions per edge
-    points (i, j), i <= j, i + j <= n, at a + (i / n) (b - a) + (j / n) (c - a); triangles with equal n are generated
-    together.
 
-    `box` = (low, high) corners (see `Grid.box`) limits the work to what can matter: a triangle whose bounding box
-    misses the box is skipped, and a triangle with more than CLIP_DIVISIONS divisions yields only the lattice points
-    within CLIP_MARGIN_M of the box (the points are the same ones the full lattice has, computed with the same
-    arithmetic). Points outside the box are not guaranteed to be absent, so callers still filter them.
+def _extent(a, b, c, bounds, report):
+    """Range of coordinate `report` over the part of triangle (a, b, c) inside the slab or rectangle `bounds`.
+
+    `bounds` maps an axis (0: x, 1: y) to its (low, high) limits; the triangle is cut by those limits and the extreme
+    values are searched among the vertices of the cut polygon: triangle vertices inside, intersections of the edges
+    with the limits, and (for a rectangle, two axes) the rectangle corners inside the triangle's projection. Returns (low, high, hit); where hit is
+    False the triangle misses the region and low/high are meaningless.
     """
+    n = len(a)
+    low, high = np.full(n, np.inf), np.full(n, -np.inf)
+    verts = (a, b, c)
+
+    def inside(points):
+        ok = np.ones(len(points), bool)
+        for axis, (lo, hi) in bounds.items():
+            ok &= (points[:, axis] >= lo - TOLERANCE) & (points[:, axis] <= hi + TOLERANCE)
+        return ok
+
+    def take(values, ok):
+        np.minimum(low, np.where(ok, values, np.inf), out=low)
+        np.maximum(high, np.where(ok, values, -np.inf), out=high)
+
+    for v in verts:
+        take(v[:, report], inside(v))
+    for p, q in ((a, b), (b, c), (c, a)):
+        for axis, limits in bounds.items():
+            for limit in limits:
+                t, crosses = _edge_cut(p, q, axis, limit)
+                point = p + t[:, None] * (q - p)
+                point[:, axis] = limit
+                take(point[:, report], crosses & inside(point))
+    if len(bounds) == 2:
+        e1, e2 = (b - a)[:, :2], (c - a)[:, :2]
+        d = e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]
+        scale = np.linalg.norm(e1, axis=1) * np.linalg.norm(e2, axis=1)
+        usable = np.abs(d) > 1e-10 * scale
+        safe = np.where(usable, d, 1.0)
+        for x in bounds[0]:
+            for y in bounds[1]:
+                w = np.stack([x - a[:, 0], y - a[:, 1]], axis=1)
+                u = (w[:, 0] * e2[:, 1] - w[:, 1] * e2[:, 0]) / safe
+                v = (e1[:, 0] * w[:, 1] - e1[:, 1] * w[:, 0]) / safe
+                covered = usable & (u >= -1e-12) & (v >= -1e-12) & (u + v <= 1 + 1e-12)
+                take(a[:, 2] + u * (b - a)[:, 2] + v * (c - a)[:, 2], covered)
+    return low, high, low <= high
+
+
+def surface_voxels(tris, grid, max_pairs=1_000_000):
+    """Yield (keys [m] int64, facing [m] int8) of every voxel of `grid` that a triangle of `tris` [n, 3, 3] intersects.
+
+    Exact, so conservative: a voxel is listed when the triangle and the half-open voxel box share a point (the
+    high faces are pulled in by HIGH_EDGE_M). Per triangle: (1) every grid row its y-extent touches; (2) in each
+    row, the columns between the x-extent of the triangle cut by that row's slab (a superset of the touched cells,
+    narrow even for a huge diagonal triangle); (3) per candidate cell, the z-range of the triangle cut by the cell's
+    rectangle (the cut polygon is convex, so every z step inside the range is crossed). Work follows the voxels
+    produced: a triangle outside the grid costs nothing and one covering the grid costs one pass over its cells.
+    Keys may repeat across and within chunks; no chunk holds more than about `max_pairs` (triangle, cell) pairs or
+    keys.
+    """
+    low, high = grid.box()
     t = tris.astype(np.float64)
-    if box is not None:
-        low, high = box
-        t = t[~np.any((t.max(axis=1) < low - CLIP_MARGIN_M) | (t.min(axis=1) >= high + CLIP_MARGIN_M), axis=1)]
+    t = t[~np.any((t.max(axis=1) < low) | (t.min(axis=1) >= high), axis=1)]
     a, b, c = t[:, 0], t[:, 1], t[:, 2]
     normal = np.cross(b - a, c - a)
     length = np.linalg.norm(normal, axis=1)
     with np.errstate(invalid="ignore", divide="ignore"):
         nz = np.where(length > 0, normal[:, 2] / length, 0.0)
     facing = np.where(nz > FLOOR_NORMAL_Z, UP, np.where(nz < -FLOOR_NORMAL_Z, DOWN, WALL)).astype(np.int8)
-    longest = np.maximum.reduce([np.linalg.norm(b - a, axis=1), np.linalg.norm(c - b, axis=1), np.linalg.norm(a - c, axis=1)])
-    divisions = np.maximum(1, np.ceil(longest / spacing)).astype(np.int64)
-    if box is not None:
-        for k in np.nonzero(divisions > CLIP_DIVISIONS)[0]:
-            yield from _clipped_lattice(a[k], b[k], c[k], divisions[k], facing[k], box, max_points)
-        divisions = np.where(divisions > CLIP_DIVISIONS, 0, divisions)
-    for n in np.unique(divisions[divisions > 0]):
-        index = np.nonzero(divisions == n)[0]
-        i, j = np.triu_indices(n + 1)
-        keep = i + j <= n
-        u, v = (i[keep] / n)[None, :, None], (j[keep] / n)[None, :, None]
-        per = u.shape[1]
-        step = max(1, max_points // per)
-        for start in range(0, len(index), step):
-            sel = index[start:start + step]
-            p = a[sel][:, None, :] + u * (b[sel] - a[sel])[:, None, :] + v * (c[sel] - a[sel])[:, None, :]
-            yield p.reshape(-1, 3), np.repeat(facing[sel], per)
+    row_first = np.clip(np.floor((t[:, :, 1].min(axis=1) - grid.min_y) / grid.cell), 0, grid.height - 1).astype(np.int64)
+    row_last = np.clip(np.floor((t[:, :, 1].max(axis=1) - grid.min_y) / grid.cell), 0, grid.height - 1).astype(np.int64)
+    row_count = row_last - row_first + 1
+    row_end = np.cumsum(row_count)
+    start = 0
+    while start < len(t):
+        before = row_end[start - 1] if start else 0
+        stop = max(start + 1, int(np.searchsorted(row_end, before + max_pairs, side="right")))
+        tri = np.repeat(np.arange(start, stop), row_count[start:stop])
+        row = row_first[tri] + np.arange(len(tri)) - np.repeat(np.cumsum(row_count[start:stop]) - row_count[start:stop], row_count[start:stop])
+        start = stop
+        y_low = grid.min_y + row * grid.cell
+        x_low, x_high, hit = _extent(a[tri], b[tri], c[tri], {1: (y_low, y_low + grid.cell - HIGH_EDGE_M)}, 0)
+        hit &= (x_high >= grid.min_x) & (x_low < grid.min_x + grid.width * grid.cell)
+        tri, row, x_low, x_high = tri[hit], row[hit], x_low[hit], x_high[hit]
+        col_first = np.clip(np.floor((x_low - grid.min_x) / grid.cell), 0, grid.width - 1).astype(np.int64)
+        col_last = np.clip(np.floor((x_high - grid.min_x) / grid.cell), 0, grid.width - 1).astype(np.int64)
+        col_count = col_last - col_first + 1
+        col_end = np.cumsum(col_count)
+        first = 0
+        while first < len(tri):
+            before = col_end[first - 1] if first else 0
+            last = max(first + 1, int(np.searchsorted(col_end, before + max_pairs, side="right")))
+            yield from _cell_voxels(grid, a, b, c, facing, tri[first:last], row[first:last], col_first[first:last], col_count[first:last], max_pairs)
+            first = last
 
 
-def _clipped_lattice(a, b, c, n, facing, box, max_points):
-    """Lattice points a + (i / n) (b - a) + (j / n) (c - a), i <= j, i + j <= n, within CLIP_MARGIN_M of `box`.
-
-    These are the points the unclipped path generates (np.triu_indices keeps i <= j).
-
-    Row j of the lattice is a line, so the i that stay inside the box on each axis form an interval; the rows are
-    intersected axis by axis and widened by one step against rounding. Yields chunks of at most `max_points` points
-    (a single row is never split).
-    """
-    low, high = box
-    edge_u, edge_v = b - a, c - a
-    rows = np.arange(n + 1)
-    first, last = np.zeros(n + 1), np.minimum(rows, n - rows).astype(np.float64)
-    for axis in range(3):
-        start = a[axis] + rows / n * edge_v[axis]
-        if edge_u[axis] == 0:
-            outside = (start < low[axis] - CLIP_MARGIN_M) | (start >= high[axis] + CLIP_MARGIN_M)
-            last = np.where(outside, -1.0, last)
-            continue
-        ends = np.sort([(low[axis] - CLIP_MARGIN_M - start) / edge_u[axis], (high[axis] + CLIP_MARGIN_M - start) / edge_u[axis]], axis=0)
-        first = np.maximum(first, np.floor(ends[0] * n) - 1)
-        last = np.minimum(last, np.ceil(ends[1] * n) + 1)
-    first = np.clip(first, 0, n + 1).astype(np.int64)
-    counts = np.maximum(np.clip(last, -1, n).astype(np.int64) - first + 1, 0)
-    cumulative = np.cumsum(counts)
-    row = 0
-    while row <= n:
-        before = cumulative[row - 1] if row else 0
-        stop = min(n + 1, max(row + 1, int(np.searchsorted(cumulative, before + max_points, side="right"))))
-        span = slice(row, stop)
-        row, total = stop, int(counts[span].sum())
-        if total == 0:
-            continue
-        j = np.repeat(rows[span], counts[span])
-        offset = np.arange(total) - np.repeat(np.cumsum(counts[span]) - counts[span], counts[span])
-        i = np.repeat(first[span], counts[span]) + offset
-        yield a + (i / n)[:, None] * edge_u + (j / n)[:, None] * edge_v, np.full(total, facing, np.int8)
+def _cell_voxels(grid, a, b, c, facing, tri, row, col_first, col_count, max_pairs):
+    """Voxels of the cells (row, col_first .. col_first + col_count - 1) that triangles `tri` intersect: see `surface_voxels`."""
+    ends = np.cumsum(col_count)
+    pair_tri = np.repeat(tri, col_count)
+    pair_row = np.repeat(row, col_count)
+    col = np.repeat(col_first, col_count) + np.arange(ends[-1]) - np.repeat(ends - col_count, col_count)
+    x_low, y_low = grid.min_x + col * grid.cell, grid.min_y + pair_row * grid.cell
+    bounds = {0: (x_low, x_low + grid.cell - HIGH_EDGE_M), 1: (y_low, y_low + grid.cell - HIGH_EDGE_M)}
+    z_low, z_high, hit = _extent(a[pair_tri], b[pair_tri], c[pair_tri], bounds, 2)
+    z_first = np.floor((z_low[hit] - grid.z_min) / grid.dz).astype(np.int64)
+    z_last = np.floor((z_high[hit] - grid.z_min) / grid.dz).astype(np.int64)
+    z_first, z_last = np.maximum(z_first, 0), np.minimum(z_last, (1 << Z_BITS) - 1)
+    count = np.maximum(z_last - z_first + 1, 0)
+    column = (pair_row[hit] * grid.width + col[hit]) << Z_BITS
+    kind = facing[pair_tri[hit]]
+    cumulative = np.cumsum(count)
+    start = 0
+    while start < len(count):
+        before = cumulative[start - 1] if start else 0
+        stop = max(start + 1, int(np.searchsorted(cumulative, before + max_pairs, side="right")))
+        span = count[start:stop]
+        offset = np.arange(span.sum()) - np.repeat(np.cumsum(span) - span, span)
+        yield column[start:stop].repeat(span) | (z_first[start:stop].repeat(span) + offset), kind[start:stop].repeat(span)
+        start = stop
 
 
 def build_keys(tris_iter, grid, chunk=1_000_000):
@@ -136,14 +186,12 @@ def build_keys(tris_iter, grid, chunk=1_000_000):
     `tris_iter` yields float32 [n, 3, 3] arrays. Returns (occupied keys, up-facing keys, down-facing keys),
     each a sorted unique int64 array.
     """
-    spacing = SAMPLE_FRACTION * min(grid.cell, grid.dz)
     buckets = {UP: [], DOWN: [], WALL: []}
     for tris in tris_iter:
         for start in range(0, len(tris), chunk):
-            for points, facing in surface_samples(tris[start:start + chunk], spacing, box=grid.box()):
-                keys, valid = grid.keys(points[:, 0], points[:, 1], points[:, 2])
+            for keys, facing in surface_voxels(tris[start:start + chunk], grid):
                 for kind in buckets:
-                    sel = valid & (facing == kind)
+                    sel = facing == kind
                     if sel.any():
                         buckets[kind].append(np.unique(keys[sel]))
         for kind, parts in buckets.items():

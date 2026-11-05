@@ -105,10 +105,14 @@ Verified by `extractor inventory` (export counts per level) and by reading the c
 
 * Terrain: unchanged landscape heights (+ the hole flag), 1 m.
 * Objects: **sparse voxel columns**. A voxel is occupied when a collision triangle blocking the query class
-  has a sample point inside it (barycentric lattice at 0.45 x the smallest voxel edge, so thin walls and open
-  shells mark the voxels they cross; no closed mesh is needed). Triangles outside the grid are skipped and large
-  ones sampled only where they cross it, so meshes reaching tens of km beyond the map (Tallil mesh 774) cost nothing. Voxels that lie entirely at or under the
-  landscape + 0.1 m are dropped. Up-facing samples are kept as a second set (floors) for standable surfaces.
+  intersects it: exact conservative surface voxelisation (`py/columns.py`), so every voxel a triangle passes through is
+  marked, however small the part inside it, and thin walls and open shells mark the voxels they cross; no closed mesh is
+  needed. Per triangle the grid rows its y-extent touches, in each row the columns between the x-extent of the triangle cut
+  by that row, and per candidate cell the z-range of the triangle cut by the cell's rectangle (a voxel is the half-open box
+  `[low, high)` of `Grid.keys`, so a triangle exactly on a voxel face belongs to the voxel above/beside it only). Triangles
+  outside the grid are skipped and a huge triangle costs one pass over the cells it covers inside the grid, so meshes reaching
+  tens of km beyond the map (Tallil mesh 774) cost nothing. Voxels that lie entirely at or under the
+  landscape + 0.1 m are dropped. The facing of each triangle (up: floors, down) is kept as a second set for standable surfaces.
 * File `VCOL1` (`py/codec.py`): per occupied column the z-runs, varint packed, gzip. Browser decode with
   `DecompressionStream("gzip")` and about 40 lines (`js/vcol.mjs`, ~100 MB of typed arrays for Fallujah 0.5 m).
 * Query: sample the segment every min(cell, dz)/3, test landscape then the column's runs (binary search of the
@@ -139,7 +143,11 @@ missing from a rebuild, 0 above-ground rebuilt voxels missing from the file). Gr
 | WGSL f32 (SwiftShader) wrong, all / without grazing | 4.08 % / 1.43 % | 8.41 % / 4.56 % |
 
 False blocked: a marked voxel can be entered up to a voxel diagonal from the surface (every not-grazing case overlaps a
-triangle). False clear: the voxel at the exact hit is empty in the file (the sample lattice missed a clipped corner).
+triangle). False clear: the voxel at the exact hit is empty in the file. The first builder (a sample lattice, 129 / 83 cases)
+lost clipped corners, a triangle vertex and half of each lattice; the exact voxelisation marks every voxel a triangle meets
+and has 0 false clear on the same 100 000 segments (false blocked 3 948 -> 4 039 on Jensen, 8 331 -> 8 508 on Kokan;
+wrong 4.08 -> 4.04 % and 8.41 -> 8.51 %; voxels 673 122 -> 723 221 and 2 007 949 -> 2 198 643; .vcol 112 531 -> 85 476 B and
+789 376 -> 696 798 B; issue deadline-squad/deadline-squadcalc#23).
 Reproduce and details: `engine/README.md`, section "Voxel columns".
 
 ## Precision pass: exact triangles near a target
