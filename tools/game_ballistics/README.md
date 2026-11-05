@@ -35,3 +35,18 @@ differs from the game; fix `weapons.json`, regenerate SquadCalc's direct-fire en
 `tools/direct_fire/gen_squadcalc_weapons.py`, then check both apps agree with
 `tools/direct_fire/compare.py`. A calculator weapon maps to its game classes in `TARGETS` in
 `gamecheck.py`.
+
+## Provenance of every input
+
+`provenance.py` compares every input of the firing solution of every weapon of both apps with the game classes
+(velocity, gravity, motor, cap, rotation, drag, launch point, spread, lifespan, explosion, bore, zoom, limits, minimum
+distance, scale offset, hold model) and writes the generated tables of `tools/volumetric/docs/data-provenance.md` (and `.ru.md`)
+and `data-provenance.tsv`; `--check` fails when a weapon is missing from the documents, a table is stale or an app differs from
+the game without a `KNOWN` entry. It reads `resolved.json`, the existing dump, Squad Ballistics' `weapons.json` and
+`tests/data/game_weapons.json` and SquadCalc's `weapons.js` (through `tools/direct_fire/weapons_json.mjs`):
+
+```sh
+python3 provenance.py --resolved resolved.json --dump dump --sb <Squad-Ballistics> --sc <SquadCalc> --check ../volumetric/docs
+python3 provenance.py --resolved resolved.json --dump dump --sb <Squad-Ballistics> --sc <SquadCalc> --write ../volumetric/docs
+```
+
