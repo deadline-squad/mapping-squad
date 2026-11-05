@@ -135,7 +135,12 @@ def fuse(terrain, surface, objects=None):
     return fused, stats
 
 
-def write(out_dir, name, fused, meta, stats, build, cell=None):
+def write(out_dir, name, fused, meta, stats, build, cell=None, sources=None, provenance=None):
+    """Write heightmap.png, heightmap.webp and meta.json of a map.
+
+    `sources` replaces the game-package sources of meta.json and `provenance` adds a free-text label of where the
+    heights come from (both for a map not built from the server package, see build_squadheight_only.py).
+    """
     os.makedirs(out_dir, exist_ok=True)
     z_min = float(np.nanmin(fused))
     z_max = float(np.nanmax(fused))
@@ -160,13 +165,13 @@ def write(out_dir, name, fused, meta, stats, build, cell=None):
         "resolution_m": cell or meta["resolution_m"],
         "bounds_m": meta["bounds_m"],
         "orientation": "row = world Y min->max, col = world X min->max",
-        "sources": {
+        "sources": sources or {
             "terrain": f"Squad dedicated server build {build}, landscape collision",
             "objects": f"Squad dedicated server build {build}, static mesh collision"
                        if "game_object_cells" in stats else None,
             "sdk_surface": f"SquadHeight {meta.get('exported_utc', '')} (Squad SDK collision trace)",
         },
-        "object_min_m": OBJECT_MIN_M,
+        **({"provenance": provenance} if provenance else {"object_min_m": OBJECT_MIN_M}),
         "stats": stats,
     }, open(os.path.join(out_dir, "meta.json"), "w"), indent=1)
 

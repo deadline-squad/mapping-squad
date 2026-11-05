@@ -94,6 +94,18 @@ Source and method: the cooked Chaos heightfields of the landscape levels, placed
 it rises 0.5 m above the game terrain, with the SDK surface of SquadHeight 1.3.0 (1.6 cm). 16-bit PNG and lossless WebP
 on SquadCalc's grid, 1 m (0.5 m on Chora and Kokan) (`H-README`, "Sources and fusion", "Grid size").
 
+**Scope of this method: 25 of the 26 maps.** The calculator lists 26 maps. The 25 above are server-derived (build
+26005357). **Belaya Pass is terrain only, from community data (added 2026-11-05):** its level is not in the dedicated server
+package (98 art paths under `Content/Maps/Belaya_Pass`, no `.umap`, no landscape, no statics; its minimap texture is a header
+without pixels, the server strips them; VERIFIED, `H-README`, "Map inventory"), so nothing of it is derived from the game files.
+Its heightmap is SquadHeight 1.3.0's Mod SDK export (June 2026, top-most trace of the SDK collision, 1 m grid, 3905 x 3906
+samples, x -1954..1950, y -2080..1825) converted without change (served PNG equal to the export, 0.0 m; WebP within 5 mm;
+VERIFIED, `H-README`, "Belaya Pass: terrain only, community data"); meta.json says `"provenance": "SquadHeight 1.3.0 (Mod SDK
+export), terrain only, not validated against server data"`, and the page tells the user. No figure of this report holds for
+it: there is no comparison with the game's landscape, no ground-truth audit, no object recall or precision, no voxel layer, no
+object or building heights as a separate layer (the SDK surface does include what its trace hits, rocks and buildings,
+unseparated). Its accuracy is **UNVERIFIED**. Firing solutions on it use the heightmap only.
+
 ### 2.1 Interpolation rule
 
 The game splits each quad into two triangles along the diagonal from (x, y) to (x+1, y+1). On points where the other
@@ -388,6 +400,7 @@ every figure in the shells-to-destroy tables, since none was measured in game (t
 | Voxel layer is conservative by half a voxel; false blocked grows with density | measured | `V-README`, `E-README` |
 | Screens other than 16:9 | out of scope (owner decision); the program warns once | `SB:RELEASE_NOTES.md` (#10) |
 | Ground truth for terrain: Training server logs, ground traces only | single reference | `H-README` |
+| Belaya Pass: terrain only from SquadHeight 1.3.0, not derived from or checked against the server package; no objects, no voxel layer, accuracy UNVERIFIED | owner decision 2026-11-05 (orchestrator, open to overrule) | section 2; `H-README` |
 | No client pak used; no decryption of the encrypted pak index | scope and licence decision | `CS` section 8 |
 | Repositories are private; public release allowed from 2027 | owner decision | task statement |
 
