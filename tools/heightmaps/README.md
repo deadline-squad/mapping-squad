@@ -78,7 +78,8 @@ Checks (Squad build 26005357):
 * SquadCalc's 8-bit heightmap of Skorpo is SquadHeight quantized to 2.09 m steps: error up to
   1.05 m (`compare_squadcalc.py`).
 
-Belaya has no heightmap here: its levels are not in the server package, see the map inventory below.
+Belaya Pass is the one exception: its level is not in the server package, so its heightmap is the community SquadHeight
+export alone, see "Belaya Pass: terrain only, community data" below. The 25 other maps are server-derived.
 
 ## Map inventory: what the server package can play
 
@@ -92,7 +93,7 @@ index lists with `SquadExtract list`, so the install is complete) and the pak co
 |---|---|---|---|---|
 | AlBasrah | 7 | 6 | yes | yes |
 | Anvil | 4 | 4 | yes | yes |
-| Belaya | 6 | 0 | yes | no |
+| Belaya | 6 | 0 | yes | terrain only, SquadHeight (not from the package) |
 | BlackCoast | 6 | 6 | yes | yes |
 | Chora | 8 | 8 | yes | yes |
 | Fallujah | 7 | 7 | yes | yes |
@@ -130,7 +131,10 @@ index lists with `SquadExtract list`, so the install is complete) and the pak co
   landscape and no layer, so the landscape collision and the static meshes that `heightmaps.sh extract` reads do not exist for
   Belaya in this build, and a heightmap, a statics export or a voxel layer cannot be built from it (SquadHeight 1.3.0 does have
   a Belaya, exported in June 2026 from the Mod SDK with bounds x -1954..1950, y -2080..1825, but it was not made from the server
-  package and cannot be fused or checked against it).
+  package and cannot be fused or checked against it; it is served as a terrain-only map of lower provenance, next section).
+  The minimap texture `Belaya_Minimap` is in the package as an asset header only (4096 x 4096 imported size, `SizeX` 0, no
+  mip data: the dedicated server strips texture pixels; `SquadExtract texture` writes nothing for it), so the map image cannot be
+  extracted from the package either.
 * **Not playable, a plugin descriptor only:** `Plugins/Expansions/{Aussie,EastAsia,Haiyan,MijinHighway,OperationDragonfly,
   OskilRiver,Saaremaa,Yehorivka_Remaster,PCG_Test}` are one `.uplugin` file each (no `.umap`, no asset), and so are the
   `Expansions/{Gorodok,Mestia,Narva,Yehorivka}` descriptors whose content lives under `Content/Maps`. `Content/Maps/Forest` is 42
@@ -143,8 +147,31 @@ index lists with `SquadExtract list`, so the install is complete) and the pak co
   streaming level names the remaster). That is the landscape `py/maps.py` extracts, so the Yehorivka data is current.
   It would become stale only when a build ships the remaster's content and its layers.
 
+## Belaya Pass: terrain only, community data
+
+Belaya Pass is the 26th playable map, but nothing of it is derived from the server package (see the inventory above). The
+calculator lists it with the heightmap of SquadHeight 1.3.0 (a Squad Mod SDK export of June 2026, top-most trace of the SDK
+collision, 1 m grid of 3905 x 3906 samples, x -1954..1950, y -2080..1825, z -307.2..-150.5 m) and nothing else.
+`meta.json` says so: `"provenance": "SquadHeight 1.3.0 (Mod SDK export), terrain only, not validated against server data"`,
+`sources` has only `sdk_surface`, `stats` is empty and there is no `volume` entry (the page then falls back to the heightmap, as
+for any map without a volume layer). The SDK surface includes what its trace hits (rock cliffs, buildings, bridges: 424 861
+structure cells in the export's own statistics), but nothing separates ground from objects, and none of the checks in this
+file applies to it: no landscape vertices to compare with, no server-side ground truth, no object recall or precision, no
+accuracy figure. Never quote the other maps' numbers for it. Against SquadHeight itself the served PNG is exact (0.0 m) and the
+WebP is within half its 1 cm step (5 mm).
+
+```sh
+tools/heightmaps/heightmaps.sh belaya    # $SQUADHEIGHT/Belaya -> $OUT/belaya/{heightmap.png,heightmap.webp,meta.json}
+```
+
+`py/build_squadheight_only.py` does it (tests: `python -m unittest test_build_squadheight_only`). SquadCalc's own 8-bit
+`heightmap.png` of Belaya (`squadcalc.app/api/img/maps/belaya/`, the fallback when the precise one cannot be fetched) is the
+same grid: its levels times 0.307176 m reproduce SquadHeight with an RMS of 8.8 cm (the 8-bit quantisation, step 0.31 m).
+The relief archive is built with `maptiles.sh relief belaya` on a `maptiles/belaya/meta.json` that only carries the
+`bounds_m` frame (there are no Detailed tiles for the map); topometrics with `topometrics_cli.py` as for the others.
+
 To add Belaya (or any map) once its level files are in the package: `SquadExtract list Belaya` (the extractor below) must show a `.umap`; then add the
-`py/maps.py` entry with its landscape level, `extract`, `build belaya`, and follow the steps of the other maps (relief tiles,
+`py/maps.py` entry with its landscape level, `extract`, `build belaya` (which then replaces the community heightmap), and follow the steps of the other maps (relief tiles,
 topometrics, statics, volumetric, `src/data/maps.js`, locales).
 
 ## Running
