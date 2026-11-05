@@ -186,6 +186,8 @@ const scriptsAfter = requests.filter((url) => /\.js(\?|$)/.test(url));
 check("pressing the button loads the module on demand", scriptsAfter.length > scriptsBefore.length, JSON.stringify(scriptsAfter.filter((url) => !scriptsBefore.includes(url)).map((url) => url.split("/").pop())));
 check("the target's precision region was fetched and used", requests.some((url) => /regions\/region_221_-229\.rtri/.test(url)) && shown.exact === true && shown.margin === 56, `exact ${shown.exact}, margin ${shown.margin} m, region load ${shown.loadMs} ms`);
 check("the legend says how far the exact triangles reach", shown.legend === "block" && /Exact triangles within 56 m of the target/.test(shown.status), JSON.stringify(shown.status));
+const live = await page.evaluate(() => { const status = document.getElementById("positionHeatStatus"); return { role: status.getAttribute("role"), live: status.getAttribute("aria-live") }; });
+check("the legend's status line is a live region for screen readers", live.role === "status" && live.live === "polite", JSON.stringify(live));
 check("the dialog closed to show the map, and the button now hides", shown.dialogOpen === false, JSON.stringify(shown));
 check("positions are clear and blocked around the building", shown.clear > 0 && shown.blocked > 0, `${shown.clear} clear, ${shown.blocked} blocked of ${shown.rays * Math.floor(shown.range / shown.cell)} (range ${shown.range} m, cell ${shown.cell} m), computed in ${shown.computeMs} ms (wall ${shown.wallMs} ms)`);
 await page.evaluate(() => {
