@@ -46,8 +46,10 @@ node volume_check.mjs <site URL>
 A build with `npm run build:engine` done and the maps' `volume.vcol` / `terrain.bin` under `/heightmaps/`. Nothing of the layer is
 requested before the setting is on; then the engine, the voxel file and the landscape file load, six walls block and six
 openings pass (`volume_cases.json`, Jensen and Kokan, from the engine's parity data), the layer's landscape equals the
-heightmap's on open ground, the line of fire and the fire coverage use it, Fallujah, Goose Bay and Kamdesh (the largest
-files) load, and a map without a volume entry keeps the heightmap with a clean console. Exits with 1 on any failure.
+heightmap's on open ground, the line of fire and the fire coverage use it, the nine largest volume files (Fallujah, Goose Bay, Kamdesh,
+Skorpo, Black Coast, Chora, Gorodok, Harju, Yehorivka) load and finish a coverage (reported: the load time from the setting to
+"ready" and the resident memory of the browser's process tree before, at the peak and after), and a map whose volume file
+answers 404 keeps the heightmap with only the 404 and the layer's warning in the console. Exits with 1 on any failure.
 
 ## targets_check.mjs: target heights and structure damage
 
@@ -72,7 +74,7 @@ node heatmap_check.mjs <site URL> --reference <dir> [--shots <dir>] [--height <k
 ```
 
 (deadline-squad/deadline-squadcalc#22 C5, C6; a build with the engine, the volume files and the Jensen precision region under
-`/heightmaps/`; `--reference` is the output of SquadCalc's `engine/tools/js/heatmap_validate.mjs` for the Jensen target (127, -205)).
+`/heightmaps/`; `--reference` is the output of SquadCalc's `engine/tools/js/heatmap_validate.mjs` for the Jensen target (131, -199)).
 The heatmap is off by default: no button in the target dialog without the volume layer or for a weapon that is not direct fire,
 and nothing of it (module, region) is requested before the button is pressed. On the target in a Jensen window the button loads the
 module on demand, the region is fetched and used (legend: *Exact triangles within 56 m of the target*), a target without region says

@@ -229,7 +229,7 @@ const WEAPON_FROM = { x: 40, y: -200 };
             result[name] = (await map.volume.heightsAt(latlng)).choices.map((choice) => choice.kind);
         }
         return result;
-    }, { points: { window: WINDOW_POINT, building: BUILDING, doorway: { x: 95.0075, y: -174.0205 } }, b: bounds });
+    }, { points: { window: WINDOW_POINT, building: BUILDING, doorway: { x: 91.875, y: -187.75 } }, b: bounds });
     check("the vertical ray finds a window, a doorway, floors and ceilings in the buildings of Jensen", openings.window.includes("window") && openings.doorway.includes("doorway") && openings.building.includes("floor") && openings.building.includes("ceiling"), JSON.stringify(openings));
 
     check("console and requests are clean", problems.length === 0, problems.join(" | ") || "no errors, warnings or failed requests");

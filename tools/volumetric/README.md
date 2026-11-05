@@ -261,6 +261,12 @@ python py/publish_volume.py <slug> <slug>/<slug>.vcol <slug>/terrain.bin ~/apps/
 ```
 
 The served `meta.json`, not the older one under `~/data/squad-heightmaps`, gives the grid (Kokan and Chora are 0.5 m there).
+All 25 maps were published this way on 2026-11-05 (the exact conservative builds): `volume.vcol` 0.1 to 48.6 MB and `terrain.bin` 0.4 to 13.0 MB
+per map, the table is in SquadCalc `engine/README.md`, "Files served for each map". The meta.json of each map was copied to
+`meta.json.bak.20261105-volumes2` first, the replaced lattice-built files were moved out of the served directory to
+`~/data/volumetric/old-lattice-served/<slug>/`, and an existing `terrain.bin` was reused where its header (origin, cell,
+width, height) equals the served meta.json grid. `terrain_raster.py` builds its levels in int32 and row blocks, so Chora
+(8129 x 8129 vertices) fits in 4 GB (`PY_MEM=4g`); its output is byte-identical after gunzip to the earlier encoder's.
 `tools/browser_check/volume_check.mjs <site URL>` checks the result in Chromium: no request before the setting is on, the
 files and the engine load, the parity segments of `volume_cases.json` (`py/pick_volume_cases.py`: Jensen and Kokan, walls
 block, doorway and window openings pass), the landscape against the heightmap, the line of fire and the fire coverage with

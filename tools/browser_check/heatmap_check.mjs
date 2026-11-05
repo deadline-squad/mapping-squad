@@ -15,9 +15,9 @@
 //
 //     node heatmap_check.mjs <site URL> --reference <dir> [--shots <dir>] [--height <kind>:<index>]
 //
-// --height names the height of the target that the reference holds (default window:1, the window 1.6 m over the landscape of
-// the building at (127, -205), which the sample-lattice voxel file offers; the exact-voxeliser file closes that window, the
-// dialog then offers the roof, so use roof:0 with a reference written for `--height roof:0`).
+// --height names the height of the target that the reference holds (default window:0, the only window of the building at
+// (131, -199), 1.6 m over the landscape, which the exact-voxeliser file keeps; the window at (127, -205) of the sample-lattice
+// file is closed in it, so a reference written for another target or height needs its own `--height`, e.g. roof:0).
 
 // <site URL> is a served build with `npm run build:engine` done, the maps' volume files and the Jensen region
 // (tools/volumetric/py/publish_regions.py) under /heightmaps/. Environment: PLAYWRIGHT_CORE, CHROME as for
@@ -34,7 +34,7 @@ if (!base || !referenceDir) {
     process.exit(2);
 }
 const shots = resolve(argument("--shots", "shots"));
-const HEIGHT = argument("--height", "window:1");
+const HEIGHT = argument("--height", "window:0");
 const [HEIGHT_KIND, HEIGHT_INDEX = "0"] = HEIGHT.split(":");
 /** The dialog's text for the chosen height: the window of the validation is the one 1.6 m over the landscape */
 const HEIGHT_OPTION = HEIGHT_KIND === "window" ? /^Window \+1\.6/ : new RegExp(`^${HEIGHT_KIND}`, "i");
@@ -47,8 +47,8 @@ function check(label, ok, detail) {
 }
 
 // Jensen: the target of the validation, in a window of a building (1.6 m over the landscape), inside the precision region
-// centred at (221, -229), 94 m from its centre along X: the exact triangles reach 56 m around the target
-const TARGET = { x: 127, y: -205 };
+// centred at (221, -229), 90 m from its centre along X: the exact triangles reach 60 m around the target
+const TARGET = { x: 131, y: -199 };
 const WINDOW = { x0: -404, y0: -1104, size: 1000 };
 const VALIDATION_WEAPON = "DF_M2A1_50";
 const SHORT_RANGE_WEAPON = "DF_M203_M320_GP_25_HK79_SL40";
@@ -192,8 +192,8 @@ const shown = await page.evaluate(() => {
 });
 const scriptsAfter = requests.filter((url) => /\.js(\?|$)/.test(url));
 check("pressing the button loads the module on demand", scriptsAfter.length > scriptsBefore.length, JSON.stringify(scriptsAfter.filter((url) => !scriptsBefore.includes(url)).map((url) => url.split("/").pop())));
-check("the target's precision region was fetched and used", requests.some((url) => /regions\/region_221_-229\.rtri/.test(url)) && shown.exact === true && shown.margin === 56, `exact ${shown.exact}, margin ${shown.margin} m, region load ${shown.loadMs} ms`);
-check("the legend says how far the exact triangles reach", shown.legend === "block" && /Exact triangles within 56 m of the target/.test(shown.status), JSON.stringify(shown.status));
+check("the target's precision region was fetched and used", requests.some((url) => /regions\/region_221_-229\.rtri/.test(url)) && shown.exact === true && shown.margin === 60, `exact ${shown.exact}, margin ${shown.margin} m, region load ${shown.loadMs} ms`);
+check("the legend says how far the exact triangles reach", shown.legend === "block" && /Exact triangles within 60 m of the target/.test(shown.status), JSON.stringify(shown.status));
 const live = await page.evaluate(() => { const status = document.getElementById("positionHeatStatus"); return { role: status.getAttribute("role"), live: status.getAttribute("aria-live") }; });
 check("the legend's status line is a live region for screen readers", live.role === "status" && live.live === "polite", JSON.stringify(live));
 check("the dialog closed to show the map, and the button now hides", shown.dialogOpen === false, JSON.stringify(shown));

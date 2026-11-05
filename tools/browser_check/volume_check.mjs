@@ -8,6 +8,7 @@
 //
 // <site URL> is a served build with `npm run build:engine` done and the maps' volume files under /heightmaps/.
 // Environment: PLAYWRIGHT_CORE, CHROME as for browser_check.mjs. Exits with 1 on any failure.
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
@@ -60,6 +61,17 @@ async function open(mapName) {
         return map.activeMap.name === name && map.heightmap?.precise && !map._spinning;
     }, mapName, { timeout: 120000 });
     return { context, page, problems, requests };
+}
+
+/** Resident memory in MB of this process's descendants (the browser, its renderers and its workers, shared pages counted once per process) */
+function browserRssMb() {
+    const rows = execFileSync("ps", ["-eo", "pid=,ppid=,rss="], { encoding: "utf8" }).trim().split("\n").map((line) => line.trim().split(/\s+/).map(Number));
+    const family = new Set([process.pid]);
+    for (let grew = true; grew;) {
+        grew = false;
+        for (const [pid, parent] of rows) if (family.has(parent) && !family.has(pid)) { family.add(pid); grew = true; }
+    }
+    return rows.filter(([pid]) => family.has(pid) && pid !== process.pid).reduce((sum, row) => sum + row[2], 0) / 1024;
 }
 
 const volumeRequests = (requests) => requests.filter((request) => /volume\.vcol|terrain\.bin|\/engine\//.test(request.url));
@@ -213,13 +225,20 @@ for (const [slug, mapName] of [["jensen", "Jensen"], ["kokan", "Kokan"]]) {
     await context.close();
 }
 
-// The largest files: the layer loads, the landscape agrees with the heightmap and the coverage finishes
-for (const mapName of ["Fallujah", "GooseBay", "Kamdesh"]) {
+// The largest files (every map has volume files now; the six biggest are 25 to 49 MB gzip): the layer loads, the landscape
+// agrees with the heightmap and the coverage finishes. Reported: load = from the setting being turned on to the worker's
+// "ready" (download, sha256, engine start, decompression of both files), and the resident memory of the browser's process
+// tree (peak sampled every 50 ms during the load, and after the coverage) against its size before the setting was turned on
+for (const mapName of ["Fallujah", "GooseBay", "Kamdesh", "Skorpo", "BlackCoast", "Chora", "Gorodok", "Harju", "Yehorivka"]) {
     const { context, page, problems, requests } = await open(mapName);
+    const baselineMb = browserRssMb();
+    let peakMb = baselineMb;
+    const sampler = setInterval(() => { peakMb = Math.max(peakMb, browserRssMb()); }, 50);
     const started = Date.now();
     await page.evaluate(() => window.__App.userSettings.set("volumeLayer", true));
-    await page.waitForFunction(() => ["ready", "unavailable"].includes(window.__App.minimap.volume.state), null, { timeout: 180000 });
+    await page.waitForFunction(() => ["ready", "unavailable"].includes(window.__App.minimap.volume.state), null, { timeout: 300000 });
     const loadMs = Date.now() - started;
+    const loadedMb = browserRssMb();
     const result = await page.evaluate(async () => {
         const map = window.__App.minimap;
         const volume = map.volume;
@@ -244,21 +263,28 @@ for (const mapName of ["Fallujah", "GooseBay", "Kamdesh"]) {
         await new Promise((resolve) => { const timer = setInterval(() => { if (map.coverage.overlay) { clearInterval(timer); resolve(); } }, 50); });
         return { ready: true, hits: differences.length, points: paths.length, median: differences[Math.floor(differences.length / 2)], coverageMs: Math.round(performance.now() - started), jobs: volume.coverageJobs };
     });
+    clearInterval(sampler);
+    const finalMb = browserRssMb();
+    peakMb = Math.max(peakMb, finalMb);
     const files = volumeRequests(requests).map((request) => Number(request.headers["content-length"] ?? 0));
+    const memory = `browser RSS ${baselineMb.toFixed(0)} MB before, peak ${peakMb.toFixed(0)} MB, ${loadedMb.toFixed(0)} MB when ready, ${finalMb.toFixed(0)} MB after the coverage`;
     check(`${mapName}: loads, the landscape agrees with the heightmap, the coverage finishes`, result.ready && result.hits > result.points / 4 && Math.abs(result.median) < 0.1 && result.jobs >= 1,
-        `${JSON.stringify(result)}; loaded in ${loadMs} ms, ${(files.reduce((sum, size) => sum + size, 0) / 1e6).toFixed(1)} MB`);
+        `${JSON.stringify(result)}; load ${loadMs} ms, ${(files.reduce((sum, size) => sum + size, 0) / 1e6).toFixed(1)} MB downloaded; ${memory}`);
     check(`${mapName}: console and requests are clean`, problems.length === 0, problems.join(" | ") || "clean");
     await context.close();
 }
 
 {
-    // A map without volume file keeps the heightmap and says nothing
+    // A map whose volume file cannot be fetched (every map has one now: the request is answered with 404) keeps the heightmap
+    // and says so once in the console
     const { context, page, problems, requests } = await open("AlBasrah");
+    await context.route(/\/heightmaps\/albasrah\/volume\.vcol/, (route) => route.fulfill({ status: 404, body: "" }));
     await page.evaluate(() => window.__App.userSettings.set("volumeLayer", true));
     await page.waitForFunction(() => window.__App.minimap.volume.state === "unavailable", null, { timeout: 60000 });
-    const state = await page.evaluate(() => ({ ready: window.__App.minimap.volume.ready, worker: window.__App.minimap.volume.worker !== null }));
-    check("a map without volume file keeps the heightmap", !state.ready && !state.worker && volumeRequests(requests).length === 0, JSON.stringify({ ...state, requests: volumeRequests(requests).length }));
-    check("a map without volume file: console and requests are clean", problems.length === 0, problems.join(" | ") || "clean");
+    const state = await page.evaluate(() => ({ ready: window.__App.minimap.volume.ready, heightmap: Boolean(window.__App.minimap.heightmap?.precise) }));
+    check("a map whose volume file is missing keeps the heightmap", !state.ready && state.heightmap, JSON.stringify(state));
+    const unexpected = problems.filter((problem) => !/HTTP 404: .*volume\.vcol|Failed to load resource|\[VOLUME\]/.test(problem));
+    check("a map whose volume file is missing: only the 404 and the layer's own warning in the console", unexpected.length === 0 && problems.some((problem) => /\[VOLUME\]/.test(problem)), problems.join(" | "));
     await context.close();
 }
 
