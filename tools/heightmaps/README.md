@@ -78,7 +78,74 @@ Checks (Squad build 26005357):
 * SquadCalc's 8-bit heightmap of Skorpo is SquadHeight quantized to 2.09 m steps: error up to
   1.05 m (`compare_squadcalc.py`).
 
-Belaya is not in the current game build and has no heightmap here.
+Belaya has no heightmap here: its levels are not in the server package, see the map inventory below.
+
+## Map inventory: what the server package can play
+
+Evidence is the Squad dedicated server build 26005357 (`steamapps/appmanifest_403240.acf`): its `ServerConfig/LayerVoting.cfg`
+and `LevelRotation.cfg`, `Manifest_UFSFiles_Linux.txt` (88727 `.uasset`/`.umap` entries, the same 88727 that the pak
+index lists with `SquadExtract list`, so the install is complete) and the pak contents. A level is *playable* when it is in
+`LevelRotation.cfg` and its gameplay layers (`Content/Maps/<dir>/Gameplay_Layers/<Layer_Id>.umap`, or the plugin's
+`Content/Maps/Gameplay_Layers`) are shipped.
+
+| Level | Layers in LayerVoting.cfg | of them with a layer `.umap` in the build | in LevelRotation.cfg | heightmap here |
+|---|---|---|---|---|
+| AlBasrah | 7 | 6 | yes | yes |
+| Anvil | 4 | 4 | yes | yes |
+| Belaya | 6 | 0 | yes | no |
+| BlackCoast | 6 | 6 | yes | yes |
+| Chora | 8 | 8 | yes | yes |
+| Fallujah | 7 | 7 | yes | yes |
+| FoolsRoad | 8 | 6 | yes | yes |
+| GooseBay | 4 | 4 | yes | yes |
+| Gorodok | 8 | 8 | yes | yes |
+| Harju | 9 | 9 | yes | yes |
+| Kamdesh | 5 | 5 | yes | yes |
+| Kohat | 5 | 5 | yes | yes |
+| Kokan | 7 | 6 | yes | yes |
+| Lashkar | 7 | 7 | yes | yes |
+| Logar | 4 | 4 | yes | yes |
+| Manicouagan | 6 | 6 | yes | yes |
+| Mestia | 5 | 5 | yes | yes |
+| Mutaha | 6 | 6 | yes | yes |
+| Narva | 8 | 8 | yes | yes |
+| PacificProvingGrounds | 1 | 1 | yes | yes |
+| Sanxian | 7 | 7 | yes | yes |
+| Skorpo | 3 | 3 | yes | yes |
+| Sumari | 7 | 7 | yes | yes |
+| Tallil | 5 | 5 | yes | yes |
+| Yehorivka | 9 | 9 | yes | yes |
+
+* `LevelRotation.cfg` names 25 levels; `Jensen` (Jensen's Range) is not among them (`ExcludedLevels.cfg` excludes `JensensRange`;
+  its layers are in `ExcludedLayers.cfg`), so our 25 maps are 24 playable levels plus Jensen's Range, and the server's 25 playable
+  levels are our 24 plus Belaya.
+* Layers named in `LayerVoting.cfg` without a `.umap` in the build: `AlBasrah_Insurgency_v1`, `FoolsRoad_RAAS_v2`,
+  `FoolsRoad_RAAS_v3`, `Kokan_RAAS_v2` (the voting list is longer than the shipped layers; the maps themselves are complete).
+  The line `Anvil_TC_v1Belaya_AAS_v1` has no line break between two layer ids and matches no layer: `Belaya_AAS_v1` is not
+  voted either (Belaya has 6 readable layers plus that one). `Skirmish`/`Seed` layers commented out with `//` are not counted.
+* **Belaya is configured but not shipped.** the lines matching `grep -i belaya` are 9 in each of `LayerVoting.cfg`, `LayerVotingNight.cfg`,
+  `LayerVotingLowPlayers.cfg` and 1 in `LevelRotation.cfg`, but the pak has 49 files whose path contains "Belaya" and none is a
+  `.umap`: only art (`Content/Maps/Belaya_Pass/`: surrounding-terrain materials and normal maps, rock and snow materials, the
+  minimap and loading-screen textures, `Belaya_Snow` particles, water materials, the loading music). There is no level, no
+  landscape and no layer, so the landscape collision and the static meshes that `heightmaps.sh extract` reads do not exist for
+  Belaya in this build, and a heightmap, a statics export or a voxel layer cannot be built from it (SquadHeight 1.3.0 does have
+  a Belaya, exported in June 2026 from the Mod SDK with bounds x -1954..1950, y -2080..1825, but it was not made from the server
+  package and cannot be fused or checked against it).
+* **Not playable, a plugin descriptor only:** `Plugins/Expansions/{Aussie,EastAsia,Haiyan,MijinHighway,OperationDragonfly,
+  OskilRiver,Saaremaa,Yehorivka_Remaster,PCG_Test}` are one `.uplugin` file each (no `.umap`, no asset), and so are the
+  `Expansions/{Gorodok,Mestia,Narva,Yehorivka}` descriptors whose content lives under `Content/Maps`. `Content/Maps/Forest` is 42
+  texture/material files without a level. None of these names is in `LayerVoting.cfg` or `LevelRotation.cfg`.
+  The content-bearing plugins are `Al_Basrah` (347 files), `Expansions/BlackCoast` (353), `Expansions/Harju` (287) and
+  `Expansions/SanxianIslands` (309).
+* **Yehorivka_Remaster does not supersede Yehorivka.** The remaster plugin has no content in this build (one `.uplugin`
+  file), and the nine playable Yehorivka layers stream `Maps/Yehorivka/Sublevels/070_Landscape/L_070_Landscape_Yehorivka`
+  (`SquadExtract json <layer>.umap LevelStreamingAlwaysLoaded` on `Yehorivka_AAS_v1`, `_RAAS_v1`, `_Invasion_v2`; no
+  streaming level names the remaster). That is the landscape `py/maps.py` extracts, so the Yehorivka data is current.
+  It would become stale only when a build ships the remaster's content and its layers.
+
+To add Belaya (or any map) once its level files are in the package: `SquadExtract list Belaya` (the extractor below) must show a `.umap`; then add the
+`py/maps.py` entry with its landscape level, `extract`, `build belaya`, and follow the steps of the other maps (relief tiles,
+topometrics, statics, volumetric, `src/data/maps.js`, locales).
 
 ## Running
 
