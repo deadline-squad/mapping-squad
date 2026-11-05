@@ -258,6 +258,14 @@ const WEAPON_FROM = { x: 40, y: -200 };
     const fob = await markerPopup("deployable_fob", 0);
     check("a FOB marker opens a popup with the shells that destroy the radio (mortar round)", /Shells to destroy/.test(fob) && !/inferred/.test(fob) && /FOB radio: 2$/.test(fob), fob);
     await page.screenshot({ path: `${shots}/structure-popup-fob.png` });
+    // The open popup follows the weapon and the shell (review finding 9)
+    const popupText = () => page.$eval(".structurePopup .leaflet-popup-content", (element) => element.innerText.replace(/\s+/g, " ").trim());
+    await selectWeapon(page, "DF_Tank_AP_M256_Rh120");
+    const apPopup = await popupText();
+    check("the open structure popup is refreshed when the weapon changes", /FOB radio: no structure damage$/.test(apPopup), apPopup);
+    await selectWeapon(page, "Mortar");
+    const backPopup = await popupText();
+    check("and again when it changes back", backPopup === fob, backPopup);
     await page.keyboard.press("Escape");
     await page.evaluate(() => document.querySelectorAll(".structurePopup .leaflet-popup-close-button").forEach((button) => button.click()));
     const hab = await markerPopup("deployable_hab", 40);
