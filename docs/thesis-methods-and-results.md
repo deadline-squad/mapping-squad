@@ -141,14 +141,14 @@ is itself a sample of the same triangles: INFERRED to be adequate because the ex
 ## 4. Voxel layer (`VCOL1`)
 
 A top-surface heightmap cannot represent what is under a bridge deck or behind a wall thinner than a cell. The layer
-stores, per occupied column, the z-runs of voxels that contain a sample point of a Visibility-blocking collision triangle
+stores, per occupied column, the z-runs of voxels that a Visibility-blocking collision triangle intersects
 (`V-README`, "Representation").
 
 | Property | Value | Source | Label |
 |---|---|---|---|
 | Format | `VCOL1`: per occupied column the z-runs, varint-packed, gzip; decoder in Rust/wasm (`SC:engine/src/voxel.rs`), JavaScript (`AGL:tools/volumetric/js/vcol.mjs`), WGSL (`SC:engine/wgsl/voxel.wgsl`); writer `py/codec.py` | `V-README` | VERIFIED |
 | Voxel | 0.5 m horizontal x 0.25 m vertical for the evaluated files (1.0 m x 0.25 m also built) | `V-README` | VERIFIED |
-| A voxel is marked | when a barycentric sample (spacing 0.45 x the smallest voxel edge) of a blocking triangle lies in it; voxels at or under landscape + 0.1 m are dropped; up-facing samples kept as a second set | `V-README`, `py/columns.py` | VERIFIED |
+| A voxel is marked | when a blocking triangle intersects it (exact conservative voxelisation: per row, column and cell the triangle is cut by the slab or rectangle and its z-range marked; half-open voxel boxes); voxels at or under landscape + 0.1 m are dropped; the facing of each triangle (up, down) is kept as separate sets | `V-README`, `py/columns.py` | VERIFIED |
 | Fallujah statics, size (gzip) | 1.0 x 0.25 m: 1.57 MB (8.4 M voxels); 1.0 x 0.5: 1.16 MB; 2.0 x 0.5: 0.40 MB; 0.5 x 0.25: 4.73 MB (20.1 M voxels); 0.5 x 0.5: 3.44 MB; trees add 0.44 M voxels at 1.0 m | `V-README` | VERIFIED |
 | Fallujah whole-map comparison | 7.5 MB PNG heightmap, 1.6 MB voxel 1.0 m, 4.7 MB voxel 0.5 m (+ trees) | `V-README` | VERIFIED |
 | Decode / one 40 m segment test (Fallujah 0.5 m, Node 26) | 322 ms / 28 us | `V-README` | VERIFIED (one run) |
@@ -302,7 +302,7 @@ segment's height range (`E-README`, "Voxel DDA against the python model and the 
 
 Explained, per `E-README`: all not-grazing false blocks (1 311 + 4 491) were checked and the reported voxel overlaps a
 triangle; in all not-grazing false clear cases (115 + 74) the voxel holding the exact hit is empty in the file because the
-builder's sample lattice lost a clipped corner.
+builder's sample lattice lost a clipped corner. The table above is the sample-lattice builder; the exact voxelisation (`py/columns.py`, issue #23) has 0 false clear on the same segments (false blocked 3 948 -> 4 039 Jensen, 8 331 -> 8 508 Kokan; wrong 4.08 -> 4.04 %, 8.41 -> 8.51 %).
 
 ### 8.2 Precision pass (`RTRI1`)
 
