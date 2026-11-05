@@ -33,6 +33,7 @@ LANDSCAPE_ROOT = "/data/squad-extract/landscapes"
 LEVELS = 65535
 MIN_STEP_M = 0.05
 STRIP_CELLS = 1_000_000
+LEVEL_ROWS = 256
 
 
 def sample_grid(actors, min_x, min_y, cell, width, height):
@@ -70,11 +71,18 @@ def encode(z, hole, min_x, min_y, cell):
     """gzip bytes of the TER1 file for heights `z` [height, width] (NaN: no landscape) and the hole mask."""
     height, width = z.shape
     z_min, step = choose_step(z)
-    levels = np.where(np.isnan(z), 0, np.rint((np.nan_to_num(z) - z_min) / step) + 1).astype(np.int64)
+    # int32 and row blocks keep the peak near three copies of the grid (a 66 M-vertex map fits in 4 GB)
+    levels = np.zeros(z.shape, np.int32)
+    for first in range(0, height, LEVEL_ROWS):
+        block = z[first:first + LEVEL_ROWS]
+        levels[first:first + LEVEL_ROWS] = np.where(np.isnan(block), 0, np.rint((np.nan_to_num(block) - z_min) / step) + 1)
     padded = np.pad(levels, ((1, 0), (1, 0)))
     residual = (levels - (padded[1:, :-1] + padded[:-1, 1:] - padded[:-1, :-1])) & 0xFFFF
+    del padded, levels
     signed = np.where(residual >= 0x8000, residual - 0x10000, residual)
+    del residual
     zigzag = ((signed << 1) ^ (signed >> 15)) & 0xFFFF
+    del signed
     holes = np.flatnonzero(hole.ravel())
     head = struct.pack(HEADER, MAGIC, min_x, min_y, cell, z_min, step, width, height, len(holes))
     planes = (zigzag & 0xFF).astype(np.uint8).tobytes() + (zigzag >> 8).astype(np.uint8).tobytes()

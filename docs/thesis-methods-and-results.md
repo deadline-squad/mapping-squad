@@ -157,10 +157,40 @@ stores, per occupied column, the z-runs of voxels that a Visibility-blocking col
 | Decode / one 40 m segment test (Fallujah 0.5 m, Node 26) | 322 ms / 28 us | `V-README` | VERIFIED (one run) |
 | Memory in the browser (Fallujah 0.5 m) | about 100 MB of typed arrays | `V-README` | UNVERIFIED (an estimate in the text) |
 
-Files built so far (`ls -l ~/data/volumetric/maps/*/*.vcol`, 2026-11-04†): Blackcoast 29 982 119 B, Fallujah 5 072 836,
-Foolsroad 6 092 960, Goosebay 15 405 454, Jensen 117 349, Kamdesh 14 350 000, Kohat 2 296 223, Kokan 789 376,
-Logar 1 407 411, Mestia 7 435 803, Pacific 2 855 445, Sumari 959 820: **12 of 25 maps**. The remaining 13 are issue
-#22 item B2 (see the coverage table in section 12).
+Files built and published (the exact conservative builder, agl dev `e34e481` + `f116a2b`, issue #22 items B2 and B5; sizes are the gzip
+files as served, 2026-11-05, MB = 10^6 bytes): **all 25 maps**.
+
+| map | voxels | columns | volume.vcol MB | terrain.bin MB | total MB |
+|---|---:|---:|---:|---:|---:|
+| Al Basrah | 30 451 611 | 6 651 616 | 6.7 | 4.0 | 10.6 |
+| Anvil | 10 967 659 | 3 799 365 | 3.8 | 3.3 | 7.1 |
+| Black Coast | 56 465 424 | 11 436 477 | 29.8 | 5.0 | 34.9 |
+| Chora | 91 931 376 | 46 320 086 | 36.9 | 5.1 | 42.0 |
+| Fallujah | 26 207 218 | 4 293 607 | 3.7 | 2.2 | 5.9 |
+| Fool's Road | 11 313 484 | 1 954 982 | 6.2 | 1.0 | 7.1 |
+| Goose Bay | 31 546 317 | 8 328 396 | 15.0 | 3.6 | 18.6 |
+| Gorodok | 84 623 955 | 16 190 947 | 39.3 | 5.8 | 45.1 |
+| Harju | 83 968 689 | 14 156 430 | 41.2 | 3.9 | 45.1 |
+| Jensen | 723 221 | 113 863 | 0.1 | 3.6 | 3.7 |
+| Kamdesh | 26 351 783 | 5 611 970 | 14.4 | 5.4 | 19.7 |
+| Kohat | 5 294 803 | 2 140 481 | 2.0 | 6.5 | 8.5 |
+| Kokan | 2 198 643 | 536 181 | 0.7 | 4.0 | 4.7 |
+| Lashkar | 32 899 158 | 12 971 740 | 13.3 | 9.9 | 23.2 |
+| Logar | 3 044 202 | 789 524 | 1.3 | 1.1 | 2.4 |
+| Manicouagan | 63 760 981 | 9 631 372 | 17.6 | 5.2 | 22.7 |
+| Mestia | 13 341 383 | 3 114 491 | 7.6 | 1.2 | 8.8 |
+| Mutaha | 4 367 244 | 755 369 | 1.0 | 1.7 | 2.7 |
+| Narva | 22 401 380 | 4 478 752 | 6.0 | 1.8 | 7.8 |
+| Pacific | 6 432 244 | 1 597 851 | 2.8 | 5.2 | 8.0 |
+| Sanxian | 53 268 036 | 7 028 913 | 16.4 | 3.8 | 20.2 |
+| Skorpo | 35 144 900 | 10 512 339 | 24.8 | 8.9 | 33.7 |
+| Sumari | 5 052 864 | 1 903 765 | 1.0 | 0.4 | 1.3 |
+| Tallil | 25 877 723 | 16 031 048 | 5.2 | 4.6 | 9.8 |
+| Yehorivka | 122 097 455 | 18 617 851 | 48.6 | 13.0 | 61.6 |
+
+`volume.vcol` 0.1 to 48.6 MB, `terrain.bin` 0.4 to 13.0 MB, 1.3 to 61.6 MB per map, 455 MB in all. In headless Chromium the biggest
+map (Yehorivka, 48.6 + 13.0 MB) is ready 3.3 to 3.7 s after the setting is turned on and Chora (46 million columns) 4.2 to 4.4 s; the browser's
+process tree grows by 1.4 GB (Yehorivka) and 1.8 GB (Chora) (`volume_check.mjs`, engine/README.md "Files served for each map").
 
 ### 4.1 What the game files contain (Fallujah)
 
@@ -408,7 +438,7 @@ the AGS-17 group-size test is the smallest measurement that settles it.
 | Table | Content | Produced by | Status |
 |---|---|---|---|
 | Reverse-position heatmap checked against the exact tracer on a target inside a building: share of heatmap cells wrong, false clear / false blocked, time per heatmap | | `#22` item C5 | PENDING |
-| Map coverage: `.vcol` built / 25, build time and size per map, `build_all.log` without FAILED | 12 of 25 built as of section 4 | `#22` item B2 | PENDING |
+| Map coverage: `.vcol` built / 25, build time and size per map, `build_all.log` without FAILED | 25 of 25 built and published (sizes in section 4; build times per map are not tabulated) | `#22` items B2, B5 | VERIFIED for sizes and publication, build times PENDING |
 | Heatmap and DDA timings on a real GPU | | `#22` item C9 (a GPU on `tk104`, otherwise "not measured") | PENDING |
 | 2D damage/splash footprint on the live site | | `#22` item C6 | PENDING |
 

@@ -39,8 +39,8 @@ function check(label, ok, detail) {
 }
 
 // Jensen: the target of the validation, in a window of a building (1.6 m over the landscape), inside the precision region
-// centred at (221, -229), 94 m from its centre along X: the exact triangles reach 56 m around the target
-const TARGET = { x: 127, y: -205 };
+// centred at (221, -229), 90 m from its centre along X: the exact triangles reach 60 m around the target
+const TARGET = { x: 131, y: -199 };
 const WINDOW = { x0: -404, y0: -1104, size: 1000 };
 const VALIDATION_WEAPON = "DF_M2A1_50";
 const SHORT_RANGE_WEAPON = "DF_M203_M320_GP_25_HK79_SL40";
@@ -105,8 +105,8 @@ async function clickTarget(page) {
     await page.mouse.click(box.x, box.y);
 }
 
-const reference = JSON.parse(readFileSync(`${referenceDir}/heatmap-jensen-${TARGET.x}_${TARGET.y}.json`)).find((entry) => entry.height === "window:1");
-if (!reference) throw new Error("the reference has no window:1 run");
+const reference = JSON.parse(readFileSync(`${referenceDir}/heatmap-jensen-${TARGET.x}_${TARGET.y}.json`)).find((entry) => entry.height === "window:0");
+if (!reference) throw new Error("the reference has no window:0 run");
 
 const { context, page, problems, requests } = await open("Jensen");
 
@@ -184,8 +184,8 @@ const shown = await page.evaluate(() => {
 });
 const scriptsAfter = requests.filter((url) => /\.js(\?|$)/.test(url));
 check("pressing the button loads the module on demand", scriptsAfter.length > scriptsBefore.length, JSON.stringify(scriptsAfter.filter((url) => !scriptsBefore.includes(url)).map((url) => url.split("/").pop())));
-check("the target's precision region was fetched and used", requests.some((url) => /regions\/region_221_-229\.rtri/.test(url)) && shown.exact === true && shown.margin === 56, `exact ${shown.exact}, margin ${shown.margin} m, region load ${shown.loadMs} ms`);
-check("the legend says how far the exact triangles reach", shown.legend === "block" && /Exact triangles within 56 m of the target/.test(shown.status), JSON.stringify(shown.status));
+check("the target's precision region was fetched and used", requests.some((url) => /regions\/region_221_-229\.rtri/.test(url)) && shown.exact === true && shown.margin === 60, `exact ${shown.exact}, margin ${shown.margin} m, region load ${shown.loadMs} ms`);
+check("the legend says how far the exact triangles reach", shown.legend === "block" && /Exact triangles within 60 m of the target/.test(shown.status), JSON.stringify(shown.status));
 const live = await page.evaluate(() => { const status = document.getElementById("positionHeatStatus"); return { role: status.getAttribute("role"), live: status.getAttribute("aria-live") }; });
 check("the legend's status line is a live region for screen readers", live.role === "status" && live.live === "polite", JSON.stringify(live));
 check("the dialog closed to show the map, and the button now hides", shown.dialogOpen === false, JSON.stringify(shown));
@@ -263,7 +263,7 @@ await page.evaluate(() => window.__App.userSettings.set("volumeLayer", true));
 await page.waitForFunction(() => window.__App.minimap.volume.ready, null, { timeout: 120000 });
 
 // --- The page's run against the validation's --------------------------------------------------------------------------
-const bins = (name) => new Uint8Array(readFileSync(`${referenceDir}/heatmap-jensen-${TARGET.x}_${TARGET.y}-window1-${name}.bin`));
+const bins = (name) => new Uint8Array(readFileSync(`${referenceDir}/heatmap-jensen-${TARGET.x}_${TARGET.y}-window0-${name}.bin`));
 const pageRun = await page.evaluate(async ({ reference, weaponName }) => {
     const app = window.__App;
     const map = app.minimap;
