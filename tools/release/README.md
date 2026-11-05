@@ -9,6 +9,8 @@ tools/release/build_release.sh                       # -> ~/work/release/<today>
 tools/release/build_release.sh --out /tmp/rel --date 2026-11-04 --no-dist
 tools/release/build_release.sh --scan-only <dir>     # only the secret scan, exit 0 clean / 2 findings
 tools/release/test_scan.sh                           # the scan against planted fake secrets
+python3 tools/release/check_report_refs.py           # every path, commit and issue number of the report resolves (needs gh; --no-issues skips issues)
+python3 -m unittest tools/release/test_check_report_refs.py   # its tests
 ```
 
 | option | meaning |

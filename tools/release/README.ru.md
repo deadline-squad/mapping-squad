@@ -9,6 +9,8 @@ tools/release/build_release.sh                       # -> ~/work/release/<сег
 tools/release/build_release.sh --out /tmp/rel --date 2026-11-04 --no-dist
 tools/release/build_release.sh --scan-only <каталог> # только проверка на секреты, код 0 чисто / 2 найдено
 tools/release/test_scan.sh                           # проверка на подставных секретах
+python3 tools/release/check_report_refs.py           # каждый путь, коммит и номер задачи отчёта существуют (нужен gh; --no-issues пропускает задачи)
+python3 -m unittest tools/release/test_check_report_refs.py   # его тесты
 ```
 
 | параметр | смысл |
