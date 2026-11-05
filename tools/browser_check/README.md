@@ -68,7 +68,7 @@ failure.
 ## heatmap_check.mjs: firing positions and the damage zone with cover
 
 ```sh
-node heatmap_check.mjs <site URL> --reference <dir> [--shots <dir>]
+node heatmap_check.mjs <site URL> --reference <dir> [--shots <dir>] [--height <kind>:<index>]
 ```
 
 (deadline-squad/deadline-squadcalc#22 C5, C6; a build with the engine, the volume files and the Jensen precision region under
@@ -78,7 +78,11 @@ and nothing of it (module, region) is requested before the button is pressed. On
 module on demand, the region is fetched and used (legend: *Exact triangles within 56 m of the target*), a target without region says
 *Voxels only*, and hiding, dragging, deleting the target and turning the volume layer off remove the image. The page's own run
 with the validation's parameters gives the validation's clear, blocked and out positions (at most 0.05 % flip on the last bit of a
-float) and, against the exact triangle tracer's output, no false clear and no false blocked position. The damage zone of the same
+float) and, against the exact triangle tracer's output, no worse than the validation's own run (no false clear and no false blocked
+position for the window of the sample-lattice file). `--height` (default `window:1`) names the height the reference holds: the
+exact-voxeliser `volume.vcol` closes the windows of that building (the dialog offers `Roof +6.3m` only), so after it is published
+use `--height roof:0 --reference <heat-val-exact>`, a reference written by `heatmap_validate.mjs --height roof:0,ground` on the new
+file; its 8 false blocked positions are all beyond 100 m from the target, outside the 56 m the region covers. The damage zone of the same
 target is computed by the layer's worker with the voxels as cover and differs from the heightmap's. Screenshots (the dialog button,
 the heatmap of the window, of a target on open ground, the damage zone) go to `--shots`. Exits with 1 on any failure.
 

@@ -13,8 +13,12 @@
 //     differs from the heightmap's (Cover).
 // Screenshots go to --shots (default ./shots).
 //
-//     node heatmap_check.mjs <site URL> --reference <dir> [--shots <dir>]
+//     node heatmap_check.mjs <site URL> --reference <dir> [--shots <dir>] [--height <kind>:<index>]
 //
+// --height names the height of the target that the reference holds (default window:1, the window 1.6 m over the landscape of
+// the building at (127, -205), which the sample-lattice voxel file offers; the exact-voxeliser file closes that window, the
+// dialog then offers the roof, so use roof:0 with a reference written for `--height roof:0`).
+
 // <site URL> is a served build with `npm run build:engine` done, the maps' volume files and the Jensen region
 // (tools/volumetric/py/publish_regions.py) under /heightmaps/. Environment: PLAYWRIGHT_CORE, CHROME as for
 // browser_check.mjs. Exits with 1 on any failure.
@@ -26,10 +30,14 @@ const base = process.argv[2];
 const argument = (name, fallback) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : fallback);
 const referenceDir = argument("--reference");
 if (!base || !referenceDir) {
-    console.error("usage: node heatmap_check.mjs <site URL> --reference <dir> [--shots <dir>]");
+    console.error("usage: node heatmap_check.mjs <site URL> --reference <dir> [--shots <dir>] [--height <kind>:<index>]");
     process.exit(2);
 }
 const shots = resolve(argument("--shots", "shots"));
+const HEIGHT = argument("--height", "window:1");
+const [HEIGHT_KIND, HEIGHT_INDEX = "0"] = HEIGHT.split(":");
+/** The dialog's text for the chosen height: the window of the validation is the one 1.6 m over the landscape */
+const HEIGHT_OPTION = HEIGHT_KIND === "window" ? /^Window \+1\.6/ : new RegExp(`^${HEIGHT_KIND}`, "i");
 mkdirSync(shots, { recursive: true });
 
 let failures = 0;
@@ -105,8 +113,8 @@ async function clickTarget(page) {
     await page.mouse.click(box.x, box.y);
 }
 
-const reference = JSON.parse(readFileSync(`${referenceDir}/heatmap-jensen-${TARGET.x}_${TARGET.y}.json`)).find((entry) => entry.height === "window:1");
-if (!reference) throw new Error("the reference has no window:1 run");
+const reference = JSON.parse(readFileSync(`${referenceDir}/heatmap-jensen-${TARGET.x}_${TARGET.y}.json`)).find((entry) => entry.height === HEIGHT);
+if (!reference) throw new Error(`the reference has no ${HEIGHT} run`);
 
 const { context, page, problems, requests } = await open("Jensen");
 
@@ -158,8 +166,8 @@ await page.screenshot({ path: `${shots}/heatmap-dialog-button.png` });
 
 // --- The heatmap of the window ------------------------------------------------------------------------------------
 const options = await page.$$eval("#targetHeightSelect option", (list) => list.map((option) => option.textContent));
-const windowOption = options.findIndex((text) => /^Window \+1\.6/.test(text));
-check("the dialog offers the window (+1.6 m) of the building", windowOption > 0, JSON.stringify(options));
+const windowOption = options.findIndex((text) => HEIGHT_OPTION.test(text));
+check(`the dialog offers the height ${HEIGHT} of the building`, windowOption > 0, JSON.stringify(options));
 await page.selectOption("#targetHeightSelect", { index: windowOption });
 await page.waitForTimeout(500);
 
@@ -263,7 +271,7 @@ await page.evaluate(() => window.__App.userSettings.set("volumeLayer", true));
 await page.waitForFunction(() => window.__App.minimap.volume.ready, null, { timeout: 120000 });
 
 // --- The page's run against the validation's --------------------------------------------------------------------------
-const bins = (name) => new Uint8Array(readFileSync(`${referenceDir}/heatmap-jensen-${TARGET.x}_${TARGET.y}-window1-${name}.bin`));
+const bins = (name) => new Uint8Array(readFileSync(`${referenceDir}/heatmap-jensen-${TARGET.x}_${TARGET.y}-${HEIGHT_KIND}${HEIGHT_INDEX}-${name}.bin`));
 const pageRun = await page.evaluate(async ({ reference, weaponName }) => {
     const app = window.__App;
     const map = app.minimap;
@@ -319,12 +327,16 @@ for (let ray = 0; ray < reference.rays; ray++) {
         if (mine === 1 && truth >= 2) falseBlocked++;
     }
 }
-check("against the exact triangles the page's precision run has no false clear and no false blocked position", falseClear === 0 && falseBlocked === 0 && exactClear > 0, `${cells} positions in the window with a shooter, ${exactClear} clear by the exact tracer, false clear ${falseClear}, false blocked ${falseBlocked}`);
+// The validation's own precision run is the bound: 0 and 0 for the window of the sample-lattice file, a handful of false blocked
+// positions beyond the region's reach (the voxels decide there) for the roof of the exact-voxeliser file
+const allowed = reference.precision;
+check("against the exact triangles the page's precision run is no worse than the validation's (none for a target the region covers)", falseClear <= allowed.falseClear && falseBlocked <= allowed.falseBlocked && exactClear > 0,
+    `${cells} positions in the window with a shooter, ${exactClear} clear by the exact tracer, false clear ${falseClear} (validation ${allowed.falseClear}), false blocked ${falseBlocked} (validation ${allowed.falseBlocked})`);
 
 // --- Cover: the damage zone with the voxels ----------------------------------------------------------------------------
 await selectWeapon(page, SHORT_RANGE_WEAPON);
 await place({ x: 60, y: -195 }, TARGET);
-const zone = await page.evaluate(async () => {
+const zone = await page.evaluate(async ({ kind, above }) => {
     const map = window.__App.minimap;
     const target = map.activeTargetsMarkers.getLayers()[0];
     const settle = async (test) => {
@@ -352,7 +364,7 @@ const zone = await page.evaluate(async () => {
     };
     // The window for the volume run
     const found = await map.volume.heightsAt(target.getLatLng());
-    const floor = found.choices.find((choice) => choice.kind === "window" && Math.abs(choice.above - 1.6) < 0.2);
+    const floor = found.choices.find((choice) => choice.kind === kind && (above === null || Math.abs(choice.above - above) < 0.2));
     window.__App.userSettings.set("volumeLayer", false);
     target.heightChoice = null;
     target.updateCoverZone();
@@ -365,7 +377,7 @@ const zone = await page.evaluate(async () => {
     await settle(() => target.coverOverlay && target.coverSignature.includes("volume:"));
     const volume = { signature: target.coverSignature, ...await pixels(target) };
     return { heightmap, volume };
-});
+}, { kind: HEIGHT_KIND, above: HEIGHT_KIND === "window" ? 1.6 : null });
 check("with the volume layer the damage zone is computed with the voxels as cover", /heightmap$/.test(zone.heightmap.signature) && /volume:/.test(zone.volume.signature)
     && zone.volume.covered > 0 && zone.volume.kill + zone.volume.wound > 0 && (zone.volume.covered !== zone.heightmap.covered || zone.volume.kill !== zone.heightmap.kill), JSON.stringify(zone));
 await page.evaluate(() => {

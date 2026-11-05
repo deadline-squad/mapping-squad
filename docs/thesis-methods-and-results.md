@@ -2,6 +2,9 @@
 
 Report for the thesis on computational ballistics. Russian version: [`thesis-methods-and-results.ru.md`](thesis-methods-and-results.ru.md).
 Written 2026-11-04 from the evidence that exists in the repositories; nothing in it was measured in a running game.
+Updated 2026-11-05: the voxel figures of sections 4, 7 and 8 were measured again with the exact conservative voxelisation
+(`AGL` `e34e481`, memory fix `f116a2b`, issue #23) on the final `.vcol` files; the figures of the earlier sample-lattice builder are
+kept as "old" next to them.
 
 ## 0. How to read this report
 
@@ -152,15 +155,20 @@ stores, per occupied column, the z-runs of voxels that a Visibility-blocking col
 | Format | `VCOL1`: per occupied column the z-runs, varint-packed, gzip; decoder in Rust/wasm (`SC:engine/src/voxel.rs`), JavaScript (`AGL:tools/volumetric/js/vcol.mjs`), WGSL (`SC:engine/wgsl/voxel.wgsl`); writer `py/codec.py` | `V-README` | VERIFIED |
 | Voxel | 0.5 m horizontal x 0.25 m vertical for the evaluated files (1.0 m x 0.25 m also built) | `V-README` | VERIFIED |
 | A voxel is marked | when a blocking triangle intersects it (exact conservative voxelisation: per row, column and cell the triangle is cut by the slab or rectangle and its z-range marked; half-open voxel boxes); voxels at or under landscape + 0.1 m are dropped; the facing of each triangle (up, down) is kept as separate sets | `V-README`, `py/columns.py` | VERIFIED |
-| Fallujah statics, size (gzip) | 1.0 x 0.25 m: 1.57 MB (8.4 M voxels); 1.0 x 0.5: 1.16 MB; 2.0 x 0.5: 0.40 MB; 0.5 x 0.25: 4.73 MB (20.1 M voxels); 0.5 x 0.5: 3.44 MB; trees add 0.44 M voxels at 1.0 m | `V-README` | VERIFIED |
-| Fallujah whole-map comparison | 7.5 MB PNG heightmap, 1.6 MB voxel 1.0 m, 4.7 MB voxel 0.5 m (+ trees) | `V-README` | VERIFIED |
-| Decode / one 40 m segment test (Fallujah 0.5 m, Node 26) | 322 ms / 28 us | `V-README` | VERIFIED (one run) |
-| Memory in the browser (Fallujah 0.5 m) | about 100 MB of typed arrays | `V-README` | UNVERIFIED (an estimate in the text) |
+| Fallujah statics, size (gzip) | exact voxeliser, 2026-11-05 (old in brackets): 1.0 x 0.25 m: 1.28 MB, 10.4 M voxels (1.57 MB, 8.4 M); 1.0 x 0.5: 1.01 MB (1.16); 2.0 x 0.5: 0.37 MB (0.40); 0.5 x 0.25: 3.37 MB, 25.4 M voxels (4.73 MB, 20.1 M); 0.5 x 0.5: 2.60 MB (3.44); trees add 0.44 M voxels at 1.0 m (unchanged). More voxels, smaller files, probably because a filled surface is one long run (not checked) | `V-README` | VERIFIED |
+| Fallujah whole-map comparison | 7.5 MB PNG heightmap, 1.3 MB voxel 1.0 m (1.6), 3.4 MB voxel 0.5 m statics (4.7); the published-format file with statics and foliage at 0.5 m is 3.72 MB (old 5.07 MB, which held statics and trees) | `V-README` | VERIFIED |
+| Decode / one 40 m segment test (Fallujah 0.5 m statics + foliage, Node 26) | 380 ms / 28 us (old 322 ms / 28 us; the old file decoded again now: 337 ms / 26 us) | `V-README`, `js/bench.mjs` | VERIFIED (one run each, shared machine) |
+| Memory in the browser (Fallujah 0.5 m) | 101 MB of typed arrays (ids, run starts, runs; old file 99 MB) | `js/bench.mjs` | VERIFIED (the arrays' `byteLength`; not the page's total) |
 
-Files built so far (`ls -l ~/data/volumetric/maps/*/*.vcol`, 2026-11-04†): Blackcoast 29 982 119 B, Fallujah 5 072 836,
-Foolsroad 6 092 960, Goosebay 15 405 454, Jensen 117 349, Kamdesh 14 350 000, Kohat 2 296 223, Kokan 789 376,
-Logar 1 407 411, Mestia 7 435 803, Pacific 2 855 445, Sumari 959 820: **12 of 25 maps**. The remaining 13 are issue
-#22 item B2 (see the coverage table in section 12).
+Files (`ls -l ~/data/volumetric/maps/*/*.vcol`, 2026-11-05, all rebuilt with the exact voxeliser; the sample-lattice files of
+2026-11-04 in brackets for the 12 maps that existed then): Albasrah 6 656 753 B, Anvil 3 825 232, Blackcoast 29 828 763 (29 982 119),
+Chora 36 901 488, Fallujah 3 721 024 (5 072 836), Foolsroad 6 155 569 (6 092 960), Goosebay 15 000 893 (15 405 454), Gorodok 39 324 886,
+Harju 41 192 707, Jensen 85 476 (117 349), Kamdesh 14 356 879 (14 350 000), Kohat 2 025 483 (2 296 223), Kokan 696 798 (789 376),
+Lashkar 13 336 154, Logar 1 305 944 (1 407 411), Manicouagan 17 554 889, Mestia 7 594 163 (7 435 803), Mutaha 1 049 816, Narva 6 004 629,
+Pacific 2 756 739 (2 855 445), Sanxian 16 382 430, Skorpo 24 792 764, Sumari 960 071 (959 820), Tallil 5 215 189, Yehorivka 48 565 730:
+**25 of 25 maps**. Eight of the twelve are smaller than before, four larger (Foolsroad, Kamdesh, Mestia, Sumari); none of the new
+files has been published to the site yet (issue #22 item B2 and the publishing step). The old Fallujah file held statics only; the
+new one holds statics and foliage.
 
 ### 4.1 What the game files contain (Fallujah)
 
@@ -237,48 +245,63 @@ from a regeneration.
 
 3 000 eye-level pairs, 10-60 m apart, inside a 600 m window around the densest columns, decided by the exact tracer
 (reference.py, fixed). "Grazing" = the exact answer flips when the segment moves 0.25 m. Statics columns 0.5 x 0.25 m for
-the voxels; `terrain` from the extracted landscape for Kohat and Logar (`V-README`, "Result on Fallujah"). All figures
-VERIFIED; no figure of this section was re-run for this report.
+the voxels; `terrain` from the extracted landscape for Kohat and Logar (`V-README`, "Result on Fallujah"). **Re-measured on
+2026-11-05 with the exact voxeliser's columns**, "old" being the sample-lattice builder. The pair draw puts 80 % of its points
+near object columns, so new columns change the draw; to compare like with like, the old columns chose the pairs and the new ones
+were scored (scratch variants of `eval_los.py`; the heightmap column reproduces the old figures to the pair, which shows the
+pairs are the same). All figures VERIFIED.
 
-| Fallujah, 3 000 pairs | 1 m heightmap | voxels 1.0 x 0.25 m | voxels 0.5 x 0.25 m |
+| Fallujah, 3 000 pairs | 1 m heightmap | voxels 1.0 x 0.25 m, old -> new | voxels 0.5 x 0.25 m, old -> new |
 |---|---|---|---|
-| judged wrong | 9.5 % | 8.4 % | **6.1 %** |
-| wrong, ignoring grazing | 5.1 % | 4.0 % | **1.9 %** |
-| false CLEAR | 144 | **2** | 16 |
-| false BLOCKED | 140 | 250 | 168 |
+| judged wrong | 9.5 % | 8.4 % -> 8.4 % | 6.1 % -> **5.8 %** |
+| wrong, ignoring grazing | 5.1 % | 4.0 % -> 4.0 % | 1.9 % -> **1.5 %** |
+| false CLEAR | 144 | 2 -> **0** | 16 -> **0** |
+| false BLOCKED | 140 | 250 -> 252 | 168 -> 174 |
 
 (The 1.0 m and 0.5 m columns are separate runs on different random pairs. Heightmap in the 1.0 m run: 8.7 % / 5.2 %,
 135 false clear, 127 false blocked. With the landscape sampled from the extracted heights, the 0.5 m run gives heightmap
-9.6 % / 5.7 %, voxels 5.6 % / 1.5 %, false clear 147 / 12.)
+9.6 % / 5.7 %, voxels 5.6 % / 1.5 % -> 5.4 % / 1.3 %, false clear 147 / 12 -> 147 / 0, false blocked 156 -> 161. A fresh
+draw from the new columns gives other pairs: 0.5 m heightmap 8.3 % / 4.6 %, voxels 5.9 % / 1.8 % (0 false clear, 178 false
+blocked); 1.0 m heightmap 9.8 % / 5.6 %, voxels 9.1 % / 4.1 % (0, 272).)
 
-| 3 000 pairs | Kohat heightmap | Kohat voxels | Logar heightmap | Logar voxels |
+| 3 000 pairs | Kohat heightmap | Kohat voxels, old -> new | Logar heightmap | Logar voxels, old -> new |
 |---|---|---|---|---|
-| wrong | 2.3 % | 2.2 % | 7.9 % | 6.4 % |
-| wrong, ignoring grazing | 0.7 % | 0.5 % | 4.2 % | 2.0 % |
-| false CLEAR | 40 | 3 | 76 | 2 |
-| false BLOCKED | 28 | 63 | 162 | 190 |
+| wrong | 2.3 % | 2.2 % -> 2.1 % | 7.9 % | 6.4 % -> **6.8 %** |
+| wrong, ignoring grazing | 0.7 % | 0.5 % -> 0.4 % | 4.2 % | 2.0 % -> **2.2 %** |
+| false CLEAR | 40 | 3 -> 0 | 76 | 2 -> 0 |
+| false BLOCKED | 28 | 63 -> 64 | 162 | 190 -> **204** |
 
-Kohat is dense (8 792 statics placements, 4.3 M triangles), Logar open rural terrain (4 098 placements, 2.6 M triangles).
-Pattern: the heightmap fails by letting shots through walls, decks and buildings (false CLEAR); the voxels almost remove
-that and pay with blocking up to half a voxel from real geometry (all 25 checked false blocks lie 0.05-0.55 m from
-geometry, `V-README`). The gain is largest where objects are dense (Fallujah) and smallest on Kohat, where the terrain
+Kohat is dense (8 792 statics placements, 4.3 M triangles), Logar open rural terrain (4 098 placements, 2.6 M triangles); the
+old columns of the two maps were rebuilt from the commit before the exact voxeliser and reproduce the old voxel counts
+(2 852 236, 1 592 422), which is why the pairs are the same. **Logar got worse** (+14 false blocked, +0.4 points wrong; still 1.1
+points better than the heightmap), Kohat and Fallujah got better; the false clear is gone on all three and the cause of the extra
+false blocked on Logar was not isolated (its voxel count grew least, +14 % against +22 % and +27 %).
+Pattern: the heightmap fails by letting shots through walls, decks and buildings (false CLEAR); the voxels remove that and pay
+with blocking up to a voxel diagonal from real geometry (the first builder's 25 checked false blocks lay 0.05-0.55 m from geometry;
+with the exact voxeliser every not-grazing false block of the 100 000-segment runs was checked to meet a triangle of the voxel it
+names, `V-README`). The gain is largest where objects are dense (Fallujah) and smallest on Kohat, where the terrain
 dominates (INFERRED from the three maps; three maps are not a sample of 25).
 
 ### 7.2 Windows, doorways and interiors (`py/eval_openings.py`)
 
 Share of cases where the model gives the reference answer (up to 120 cases per category, seed 11, 600 m window, full
-`.vcol`; n in brackets for the voxel column) (`V-README`):
+`.vcol`; n in brackets) (`V-README`). The voxel column is old -> new on **the same cases** (a scratch variant draws the
+points from the old `.vcol` and scores the new one); VERIFIED:
 
 | category (truth) | Fallujah heightmap / voxels | Kohat heightmap / voxels | Logar heightmap / voxels |
 |---|---|---|---|
-| opening: inside -> outside, clear | 0 % / 49 % (105) | 0 % / 35 % (51) | 0 % / 12 % (101) |
-| room_clear: same roof, clear | 0 % / 73 % (78) | 0 % / 84 % (120) | 0 % / 65 % (120) |
-| wall: inside -> outside, blocked | 100 % / 100 % (120) | 100 % / 99 % (120) | 100 % / 100 % (120) |
-| room_partition: same storey, blocked | 100 % / 99 % (120) | 100 % / 98 % (120) | 100 % / 99 % (120) |
-| room_floor: other storey, blocked | 100 % / 100 % (120) | 100 % / 100 % (120) | 100 % / 100 % (120) |
+| opening: inside -> outside, clear | 0 % / 49 % -> 49 % (105) | 0 % / 35 % -> **29 %** (51) | 0 % / 12 % -> 12 % (101) |
+| room_clear: same roof, clear | 0 % / 73 % -> 71 % (78) | 0 % / 84 % -> **81 %** (120) | 0 % / 65 % -> **62 %** (120) |
+| wall: inside -> outside, blocked | 100 % / 100 % -> 100 % (120) | 100 % / 99 % -> 100 % (120) | 100 % / 100 % -> 100 % (120) |
+| room_partition: same storey, blocked | 100 % / 99 % -> 100 % (120) | 100 % / 98 % -> 100 % (120) | 100 % / 99 % -> 100 % (120) |
+| room_floor: other storey, blocked | 100 % / 100 % -> 100 % (120) | 100 % / 100 % -> 100 % (120) | 100 % / 100 % -> 100 % (120) |
 
-VERIFIED. The heightmap treats every roofed space as solid and never sees an opening; the voxels find about half of the
-openings on Fallujah and fewer on Kohat and Logar. This is a weakness of the voxel layer and is reported as such.
+The heightmap treats every roofed space as solid and never sees an opening; the voxels find about half of the openings on
+Fallujah and fewer on Kohat and Logar. This is a weakness of the voxel layer and is reported as such. The exact voxeliser finds
+the same share on Fallujah and Logar, 6 points fewer on Kohat, and 2-3 points fewer of the open room interiors on all three maps,
+and blocks walls and partitions every time (99, 98, 99 % -> 100 %): thin openings are closed (on Jensen a 0.5 m wide gap in a
+window wall is filled and the target dialog no longer offers the windows of that building, VERIFIED by decoding both files). A
+fresh draw gives openings 39 % / 43 % / 15 % and room_clear 65 % / 58 % / 70 % on other cases.
 
 ## 8. Voxel DDA parity, precision pass
 
@@ -290,22 +313,31 @@ voxel file and the triangles agree (0 file voxels missing from a rebuild, 0 abov
 file). The engine's DDA is a two-dimensional Amanatides-Woo walk over the columns, with a jump to the first run in the
 segment's height range (`E-README`, "Voxel DDA against the python model and the exact triangles"; `V-README`):
 
-| 100 000 segments | Jensen (statics, 117 KB) | Kokan (statics + foliage, 789 KB) | Label |
-|---|---|---|---|
-| DDA clear, sampled model blocked | 0 | 0 | VERIFIED |
-| DDA blocked, sampled model clear | 101 | 193 | VERIFIED |
-| exact blocked / clear | 29 732 / 70 268 | 12 709 / 87 291 | VERIFIED |
-| false CLEAR (of them grazing) | 129 (14) | 83 (9) | VERIFIED |
-| false BLOCKED (of them grazing) | 3 948 (2 637) | 8 331 (3 840) | VERIFIED |
-| wrong, all / without grazing | 4.08 % / 1.43 % | 8.41 % / 4.57 % | VERIFIED |
-| WGSL f32 (SwiftShader, a CPU) wrong, all / without grazing | 4.08 % / 1.43 % | 8.41 % / 4.56 % | VERIFIED |
-| WGSL against native DDA: differing segments | 10 | 2 | VERIFIED |
-| wasm against native DDA | equal on all 200 000 | | VERIFIED |
-| DDA speed (shared machine, all threads) | 416 000 seg/s | 167 000 seg/s | VERIFIED, lower bound |
+| 100 000 segments | Jensen old | Jensen (statics, 85 KB) | Kokan old | Kokan (statics + foliage, 697 KB) | Label |
+|---|---|---|---|---|---|
+| DDA clear, sampled model blocked | 0 | 0 | 0 | 0 | VERIFIED |
+| DDA blocked, sampled model clear | 101 | 77 | 193 | 179 | VERIFIED |
+| exact blocked / clear | 29 732 / 70 268 | 30 071 / 69 929 | 12 709 / 87 291 | 13 214 / 86 786 | VERIFIED |
+| false CLEAR (of them grazing) | 129 (14) | **0** | 83 (9) | **0** | VERIFIED |
+| false BLOCKED (of them grazing) | 3 948 (2 637) | 3 922 (2 607) | 8 331 (3 840) | 8 499 (4 055) | VERIFIED |
+| wrong, all / without grazing | 4.08 % / 1.43 % | 3.92 % / 1.31 % | 8.41 % / 4.57 % | 8.50 % / 4.44 % | VERIFIED |
+| WGSL f32 (SwiftShader, a CPU) wrong, all / without grazing | 4.08 % / 1.43 % | 3.92 % / 1.31 % | 8.41 % / 4.56 % | 8.50 % / 4.44 % | VERIFIED |
+| WGSL against native DDA: blocked/clear flips, other first voxel | 1, 9 | 0, 9 | 1, 1 | 0, 0 | VERIFIED |
+| wasm against native DDA | equal on all 200 000 | equal on all 200 000 | | | VERIFIED |
+| DDA speed (shared machine, load 11 to 13, all threads) | 416 000 seg/s | 518 700 seg/s | 167 000 seg/s | 570 500 seg/s | VERIFIED, not comparable across the two runs (different load) |
 
-Explained, per `E-README`: all not-grazing false blocks (1 311 + 4 491) were checked and the reported voxel overlaps a
-triangle; in all not-grazing false clear cases (115 + 74) the voxel holding the exact hit is empty in the file because the
-builder's sample lattice lost a clipped corner. The table above is the sample-lattice builder; the exact voxelisation (`py/columns.py`, issue #23) has 0 false clear on the same segments (false blocked 3 948 -> 4 039 Jensen, 8 331 -> 8 508 Kokan; wrong 4.08 -> 4.04 %, 8.41 -> 8.51 %).
+"Old" is the first, sample-lattice builder with its own segments; the other columns are the exact conservative voxelisation
+(`py/columns.py`, issue #23, `AGL` `e34e481`) on the final `.vcol` files, measured on 2026-11-05 with 100 000 segments drawn again
+from those files, so the exact answers differ as well. On the same old segments the new files give 4.04 % (Jensen) and 8.51 %
+(Kokan) wrong, false blocked 4 039 and 8 508: the total is slightly better on Jensen and **0.10 points worse on Kokan**, because
+the 83 false clear that disappear are fewer than the 177 false blocked that appear.
+
+Explained, per `E-README`: all not-grazing false blocks (1 315 + 4 444) were checked and the reported voxel overlaps a triangle.
+There is no false clear to explain: the old builder lost the voxel holding the exact hit in all 115 + 74 not-grazing cases (its
+sample lattice missed a clipped corner), the exact voxelisation marks every voxel a triangle meets. The conservative file has more
+voxels (673 122 -> 723 221 on Jensen, 2 007 949 -> 2 198 643 on Kokan) but a smaller `.vcol` (112 531 -> 85 476 B, 789 376 ->
+696 798 B). Fallujah (statics + foliage, window with 45.3 M triangles, 26.2 M voxels): false clear 0 (old 494), false blocked 5 682,
+wrong 5.68 % / 2.29 % without grazing (old 6.10 % / 2.60 %) (VERIFIED).
 
 ### 8.2 Precision pass (`RTRI1`)
 
@@ -315,19 +347,30 @@ target decide what comes within 0.6 m of an occupied voxel. Same segments; 16 re
 
 | 100 000 segments | Jensen voxel -> precision | Kokan voxel -> precision | Fallujah voxel -> precision | Label |
 |---|---|---|---|---|
-| false CLEAR | 129 -> 8 | 83 -> 4 | 494 -> 35 | VERIFIED |
-| false BLOCKED | 3 948 -> 279 | 8 331 -> 858 | 5 609 -> 409 | VERIFIED |
-| wrong, all / without grazing | 4.08 % / 1.43 % -> **0.29 % / 0.10 %** | 8.41 % / 4.57 % -> **0.86 % / 0.47 %** | 6.10 % / 2.60 % -> **0.44 % / 0.17 %** | VERIFIED |
-| sent to the exact pass | 42.0 % | 37.0 % | 60.1 % | VERIFIED (not typical: the segments were chosen near geometry) |
+| false CLEAR | 0 -> 0 (old 129 -> 8) | 0 -> 1 (old 83 -> 4) | 0 -> 0 (old 494 -> 35) | VERIFIED |
+| false BLOCKED | 3 922 -> 301 (old 3 948 -> 279) | 8 499 -> 866 (old 8 331 -> 858) | 5 682 -> 428 (old 5 609 -> 409) | VERIFIED |
+| wrong, all / without grazing | 3.92 % / 1.31 % -> **0.30 % / 0.11 %** (old 4.08 % / 1.43 % -> 0.29 % / 0.10 %) | 8.50 % / 4.44 % -> **0.87 % / 0.45 %** (old 8.41 % / 4.57 % -> 0.86 % / 0.47 %) | 5.68 % / 2.29 % -> **0.43 % / 0.17 %** (old 6.10 % / 2.60 % -> 0.44 % / 0.17 %) | VERIFIED |
+| sent to the exact pass | 42.4 % (old 42.0 %) | 37.4 % (old 37.0 %) | 60.4 % (old 60.1 %) | VERIFIED (not typical: the segments were chosen near geometry) |
 | region file min / median / max | 57 B / 100 KB / 5.0 MB | 1.04 / 2.48 / 3.52 MB | 6.48 / 15.9 / 26.0 MB | VERIFIED |
-| time per segment, one thread | 7.7 -> 8.9 us | 12.1 -> 14.4 us | 69.8 -> 50.0 us | VERIFIED, shared machine; Fallujah at load average ~20 and regions answered one at a time, not comparable with the other two |
-| target at the segment start: wrong / without grazing | 0.00 % / 0.00 % | 0.10 % / 0.05 % | 0.04 % / 0.02 % | VERIFIED |
+| time per segment, one thread | 3.8 -> 6.2 us | 7.8 -> 10.6 us | 11.0 -> 40.2 us | VERIFIED, shared machine; Fallujah regions answered one at a time, not comparable with the other two (old run: load ~20, 69.8 -> 50.0 us) |
+| target at the segment start: wrong / without grazing | 0.01 % / 0.00 % (old 0.00 % / 0.00 %) | 0.11 % / 0.05 % (old 0.10 % / 0.05 %) | 0.03 % / 0.01 % (old 0.04 % / 0.02 %) | VERIFIED |
 
 Fallujah: statics + foliage (the voxel file holds both), densest 1 km window with 45.3 M triangles, 16 regions of 1.8 - 7.3 M
-triangles, every process under 3 GB (`E-README`, "Precision pass").
+triangles, python under 4 GB and the Rust test under 5 GB (`E-README`, "Precision pass"). The regions were rebuilt from the final
+`.vcol`; the Jensen region published on the site is identical to the rebuilt one after gunzip, so it was left as it is.
 
-With the exact triangles of the whole window available the pass has 0 wrong answers at margin 0.6 m on Jensen and Kokan (not run on Fallujah: 45.3 M triangles do not fit 3 GB); 0.3 m
-leaves one false clear on Kokan, which is why 0.6 m is kept (VERIFIED).
+**Honest reading.** The exact voxelisation removes the false clear (129 / 83 / 494 -> 0) and with it the precision pass's
+inherited false clear, but after the pass the wrong share is **0.01 points worse on Jensen and Kokan and 0.01 better on Fallujah**,
+and the voxel walk alone is 0.09 points worse on Kokan: what is left is the voxel walk outside the 150 m square, which the
+conservative file blocks slightly more often. The one Kokan false clear is a ray 0.04 mm from the shared edge of two 5 cm foliage
+triangles; the region file's vertex lattice is 0.1 mm, so it is the file's stated precision (VERIFIED by querying the region:
+shifting the segment 1 mm up hits).
+
+With the exact triangles of the whole window available the pass has 0 wrong answers at **every** margin tested (0, 0.25, 0.3, 0.5,
+0.6, 1.0 m) on Jensen and Kokan; with the old files margin 0 left 129 / 83 false clear and 0.3 m left one on Kokan, which is why 0.6 m
+was chosen. The share sent to the exact pass is 34 % / 22 % at margin 0 against 45 % / 41 % at 0.6 m. 0.6 m is kept because the
+published region and the file served today use it; a margin of 0 with 150 m regions was not run (not run on Fallujah either: 45.3 M
+triangles do not fit the cap) (VERIFIED for the sweep, not run for the change).
 
 ## 9. Structure damage for FOB and HAB
 
@@ -386,9 +429,9 @@ every figure in the shells-to-destroy tables, since none was measured in game (t
 | Launch height of the stationary AGS-17, MK19, SPG-9 (#13): files say 0.347 / 0.368 / 0.637 m, entries use 1 m | unchanged; the 67 measurements cannot tell 0.347 from 1 m (RMS 5.34 m both) | `SB:RELEASE_NOTES.md` |
 | C90-CR, DZJ-08, RPG-28: values from the game files, no in-game shots | not measured | `#22` O2; `SB:RELEASE_NOTES.md` (#9) |
 | QLZ87 beyond 400 m | not measured | `#22` O2 |
-| GPU timings | none: the WGSL kernel was timed on SwiftShader (a CPU, about 19 000 segments/s); item C9 is open | `E-README`; `#22` C9 |
-| The voxel layer finds half of the openings on Fallujah, 35 % on Kohat, 12 % on Logar | measured, section 7.2 | `V-README` |
-| Voxel layer is conservative by half a voxel; false blocked grows with density | measured | `V-README`, `E-README` |
+| GPU timings | none: the WGSL kernel was timed on SwiftShader (a CPU, 7 200 and 11 400 segments/s on a loaded host on 2026-11-05, about 19 000 on an idle one before); item C9 is open | `E-README`; `#22` C9 |
+| The voxel layer finds about half of the openings on Fallujah (49 %), 29 % on Kohat, 12 % on Logar | measured, section 7.2 | `V-README` |
+| Voxel layer is conservative by up to a voxel diagonal; false blocked grows with density | measured | `V-README`, `E-README` |
 | Screens other than 16:9 | out of scope (owner decision); the program warns once | `SB:RELEASE_NOTES.md` (#10) |
 | Ground truth for terrain: Training server logs, ground traces only | single reference | `H-README` |
 | No client pak used; no decryption of the encrypted pak index | scope and licence decision | `CS` section 8 |
@@ -408,7 +451,7 @@ the AGS-17 group-size test is the smallest measurement that settles it.
 | Table | Content | Produced by | Status |
 |---|---|---|---|
 | Reverse-position heatmap checked against the exact tracer on a target inside a building: share of heatmap cells wrong, false clear / false blocked, time per heatmap | | `#22` item C5 | PENDING |
-| Map coverage: `.vcol` built / 25, build time and size per map, `build_all.log` without FAILED | 12 of 25 built as of section 4 | `#22` item B2 | PENDING |
+| Map coverage: `.vcol` built / 25, build time and size per map, `build_all.log` without FAILED | 25 of 25 built (2026-11-05, exact voxeliser); not yet published | `#22` item B2 | PENDING |
 | Heatmap and DDA timings on a real GPU | | `#22` item C9 (a GPU on `tk104`, otherwise "not measured") | PENDING |
 | 2D damage/splash footprint on the live site | | `#22` item C6 | PENDING |
 
