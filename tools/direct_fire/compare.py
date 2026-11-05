@@ -13,7 +13,8 @@ weapon with a `ballistics` name that Squad Ballistics has, every shell of it:
   the minimum distance (Squad Ballistics must refuse closer targets) and the elevation
   limits.
 
-Every weapon is also checked on its maximum range.
+Every weapon is also checked on its maximum range. A projectile that the game destroys before it arrives
+(`lifespan` of Squad Ballistics, `projectileLifespan` of SquadCalc, the game's InitialLifeSpan) is a shot both must refuse.
 
 The grid (documented here, so that a regression in any corner shows up):
 

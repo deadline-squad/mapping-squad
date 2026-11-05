@@ -23,6 +23,9 @@ The AGS-17 optic emplacement is skipped: SquadCalc's "AGS-17" is it.
 
 A weapon Squad Ballistics renamed (RENAMED: the RMB sights, "QLZ87" -> "QLZ87 · optic (RMB ×3)") keeps its DF_ identifier, so its position in WEAPONS and its locale key stay, and gets `legacyBallistics` with the old name.
 
+The projectile's `lifespan` (InitialLifeSpan, the game destroys the round that long after launch) becomes
+`projectileLifespan`, which SquadCalc refuses a solution past; a weapon without one (the mortar) keeps SquadCalc's default.
+
 A boosted rocket gets `acceleration`/`accelerationTime`, a projectile with a speed cap `maxSpeed`
 (MaxSpeed of its movement component), and one whose motor keeps the barrel's axis
 `rotationFollowsVelocity: false` (SquadCalc's squadBallistics.js flies them like Squad Ballistics).
@@ -651,7 +654,7 @@ def hold_laid_entry(key, w):
         f"        minElevation: [{num(lim[0])}, {num(lim[1])}],",
         f"        holdElevation: [{num(hold[0])}, {num(hold[1])}],",
         f"        elevationRate: {num(w['hold_rate'])},",
-        "        projectileLifespan: 40,",
+        f"        projectileLifespan: {num(w['lifespan'])},",
         "        heatmap: false,",
         '        unit: "sec",',
         '        type: "deployables",',
@@ -701,6 +704,8 @@ def direct_fire_entry(key, w):
         '        angleType: "low",',
         "        elevationPrecision: 2,",
     ]
+    if w.get("lifespan"):
+        lines.append(f"        projectileLifespan: {num(w['lifespan'])},")
     if w.get("launch_height"):
         lines.append(f"        heightOffset: {num(w['launch_height'])},")
     if w.get("angle_offset"):
