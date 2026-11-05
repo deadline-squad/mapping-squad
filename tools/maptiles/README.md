@@ -56,14 +56,6 @@ rendered into `$DIST/maptiles/.<map>.tmp` and swapped in when complete; the page
 `?v=<meta.json generated>`, so the long cache lifetime set by Caddy never serves a stale tile.
 After a game patch: `heightmaps.sh extract build deploy`, then `maptiles.sh extract prep render check`.
 
-## Belaya Pass
-
-Belaya has no Detailed tiles (its level is not in the server package, `../heightmaps/README.md`). Its relief archive is made
-from the community SquadHeight heightmap: `relief.py` only reads `maptiles/belaya/meta.json` for the frame, so give it one
-with the heightmap's `bounds_m` (nothing is served from it) and run `maptiles.sh relief belaya`. The archive is terrain
-shading of unvalidated data; the page offers the Relief layer for Belaya and falls back to the upstream topographic map for
-Detailed.
-
 ## Game colours (style `colour`)
 
 A second layer, "Detailed · game colours", draws the same data (hillshade, contours, roads, building footprints

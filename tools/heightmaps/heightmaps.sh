@@ -4,7 +4,6 @@
 #   heightmaps.sh setup               clone CUE4Parse at the pinned commit, build the extractor and the Python image
 #   heightmaps.sh extract             landscape collision and static meshes of every map from the paks
 #   heightmaps.sh build [map ...]     fuse them with SquadHeight into $OUT/<map>/{heightmap.png,meta.json}
-#   heightmaps.sh belaya              Belaya Pass from SquadHeight alone (its level is not in the server package) into $OUT/belaya
 #   heightmaps.sh deploy              copy $OUT into the served SquadCalc (backup first)
 #   heightmaps.sh webp [map ...]      heightmap.webp and its meta.json for heightmaps already in $DIST/heightmaps, into $OUT_WEBP
 #   heightmaps.sh deploy-webp         copy the WebP files of $OUT_WEBP next to the served PNGs (hard-linked backup first, the
@@ -76,10 +75,6 @@ build)
     shift
     mkdir -p "$OUT"
     python_tool build_all.py /squadheight /work /out "$(game_build)" "$@"
-    ;;
-belaya)
-    mkdir -p "$OUT"
-    python_tool build_squadheight_only.py /squadheight/Belaya /out/belaya Belaya
     ;;
 deploy)
     backup="$DIST/heightmaps.bak.$(date +%Y%m%d-%H%M)"
