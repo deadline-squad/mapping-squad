@@ -1,7 +1,6 @@
 using CUE4Parse.Compression;
 using CUE4Parse.FileProvider;
 using CUE4Parse.UE4.Assets.Exports.Component.Landscape;
-using CUE4Parse.UE4.Assets.Exports.Texture;
 using CUE4Parse.UE4.Assets.Objects;
 using CUE4Parse.UE4.Objects.Core.Math;
 using CUE4Parse.UE4.Objects.UObject;
@@ -32,17 +31,6 @@ else if (mode == "json")
     var package = provider.LoadPackage(args[2]);
     foreach (var export in package.GetExports().Where(e => e.Name == args[3] || e.ExportType == args[3]).Take(int.Parse(args.ElementAtOrDefault(4) ?? "1")))
         Console.WriteLine(JsonConvert.SerializeObject(export, Formatting.Indented));
-}
-else if (mode == "texture")
-{
-    // texture <package> <outdir>: the largest mip of a Texture2D as <name>.raw (the GPU block data as cooked) and
-    // <name>.json (pixel format, width, height); decoded by tools/heightmaps/py/texture_to_png.py
-    var texture = provider.LoadPackageObject<UTexture2D>(args[2]);
-    var mip = texture.GetFirstMip() ?? throw new InvalidOperationException("texture has no mips");
-    Directory.CreateDirectory(args[3]);
-    File.WriteAllBytes(Path.Combine(args[3], texture.Name + ".raw"), mip.BulkData.Data!);
-    File.WriteAllText(Path.Combine(args[3], texture.Name + ".json"),
-        JsonConvert.SerializeObject(new { format = texture.Format.ToString(), width = mip.SizeX, height = mip.SizeY }));
 }
 else if (mode == "mesh")
 {

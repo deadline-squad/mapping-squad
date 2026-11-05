@@ -23,8 +23,6 @@ if (!base) {
     process.exit(2);
 }
 const allMaps = process.argv.includes("--maps");
-// Maps without Detailed tiles (heights from community data only)
-const TERRAIN_ONLY_MAPS = ["Belaya"];
 const ballisticsIndex = process.argv.indexOf("--ballistics");
 const ballisticsFile = ballisticsIndex > 0 ? process.argv[ballisticsIndex + 1] : null;
 
@@ -320,9 +318,7 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
                 return { name: map.activeMap.name, precise: map.heightmap.precise, detailed: detailed(), ms: Math.round(ms), longest: Math.round(Math.max(0, ...longTasks)) };
             }, value);
             const errors = problems.slice(before);
-            // Belaya Pass is terrain only: it has no Detailed tiles and shows the upstream topographic map, without a request or a warning
-            const hasTiles = !TERRAIN_ONLY_MAPS.includes(result.name);
-            check(`map ${result.name}`, result.precise && Boolean(result.detailed) === hasTiles && errors.length === 0,
+            check(`map ${result.name}`, result.precise && result.detailed && errors.length === 0,
                 `precise heightmap in ${result.ms} ms, longest task ${result.longest} ms, detailed tiles ${result.detailed}${errors.length ? `; ${errors.join(" | ")}` : ""}`);
         }
     }
