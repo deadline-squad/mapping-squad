@@ -14,6 +14,8 @@
 #   maptiles.sh relief-setup           Python image of the relief layer (numpy, scipy, Pillow, RVT, pmtiles)
 #   maptiles.sh relief [map ...]       shaded relief PMTiles (MDOW hillshade + anisotropic SVF) into $WORK/relief/<map>.pmtiles;
 #                                      RELIEF_ARGS adds options of py/relief.py (--tint, --extra-zoom N)
+#   maptiles.sh layer-minimaps         the game's per-layer minimap textures (Seed, Skirmish) as webp into
+#                                      $DIST/maptiles/<texture>/0/0_0.webp and $DIST/maptiles/layer-minimaps.json
 #
 # Without maps every map of ../heightmaps/py/maps.py is processed.
 # Environment (defaults in brackets):
@@ -25,6 +27,7 @@
 #   DIST         served SquadCalc [~/apps/squadcalc/dist]
 #   CUE4PARSE    CUE4Parse checkout with ../heightmaps/extractor/cue4parse.patch [$EXTRACT/cue4parse]
 #   WORKERS      parallel processes [3]
+#   CLIENT_DIR   Squad game client install (its paks hold the minimap textures) [~/data/squad-client]
 #   BASEMAPS     upstream basemap images <map>.webp for the colour styles, fetched when missing [$WORK/basemaps]
 set -eu
 
@@ -39,6 +42,7 @@ DIST=${DIST:-$HOME/apps/squadcalc/dist}
 CUE4PARSE=${CUE4PARSE:-$EXTRACT/cue4parse}
 WORKERS=${WORKERS:-3}
 BASEMAPS=${BASEMAPS:-$WORK/basemaps}
+CLIENT_DIR=${CLIENT_DIR:-$HOME/data/squad-client}
 DOTNET_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
 PY_IMAGE=squadcalc-maptiles-py
 RELIEF_IMAGE=squadcalc-relief-py
@@ -140,6 +144,21 @@ colour-render)
     shift
     for slug in $(maps "$@"); do colour_tool render.py "$slug" --style colour --workers "$WORKERS"; done
     ;;
+layer-minimaps)
+    out="$WORK/layer-minimaps"
+    mkdir -p "$out/tex" "$DIST/maptiles"
+    extractor() {
+        # shellcheck disable=SC2086
+        nice docker run --rm $USER_FLAGS -v "$WORK:/work" -v "$CLIENT_DIR/SquadGame/Content/Paks:/paks:ro" -w /work/bin \
+            "$DOTNET_IMAGE" dotnet SquadExtract.dll /paks "$@"
+    }
+    extractor layerminimaps 'Gameplay_Layers/' > "$out/layers.tsv"
+    extractor texraw '/(Minimap|Masks)/(?!RVT_)(?![^/]*Boundary)[^/]*Minimap[^/]*\.uasset$' /work/layer-minimaps/tex
+    # shellcheck disable=SC2086
+    nice docker run --rm $USER_FLAGS -v "$HERE/py:/py:ro" -v "$out:/layer-minimaps" -v "$DIST/maptiles:/tiles" \
+        -v "$CLIENT_DIR/steamapps:/steamapps:ro" -w /py "$PY_IMAGE" python -W ignore layer_minimaps.py \
+        /layer-minimaps/layers.tsv /layer-minimaps/tex /steamapps/appmanifest_393380.acf /tiles
+    ;;
 relief-setup)
     docker build -q -t "$RELIEF_IMAGE" -f "$HERE/py/Dockerfile.relief" "$HERE/py"
     ;;
@@ -158,7 +177,7 @@ colour-distance)
     colour_tool colour_distance.py "$slug" "/tiles/$folder" "$@"
     ;;
 *)
-    sed -n '2,27p' "$0"
+    sed -n '2,30p' "$0"
     exit 2
     ;;
 esac
