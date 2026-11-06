@@ -56,6 +56,47 @@ rendered into `$DIST/maptiles/.<map>.tmp` and swapped in when complete; the page
 `?v=<meta.json generated>`, so the long cache lifetime set by Caddy never serves a stale tile.
 After a game patch: `heightmaps.sh extract build deploy`, then `maptiles.sh extract prep render check`.
 
+## Layer minimaps
+
+Most layers of a map use one minimap texture of the whole map. Seed and Skirmish layers ship a texture of
+their own that covers only the part of the map the layer is played on, so it is several times finer than the
+whole-map image (4096 px over the playable strip instead of the whole map). SquadCalc can show it for those
+layers.
+
+Source: the Squad game client (not the server files) at `$CLIENT_DIR`, default `~/data/squad-client`; its paks
+open without a key. The extractor's `layerminimaps` mode prints one line per `Gameplay_Layers` level: the level,
+its `MapTexture` and the two minimap corners in cm (`layers.tsv`). The `texraw` mode writes the raw mip 0 of the
+minimap textures (`<name>.<PixelFormat>.<w>x<h>.bin`; DXT1 4096x4096, one B8G8R8A8 2048x2048). The map of a layer
+is the first `_` token of its name; the base texture of a map is the one most of its layers use; a texture used
+by a layer of that map but different from the base is a layer minimap. Layers that use the base texture with
+other corners (Yehorivka Skirmish, Sumari, Mestia) are not layer minimaps. With client build 26234431 there are
+15 of them: Seed and Skirmish textures of AlBasrah, BlackCoast, Chora, Fallujah, GooseBay, Gorodok, Manicouagan,
+Mutaha, Skorpo and Tallil.
+
+```sh
+tools/maptiles/maptiles.sh setup           # once, and after a change of the extractor
+tools/maptiles/maptiles.sh layer-minimaps  # about 2.5 min
+```
+
+Output, next to the tile folders of the maps:
+
+```
+$DIST/maptiles/<texture name in lower case>/0/0_0.webp   lossy webp, quality 90, method 4 (1-4.5 MB each)
+$DIST/maptiles/layer-minimaps.json
+```
+
+```json
+{"generated": "<UTC ISO time>", "build": "<client buildid>",
+ "textures": {"Mutaha_Minimap_Seed_v1": {"folder": "mutaha_minimap_seed_v1", "size": 4096, "layers": ["Mutaha_Seed_v1"]}}}
+```
+
+`size` is the texture's side in px, `layers` the layers that use it. The corners of each layer are in
+`$WORK/layer-minimaps/layers.tsv`. The folder names contain `_minimap_`, so they cannot collide with the map
+folders, and `maptiles/<texture>/0/0_0.webp` falls under the same long cache rule as the tile folders. Files are
+written under a temporary name and renamed; nothing else under `$DIST/maptiles` is touched. Decoding
+(`py/layer_minimaps.py`: BC1 and B8G8R8A8 to RGB) is covered by `py/test_layer_minimaps.py`:
+`docker run --rm -v tools/maptiles/py:/py -w /py squadcalc-maptiles-py python -m unittest test_layer_minimaps`.
+
 ## Game colours (style `colour`)
 
 A second layer, "Detailed · game colours", draws the same data (hillshade, contours, roads, building footprints

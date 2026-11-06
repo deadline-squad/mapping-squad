@@ -123,6 +123,48 @@ else if (mode == "statics")
     }
     File.WriteAllText(Path.Combine(outDir, "meshes.json"), JsonConvert.SerializeObject(meshes, Formatting.Indented));
 }
+else if (mode == "texraw")
+{
+    var re = new System.Text.RegularExpressions.Regex(args[2], System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    Directory.CreateDirectory(args[3]);
+    foreach (var path in provider.Files.Keys.Where(k => k.EndsWith(".uasset") && re.IsMatch(k)).Order())
+    {
+        try
+        {
+            var texture = provider.LoadPackage(path).GetExports().OfType<CUE4Parse.UE4.Assets.Exports.Texture.UTexture2D>().FirstOrDefault();
+            var mip = texture?.GetFirstMip();
+            if (texture == null || mip?.BulkData?.Data == null) { Console.Error.WriteLine($"{path}: no pixel data"); continue; }
+            var name = Path.GetFileNameWithoutExtension(path);
+            File.WriteAllBytes(Path.Combine(args[3], $"{name}.{texture.Format}.{mip.SizeX}x{mip.SizeY}.bin"), mip.BulkData.Data);
+            Console.WriteLine($"{name} {texture.Format} {mip.SizeX}x{mip.SizeY} {mip.BulkData.Data.Length}");
+        }
+        catch (Exception e) { Console.Error.WriteLine($"{path}: FAILED {e.GetType().Name}: {e.Message}"); }
+    }
+}
+else if (mode == "layerminimaps")
+{
+    // layerminimaps <regex over paths>: one line per gameplay layer: path, MapTexture, then the two minimap corners (cm)
+    var re = new System.Text.RegularExpressions.Regex(args[2], System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    foreach (var path in provider.Files.Keys.Where(k => k.EndsWith(".umap") && k.Contains("/Gameplay_Layers/") && re.IsMatch(k)).Order())
+    {
+        try
+        {
+            var exports = provider.LoadPackage(path).GetExports().ToList();
+            var settings = exports.FirstOrDefault(e => e.ExportType == "SQWorldSettings");
+            if (settings == null) { Console.WriteLine($"{path}\tno world settings"); continue; }
+            var texture = settings.GetOrDefault<FPackageIndex>("MapTexture")?.ResolvedObject?.GetPathName() ?? "";
+            string Corner(string key)
+            {
+                var actorName = settings.GetOrDefault<FPackageIndex>(key)?.ResolvedObject?.Name.Text;
+                var root = exports.FirstOrDefault(e => (e.ExportType == "SceneComponent" || e.ExportType == "StaticMeshComponent") && e.Outer?.Name.Text == actorName);
+                var loc = root?.GetOrDefault<FVector>("RelativeLocation");
+                return loc == null ? "?\t?" : $"{loc.Value.X}\t{loc.Value.Y}";
+            }
+            Console.WriteLine($"{path}\t{texture}\t{Corner("MapTextureCornerZero")}\t{Corner("MapTextureCornerOne")}");
+        }
+        catch (Exception e) { Console.WriteLine($"{path}\tFAILED {e.GetType().Name}: {e.Message}"); }
+    }
+}
 else if (mode == "features")
 {
     // features <path filter> <outdir>: map features for tools/maptiles from the levels under the filter, one
