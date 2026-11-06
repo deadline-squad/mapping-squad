@@ -37,6 +37,18 @@ Skorpo without a layer: the grid starts 9.5 m east of the map image (`SDK_data.m
 `Chora_Skirmish_v1` (needs the layer API): 1007 m east and 1222 m south of it, the corner of the layer's own minimap; clearing
 the layer returns it to the map's corner. Exits with 1 on any failure.
 
+## layer_minimap_check.mjs: the own minimap of Seed and Skirmish layers
+
+```sh
+node layer_minimap_check.mjs <site URL>
+```
+
+Needs the layer API and the images of `tools/maptiles` (step `layer-minimaps`) under `/maptiles/`. Mutaha Seed v1: its 4096 px
+texture is drawn above the map image at the layer's corners (633.6 m east and 581.5 m south of the image corner, 1300 m
+square), the topographic layer removes it and the basemap brings it back, clearing the layer removes it; Mutaha RAAS v1
+(the map's own texture) shows nothing; Tallil Seed v1 shows its texture; a map change leaves none; only the images of layers
+with a texture of their own are requested; console clean. `SHOT_DIR=<dir>` also saves a screenshot. Exits with 1 on any failure.
+
 ## volume_check.mjs: the volume layer
 
 ```sh
