@@ -1,6 +1,7 @@
 // Checks the own minimap of gameplay layers in the Deadline SquadCalc in Chromium: a Seed or Skirmish layer ships a
 // 4096 px game texture over a part of the map (tools/maptiles, step layer-minimaps); SquadCalc draws it above the
-// map image where the game's corners put it, only on the upstream basemap, and removes it with the layer.
+// map image where the game's corners put it, only on the upstream basemap (asked for in the URL, it is not the default layer),
+// and removes it with the layer.
 //
 //     node layer_minimap_check.mjs <site URL>
 //
@@ -38,7 +39,7 @@ page.on("request", (request) => { if (request.url().includes("/maptiles/") && re
 
 const ready = () => page.waitForFunction(() => window.__App?.minimap?.grid?.kpLines?.length > 0 && !window.__App.minimap._spinning, null, { timeout: 120000 });
 const loadLayer = async (map, layer) => {
-    await page.goto(`${base}/?map=${map}`, { waitUntil: "load" });
+    await page.goto(`${base}/?map=${map}&type=basemap`, { waitUntil: "load" });
     await ready();
     await page.evaluate((name) => window.__App.LAYER_SELECTOR.val(name).trigger("change"), layer);
     await page.waitForFunction((name) => window.__App?.minimap?.layer?.layerData?.rawName === name, layer, { timeout: 120000 });
@@ -93,7 +94,7 @@ await waitOverlayLoaded();
 state = await overlay();
 check("Tallil Seed v1: own minimap", state && /tallil_outskirts_minimap_skirmish_v1\/0\/0_0\.webp/.test(state.src) && near(state.east - state.west, 1130, 0.5), JSON.stringify(state));
 
-await page.goto(`${base}/?map=Anvil`, { waitUntil: "load" });
+await page.goto(`${base}/?map=Anvil&type=basemap`, { waitUntil: "load" });
 await ready();
 check("a map change leaves no layer minimap behind", (await overlay()) === null, "none");
 

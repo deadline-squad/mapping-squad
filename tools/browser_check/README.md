@@ -49,6 +49,17 @@ square), the topographic layer removes it and the basemap brings it back, cleari
 (the map's own texture) shows nothing; Tallil Seed v1 shows its texture; a map change leaves none; only the images of layers
 with a texture of their own are requested; console clean. `SHOT_DIR=<dir>` also saves a screenshot. Exits with 1 on any failure.
 
+## standard_hd_check.mjs: the Standard HD layer
+
+```sh
+node standard_hd_check.mjs <site URL> [map ...]
+```
+
+Needs the tiles of `tools/maprender` under `/maptiles/<map>-hd/`. On every map of the selector (or the named ones): Standard HD is the
+layer shown by default, its finest tiles load at 256 px and at most 0.33 m per pixel, the map goes two zooms past them. A map whose
+`meta.json` answers 404 shows the detailed layer; a link with `type=basemap` keeps the basemap; no tile is missing, console clean.
+`SHOT_DIR=<dir>` also saves a screenshot per map at the finest zoom. Exits with 1 on any failure.
+
 ## volume_check.mjs: the volume layer
 
 ```sh
