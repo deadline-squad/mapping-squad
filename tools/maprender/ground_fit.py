@@ -9,6 +9,8 @@ from PIL import Image
 from scipy import ndimage, optimize
 
 SKIP_TEXTURE = re.compile(r"noise|stencil|blank|utility|macro|_u$|_n$|placeholder|wind", re.IGNORECASE)
+# Assets of the engine itself, never of the map's art: the placeholder and default textures
+ENGINE_ASSETS = "/Engine/"
 # Mean difference between a texture's channels (each divided by its mean) above which it is a mask packed into RGB, not a colour
 MASK_CHROMA = 0.25
 DETAIL_SIZE = 512
@@ -94,14 +96,16 @@ def tile_of(scalars, token):
 def layer_details(scene_dir, layers, colours):
     """[layers, s, s, 3] detail textures (albedo / mean, 128 = 1) and [layers, 2] tiles in cm, with {layer: texture} as a report. A layer
     takes the albedo parameter of its name in the landscape material, else the texture naming it, else the texture nearest to its
-    fitted colour."""
+    fitted colour. The engine's own textures (ENGINE_ASSETS) are never candidates: the landscape material lists its default parameter
+    values (BlendFunc_DefBase, BlendFunc_DefBlend: grids and crosses) beside the real ground textures, and a layer without a game
+    texture of its own keeps its fitted colour (report None)."""
     landscape = next(iter(json.loads(Path(os.path.join(scene_dir, "landscape.json")).read_text()).values()))
     textures = json.loads(Path(os.path.join(scene_dir, "textures.json")).read_text())
     candidates = {}
     for path in sorted(set(landscape["textures"].values())):
         short = path.split(".")[-1]
         info = textures.get(path, {})
-        if SKIP_TEXTURE.search(short) or info.get("format") not in ("PF_R8G8B8A8", "PF_B8G8R8A8"):
+        if path.startswith(ENGINE_ASSETS) or SKIP_TEXTURE.search(short) or info.get("format") not in ("PF_R8G8B8A8", "PF_B8G8R8A8"):
             continue
         data = np.fromfile(os.path.join(scene_dir, "textures", info["file"] + ".bin"), np.uint8).reshape(info["height"], info["width"], 4)
         rgb = data[..., [2, 1, 0]] if info["format"] == "PF_B8G8R8A8" else data[..., :3]

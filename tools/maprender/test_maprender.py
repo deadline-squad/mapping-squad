@@ -448,15 +448,15 @@ class OpenGroundTest(unittest.TestCase):
         self.assertTrue(land[50, 40])
 
 
-def write_texture(folder, table, name, colour, noise=8, seed=0):
-    """A 16 px texture in `folder`/textures with its entry in `table`; its pixels vary around `colour`."""
+def write_texture(folder, table, name, colour, noise=8, seed=0, root="/Game"):
+    """A 16 px texture in `folder`/textures with its entry in `table` under `root`; its pixels vary around `colour`."""
     random = np.random.default_rng(seed)
     pixels = np.clip(np.array(colour, np.float32) + random.integers(-noise, noise + 1, (16, 16, 1)), 0, 255)
     data = np.dstack([pixels, np.full((16, 16), 255.0)]).astype(np.uint8)
     file = str(len(table))
     data.tofile(os.path.join(folder, "textures", file + ".bin"))
-    table[f"/Game/{name}.{name}"] = {"file": file, "format": "PF_R8G8B8A8", "width": 16, "height": 16}
-    return f"/Game/{name}.{name}"
+    table[f"{root}/{name}.{name}"] = {"file": file, "format": "PF_R8G8B8A8", "width": 16, "height": 16}
+    return f"{root}/{name}.{name}"
 
 
 class LayerDetailsTest(unittest.TestCase):
@@ -494,6 +494,30 @@ class LayerDetailsTest(unittest.TestCase):
             self.make_scene(folder, {"First": ("T_Sand_01", (90, 85, 50)), "Second": ("T_EuropeanGrass_01_BC", (120, 95, 60))})
             _, _, report = ground_fit.layer_details(folder, ["Grass_LayerInfo"], np.array([[90.0, 85, 50]]))
             self.assertEqual(report["Grass_LayerInfo"], "T_EuropeanGrass_01_BC")
+
+    def test_the_engines_default_textures_are_never_a_ground_texture(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.make_scene(folder, {"Grass Albedo": ("T_Grass_01", (90, 85, 50))})
+            table = json.loads(Path(folder, "textures.json").read_text())
+            # The landscape material lists its default parameter values beside the ground textures; this one is the nearest to the layer's colour
+            engine = write_texture(folder, table, "BlendFunc_DefBase", (120, 120, 120), root="/Engine/EngineMaterials")
+            Path(folder, "textures.json").write_text(json.dumps(table))
+            landscape = json.loads(Path(folder, "landscape.json").read_text())
+            landscape["level"]["textures"]["BlendFunc_DefBase"] = engine
+            Path(folder, "landscape.json").write_text(json.dumps(landscape))
+            _, _, report = ground_fit.layer_details(folder, ["Unknown_LayerInfo"], np.array([[120.0, 120, 120]]))
+            self.assertEqual(report["Unknown_LayerInfo"], "T_Grass_01")
+
+    def test_a_layer_with_only_engine_textures_to_choose_from_keeps_its_fitted_colour(self):
+        with tempfile.TemporaryDirectory() as folder:
+            os.makedirs(os.path.join(folder, "textures"))
+            table = {}
+            engine = write_texture(folder, table, "BlendFunc_DefBlend", (83, 56, 40), root="/Engine/EngineMaterials")
+            Path(folder, "textures.json").write_text(json.dumps(table))
+            Path(folder, "landscape.json").write_text(json.dumps({"level": {"textures": {"BlendFunc_DefBlend": engine}, "scalars": {}}}))
+            details, _, report = ground_fit.layer_details(folder, ["Gravel_LayerInfo"], np.array([[100.0, 90, 70]]))
+            self.assertEqual(report, {"Gravel_LayerInfo": None})
+            self.assertTrue((details == 128).all())
 
 
 class InvisibleFoliageTest(unittest.TestCase):
