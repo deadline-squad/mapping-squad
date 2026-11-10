@@ -10,9 +10,7 @@ Prints one JSON line.
 """
 
 import argparse
-import io
 import json
-import math
 import os
 import sys
 

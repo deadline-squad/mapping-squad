@@ -2,14 +2,25 @@
 
 Usage: check_alignment.py <map> [<map> ...]   (writes /check/<map>.json and overlay PNGs to /check)
 
-Three independent comparisons per map, each on the building-dense windows of the map:
+Four comparisons per map, each on the building-dense windows of the map:
 
-1. Tiles vs the precise heightmap SquadCalc serves (/heightmaps/<map>/, tools/heightmaps): buildings
-   in the finest tiles (darker grey pixels) against the heightmap's objects (over 2 m above the bare
+0. Tiles vs the Standard HD layer (/hd/<map>-hd/, tools/maprender), the gate of the check: the HD layer is a camera render of
+   the same client meshes, independent of this pipeline's rasterizer, so the two must coincide wherever there are buildings.
+   Windows of HD_WINDOW_M around the largest roofs (at least HD_SPACING_M apart, wholly inside the map: a window over the map's
+   edge holds no picture beyond it, e.g. the walls along Gorodok's border) are resampled from both layers' finest
+   zooms to HD_PIXEL_M per pixel; the offset is the sub-pixel peak of the cross-correlation of their edge images. Pass: the
+   median over at least HD_MIN_WINDOWS measured windows under HD_PASS_M on both axes (the scene raster's cell: the HD
+   layer's own pixel is 0.25 m, so its sub-pixel peak resolves a few centimetres). A positive offset means the tiles lie east
+   (x) or south (y) of HD. Beside the median: the largest deviation of a measured window from it and how many windows lie
+   within HD_PASS_M themselves. Maps without an HD layer fall back to the heightmap gate (1).
+
+1. Tiles vs the precise heightmap SquadCalc serves (/heightmaps/<map>/, tools/heightmaps), from the server's collision: buildings
+   in the finest tiles (the edges of their picture, whatever the style) against the heightmap's objects (over 2 m above the bare
    ground), in the windows with the most buildings, the heightmap placed with SquadCalc's grid convention (whole metres from corner0,
    squadHeightmaps.js getHeight). The offset is the peak of their cross-correlation, refined to
    sub-pixel by a parabola, in pixels of the finest zoom; windows without a clear peak are reported
-   but not counted. Pass: the median over at least two windows under 1 px on both axes.
+   but not counted. Pass: the median over at least two windows under 1 px on both axes. Its windows are 1 m samples, so on
+   the finest zooms (0.07 m per pixel) a correct map can read a pixel off: a gate only where no HD layer exists.
 2. Height reference: the prepared ground against the served heightmap where they agree within 5 cm
    (open ground; the share is reported): the median difference must be under 1 cm, so contour labels read
    the same heights as SquadCalc's readouts.
@@ -29,10 +40,23 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
+import compare_crops
+
 UPSTREAM = "https://squadcalc.app/api/img/maps/{map}/basemap_hq/5_{x}_{y}.webp"
 WINDOW_TILES = 4
 WINDOWS = 4
+# Share of a window that the served heightmap must show as objects for the window to be measured
+MIN_HEIGHTMAP_OBJECTS = 0.01
 SEARCH = 12
+HD_DIR = "/hd"
+HD_WINDOW_M = 76.8
+HD_PIXEL_M = 0.1
+HD_WINDOWS = 8
+HD_SPACING_M = 150.0
+HD_SEARCH_PX = 20
+HD_MIN_PEAK = 0.2
+HD_MIN_WINDOWS = 4
+HD_PASS_M = 0.1
 
 
 def mosaic(tiles_dir, z, x0, y0, n):
@@ -45,12 +69,13 @@ def mosaic(tiles_dir, z, x0, y0, n):
     return image
 
 
-def objectness(rgb):
-    """Buildings in the tiles: grey (low saturation) pixels darker than the ground colours."""
-    f = rgb.astype(np.float32) / 255
-    high, low = f.max(2), f.min(2)
-    saturation = (high - low) / np.maximum(high, 1e-3)
-    return ((saturation < 0.12) & (high > 0.15) & (high < 0.8)).astype(np.float32)
+def edge_strength(image):
+    """Gradient magnitude of the smoothed picture (luminance of an RGB picture, or a mask): where outlines, walls and footprints are."""
+    plane = image.astype(np.float32)
+    if plane.ndim == 3:
+        plane = plane.mean(2)
+    smooth = ndimage.gaussian_filter(plane, 1.5)
+    return np.hypot(ndimage.sobel(smooth, 0), ndimage.sobel(smooth, 1))
 
 
 def peak_offset(a, b, search=SEARCH):
@@ -71,6 +96,67 @@ def peak_offset(a, b, search=SEARCH):
     return float(dx), float(dy), peak
 
 
+def on_ground_grid(hm, ground):
+    """The served heightmap on the 1 m grid of the prepared ground.
+
+    A few maps are served at 0.5 m (Chora, Kokan): their grid is the ground's with every metre split,
+    (n - 1) * step + 1 samples a side, so every step-th sample lies on a ground sample.
+    """
+    if hm.shape == ground.shape:
+        return hm
+    step = (hm.shape[0] - 1) // (ground.shape[0] - 1)
+    if step < 2 or any((g - 1) * step + 1 != h for g, h in zip(ground.shape, hm.shape)):
+        raise ValueError(f"heightmap {hm.shape} does not refine the ground grid {ground.shape}")
+    return hm[::step, ::step]
+
+
+def hd_window_centres(labels, bounds):
+    """Centres (m) of the HD gate's windows: the largest roofs, at least HD_SPACING_M apart, each window wholly inside the map."""
+    half = HD_WINDOW_M / 2
+    centres = []
+    for label in sorted(labels, key=lambda item: -item["area"]):
+        if len(centres) == HD_WINDOWS:
+            break
+        inside = bounds["min_x"] + half <= label["x"] <= bounds["max_x"] - half and bounds["min_y"] + half <= label["y"] <= bounds["max_y"] - half
+        if inside and all(np.hypot(label["x"] - x, label["y"] - y) >= HD_SPACING_M for x, y in centres):
+            centres.append((label["x"], label["y"]))
+    return centres
+
+
+def hd_alignment(slug, tiles, labels):
+    """Report of comparison 0 (see the module docstring), or None when the map has no HD layer."""
+    hd = os.path.join(HD_DIR, f"{slug}-hd")
+    if not os.path.exists(os.path.join(hd, "meta.json")):
+        return None
+    size_px = round(HD_WINDOW_M / HD_PIXEL_M)
+    centres = hd_window_centres(labels, json.load(open(os.path.join(tiles, "meta.json")))["bounds_m"])
+    windows, offsets = [], []
+    previous_px = compare_crops.OUT_PX
+    compare_crops.OUT_PX = size_px
+    try:
+        for x, y in centres:
+            ours = np.asarray(compare_crops.window(tiles, (x, y), HD_WINDOW_M))
+            theirs = np.asarray(compare_crops.window(hd, (x, y), HD_WINDOW_M))
+            dx, dy, peak = peak_offset(edge_strength(ours), edge_strength(theirs), HD_SEARCH_PX)
+            measured = max(abs(dx), abs(dy)) < HD_SEARCH_PX - 0.5 and peak >= HD_MIN_PEAK
+            if measured:
+                offsets.append((dx * HD_PIXEL_M, dy * HD_PIXEL_M))
+            windows.append({"centre_m": [round(x, 1), round(y, 1)], "dx_m": round(dx * HD_PIXEL_M, 3), "dy_m": round(dy * HD_PIXEL_M, 3),
+                            "correlation": round(peak, 3), "measured": measured})
+            Image.fromarray(np.concatenate([ours, theirs], axis=1)).save(f"/check/{slug}_hd_{x:.0f}_{y:.0f}.png")
+    finally:
+        compare_crops.OUT_PX = previous_px
+    report = {"windows": windows, "measured": len(offsets), "pass": False}
+    if offsets:
+        dx, dy = float(np.median([o[0] for o in offsets])), float(np.median([o[1] for o in offsets]))
+        report["offset_m"] = [round(dx, 3), round(dy, 3)]
+        spread = [max(abs(o[0] - dx), abs(o[1] - dy)) for o in offsets]
+        report["max_deviation_m"] = round(max(spread), 3)
+        report["within_pass_m"] = sum(max(abs(o[0]), abs(o[1])) < HD_PASS_M for o in offsets)
+        report["pass"] = abs(dx) < HD_PASS_M and abs(dy) < HD_PASS_M and len(offsets) >= HD_MIN_WINDOWS
+    return report
+
+
 def check(slug):
     prep = os.path.join("/prep", slug)
     tiles = os.path.join("/tiles", slug)
@@ -83,30 +169,40 @@ def check(slug):
     full = 256 * 2 ** z
     px_x, px_y = size_x / full, size_y / full
     ground = np.load(os.path.join(prep, "ground.npy"))
+    hm = on_ground_grid(hm, ground)
     # Objects of the served heightmap: where it rises 2 m above the bare ground
     bumps = (hm - ground > 2.0).astype(np.float32)
     report = {"map": slug, "zoom": z, "m_per_px": round(px_x, 4), "windows": []}
 
-    # The windows with the most buildings (roof labels of prep.py)
+    # The windows with the most buildings: the roof labels of the scene raster that the tiles draw (scene_prep.py), else those of prep.py
+    labels_path = os.path.join(prep, "top_labels.json")
+    if not os.path.exists(labels_path):
+        labels_path = os.path.join(prep, "labels.json")
     n = full // 256 // WINDOW_TILES
     counts = {}
-    for label in json.load(open(os.path.join(prep, "labels.json"))):
+    labels = json.load(open(labels_path))
+    for label in labels:
         key = (int((label["x"] - b["min_x"]) / px_x // (256 * WINDOW_TILES)), int((label["y"] - b["min_y"]) / px_y // (256 * WINDOW_TILES)))
         counts[key] = counts.get(key, 0) + label["area"]
     ranked = sorted(((area, wx, wy) for (wx, wy), area in counts.items() if 0 <= wx < n and 0 <= wy < n), reverse=True)
-    picked = ranked[:WINDOWS]
 
-    offsets = []
-    for _, wx, wy in picked:
+    offsets, picked = [], []
+    for area, wx, wy in ranked:
+        if len(picked) == WINDOWS:
+            break
         x0, y0 = wx * WINDOW_TILES, wy * WINDOW_TILES
-        rgb = mosaic(tiles, z, x0, y0, WINDOW_TILES)
-        ours = objectness(rgb)
         gx = 256 * x0 + np.arange(256 * WINDOW_TILES) + 0.5
         gy = 256 * y0 + np.arange(256 * WINDOW_TILES) + 0.5
         cols = np.clip(np.rint(gx * px_x).astype(int), 0, hm.shape[1] - 1)
         rows = np.clip(np.rint(gy * px_y).astype(int), 0, hm.shape[0] - 1)
         theirs = bumps[np.ix_(rows, cols)]
-        dx, dy, peak = peak_offset(ours, theirs)
+        # The served heightmap leaves out some buildings of the scene (Blueprint actors on a few maps): a window where it
+        # has next to no objects has nothing to correlate with
+        if theirs.mean() < MIN_HEIGHTMAP_OBJECTS:
+            continue
+        picked.append((area, wx, wy))
+        rgb = mosaic(tiles, z, x0, y0, WINDOW_TILES)
+        dx, dy, peak = peak_offset(edge_strength(rgb), edge_strength(theirs))
         # A peak on the search boundary or a weak one is no measurement (too few buildings in the window)
         measured = max(abs(dx), abs(dy)) < SEARCH - 0.5 and peak >= 0.1
         if measured:
@@ -122,6 +218,11 @@ def check(slug):
         report["heightmap_offset_px"] = [round(dx, 2), round(dy, 2)]
         report["heightmap_offset_m"] = [round(dx * px_x, 3), round(dy * px_y, 3)]
         report["heightmap_pass"] = abs(dx) < 1 and abs(dy) < 1 and len(offsets) >= 2
+
+    hd = hd_alignment(slug, tiles, labels)
+    if hd is not None:
+        report["hd"] = hd
+    report["alignment_pass"] = hd["pass"] if hd is not None else report["heightmap_pass"]
 
     open_ground = np.abs(hm - ground) < 0.05
     diff = (ground - hm)[open_ground]
@@ -172,7 +273,7 @@ def main(maps):
             failed.append(slug)
             continue
         report = check(slug)
-        if not report.get("heightmap_pass", True) or not report["height_reference_pass"]:
+        if not report["alignment_pass"] or not report["height_reference_pass"]:
             failed.append(slug)
     print("FAILED: " + " ".join(failed) if failed else "all aligned", flush=True)
     sys.exit(1 if failed else 0)

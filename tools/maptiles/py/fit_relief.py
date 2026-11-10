@@ -18,7 +18,6 @@ import multiprocessing
 import os
 
 import numpy as np
-from PIL import Image
 from scipy import ndimage
 
 import fit_palette
@@ -47,7 +46,7 @@ def task(block):
     d = render._data
     t = d["trace"]
     render.render_block(d, z, bx, by)
-    m = render.MARGIN
+    m = render.block_margin(d, z)
     full = render.TILE * 2 ** z
     w = min(fit_palette.BLOCK_PX, full - bx * fit_palette.BLOCK_PX)
     h = min(fit_palette.BLOCK_PX, full - by * fit_palette.BLOCK_PX)

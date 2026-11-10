@@ -21,7 +21,6 @@ import os
 
 import numpy as np
 from PIL import Image
-from scipy import ndimage
 
 import features
 import render
@@ -29,7 +28,7 @@ import render
 MIN_PIXELS = 4000
 # Opacity of the canopy colours in the fitted styles: a mostly opaque crown takes its colour from the basemap
 # instead of from the ground under it, which a half transparent crown would need to over-correct
-FOLIAGE_ALPHA = {"conifer": 0.8, "deciduous": 0.8, "bush": 0.7, "rock": 0.9}
+FOLIAGE_ALPHA = {"conifer": 0.8, "deciduous": 0.8, "bush": 0.7, "rock": 0.9, "palm": 0.8}
 # Share of a crown's opacity that reaches a pixel classed as that crown (crown coverage is above 0.6, mean about 0.85)
 CROWN_COVERAGE = 0.85
 BLOCK_PX = render.TILE * render.BLOCK_TILES
@@ -89,7 +88,7 @@ def task(block):
     t = d["trace"]
     image = render.render_block(d, z, bx, by)
     del image
-    m = render.MARGIN
+    m = render.block_margin(d, z)
     full = render.TILE * 2 ** z
     w = min(BLOCK_PX, full - bx * BLOCK_PX)
     h = min(BLOCK_PX, full - by * BLOCK_PX)

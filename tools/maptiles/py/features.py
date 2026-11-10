@@ -34,16 +34,17 @@ NO_COVER = 255
 HOLE_INDEX = 255
 
 # Foliage classes, by mesh name; FOLIAGE_SKIP is ground clutter too small for a map symbol
-CONIFER, DECIDUOUS, BUSH, ROCK = 0, 1, 2, 3
-FOLIAGE_CLASSES = ["conifer", "deciduous", "bush", "rock"]
+CONIFER, DECIDUOUS, BUSH, ROCK, PALM = 0, 1, 2, 3, 4
+FOLIAGE_CLASSES = ["conifer", "deciduous", "bush", "rock", "palm"]
 FOLIAGE_SKIP = -1
 _FOLIAGE_RULES = [
     (FOLIAGE_SKIP, r"grass|flower|fern|clutter|weed|foxglove|daisy|nettle|moss_|leaves|leaf_|debris|pebble|snowpole|decal"
                    r"|haybale|log|trash|cardboard|cloth|breezeblock|brick|tire|tyre|barrel|crate|bottle|garbage|litter|paper"),
     (ROCK, r"rock|stone|boulder|cliff"),
     (BUSH, r"shrub|bush|hedge|reed|sapling|scrub|juniper|thorn|bramble|cactus|plant"),
+    (PALM, r"palm"),
     (CONIFER, r"pine|spruce|(^|_)fir|conifer|cedar|larch|cypress|taiga|evergreen"),
-    (DECIDUOUS, r"tree|birch|oak|maple|beech|poplar|willow|palm|aspen|alder|(^|_)elm|(^|_)ash|linden|acacia|olive"
+    (DECIDUOUS, r"tree|birch|oak|maple|beech|poplar|willow|aspen|alder|(^|_)elm|(^|_)ash|linden|acacia|olive"
                 r"|chestnut|walnut|cherry|apple|mulberry|eucalyptus|banana|bamboo|deciduous"),
 ]
 # Foliage whose mesh name matches no rule: a tree from this height (m), a bush from BUSH_MIN_M
@@ -65,15 +66,17 @@ _SPLINE_RULES = [
 ]
 
 # Static mesh classes for the object raster (see prep.py), by mesh path
-STRUCTURE, WALL, ROCK_OBJECT, VEGETATION = 0, 1, 2, 3
-OBJECT_CLASSES = ["structure", "wall", "rock", "vegetation"]
+STRUCTURE, WALL, ROCK_OBJECT, VEGETATION, BRIDGE = 0, 1, 2, 3, 4
+OBJECT_CLASSES = ["structure", "wall", "rock", "vegetation", "bridge"]
 _OBJECT_RULES = [
-    (VEGETATION, r"hedge|tree|bush|shrub|foliage|reed|plant|palm"),
+    (BRIDGE, r"bridge"),
+    (VEGETATION, r"hedge|(?<!s)tree|bush|shrub|foliage|reed|plant|palm"),
     (WALL, r"wall|fence|barrier|hesco|sandbag|railing|guardrail|barricade|gate"),
     (ROCK_OBJECT, r"rock|cliff|boulder|stone|mountain|landscape_mesh|terrain"),
 ]
 
 # Static water surfaces, by mesh path; the exclusions are props named after water
+_OCEAN_ACTOR = r"BP_Ocean(_|$)"
 _WATER_MESH = r"waterplane|oceanplane|oceanwater|sm_env_river|lake|pond"
 _WATER_MESH_EXCLUDE = r"tank|tower|pump|melon|container|rcon|bottle|well"
 
@@ -86,9 +89,12 @@ def _classify(name, rules, default):
     return default
 
 
-def object_class(mesh_path):
-    """Object raster class (STRUCTURE, WALL, ROCK_OBJECT, VEGETATION) of a static mesh, by its path."""
-    return _classify(mesh_path, _OBJECT_RULES, STRUCTURE)
+def object_class(mesh_name):
+    """Object raster class (STRUCTURE, WALL, ROCK_OBJECT, VEGETATION, BRIDGE) of a static mesh, by its asset name.
+
+    The name and not the folder path: a folder called "Streets" is no tree.
+    """
+    return _classify(mesh_name, _OBJECT_RULES, STRUCTURE)
 
 
 def ellipse_polygon(cx, cy, half_x, half_y, yaw_deg, points=16):
@@ -169,10 +175,11 @@ def foliage(directory):
 
 
 def splines(directory):
-    """Landscape spline segments as {cls, left, right, center} in world metres, and a class report.
+    """Landscape spline segments as {cls, meshes, left, right, center} in world metres, and a class report.
 
     ``left`` and ``right`` are the segment's edges (the width the meshes are laid with), ``center``
-    the centre line with its height. Segments whose meshes match no rule are reported and left out.
+    the centre line with its height, ``meshes`` the asset paths of the meshes laid along it.
+    Segments whose meshes match no rule are reported and left out.
     """
     segments = []
     report = {}
@@ -189,6 +196,7 @@ def splines(directory):
         matrix = objects.component_world(item["chain"])
         segments.append({
             "cls": cls,
+            "meshes": sorted(set(item["meshes"])),
             "left": np.round(_transform_points(item["left"], matrix)[:, :2], 2).tolist(),
             "right": np.round(_transform_points(item["right"], matrix)[:, :2], 2).tolist(),
             "center": np.round(_transform_points(item["center"], matrix), 2).tolist(),
@@ -197,11 +205,16 @@ def splines(directory):
 
 
 def sea_level(directory):
-    """World Z (m) of the map's ocean (median over ocean actors of every weather layer), or None."""
+    """World Z (m) of the map's ocean (median over the ocean actors, BP_Ocean*, of every weather layer), or None.
+
+    Only the ocean blueprints count: the ambient sound splines of the shore (BP_SoundSpline_ambience_ocean_calm_01) lie along
+    rivers and lakes at any height (Manicouagan's above its reservoir, 42 m over its ocean), and the ocean's fog and vertex
+    animation managers are not its surface.
+    """
     levels = []
     for line in open(os.path.join(directory, "water.ndjson")):
         item = json.loads(line)
-        if "ocean" in item["actor"].lower() and item["chain"]:
+        if re.match(_OCEAN_ACTOR, item["actor"]) and item["chain"]:
             levels.append(objects.component_world(item["chain"][-1:])[3, 2] / 100)
     return float(np.median(levels)) if levels else None
 
