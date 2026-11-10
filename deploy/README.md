@@ -64,3 +64,11 @@ What the generator cannot do, by hand:
 Then rewrite the provenance tables, which list every weapon of both apps:
 `python3 tools/game_ballistics/provenance.py --resolved ~/data/squad-weapons/resolved.json --dump ~/data/squad-weapons/dump --sb ~/dev/Squad-Ballistics --sc ~/agl/SquadCalc --write tools/volumetric/docs`;
 the same command with `--check` exits 1 while a weapon is missing from them or a value differs from the game unexplained.
+
+After a game patch (a new build of the dedicated server in `~/data/squad-server`), recheck what the calculator keeps by
+hand against the new files with `tools/game_audit/game_audit.sh`: the four `extract-*` commands and `derive`, then
+`git diff tools/game_audit/data` (what the patch changed: mount pitch ranges, sight offsets, landscapes, minimap
+corners, FOB radius and protection zones per layer), `check` (which value of `maps.js` or `weapons.js` no longer equals
+the game's, exit 1) and `api` (the layers the upstream API serves against the game's). The steps are in
+`tools/game_audit/README.md`, "After a game patch"; the weapon checks above (`gamecheck.py`, `provenance.py`,
+`compare.py`) follow, and the heightmaps are rebuilt with `tools/heightmaps/heightmaps.sh`.
