@@ -3,7 +3,9 @@
 #
 #   heightmaps.sh setup               clone CUE4Parse at the pinned commit, build the extractor and the Python image
 #   heightmaps.sh extract             landscape collision and static meshes of every map from the paks
-#   heightmaps.sh build [map ...]     fuse them with SquadHeight into $OUT/<map>/{heightmap.png,meta.json}
+#   heightmaps.sh build [map ...]     fuse them with SquadHeight into $OUT/<map>/{heightmap.png,meta.json}; the client scenes
+#                                     ($SCENES, "maprender.sh scene" of tools/maprender) say which of SquadHeight's objects
+#                                     the game has
 #   heightmaps.sh deploy              copy $OUT into the served SquadCalc (backup first)
 #   heightmaps.sh webp [map ...]      heightmap.webp and its meta.json for heightmaps already in $DIST/heightmaps, into $OUT_WEBP
 #   heightmaps.sh deploy-webp         copy the WebP files of $OUT_WEBP next to the served PNGs (hard-linked backup first, the
@@ -14,6 +16,8 @@
 #   SQUAD_DIR    Squad dedicated server install, read only [~/data/squad-server]
 #   SQUADHEIGHT  unpacked SquadHeight release: <Map>/heightmap.png + meta.json [~/data/squadheight-v1.3.0/x]
 #   WORK         extractor build and extracted data [~/data/squad-extract]
+#   SCENES       client scenes of tools/maprender, read only [~/data/squad-scene]
+#   CLIENT_DIR   Squad game client install the scenes were extracted from (its build id goes into meta.json) [~/data/squad-client]
 #   OUT          built heightmaps [~/data/squad-heightmaps]
 #   OUT_WEBP     WebP files of the served heightmaps [~/data/squad-heightmaps-webp]
 #   DIST         served SquadCalc [~/apps/squadcalc/dist]
@@ -23,6 +27,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 SQUAD_DIR=${SQUAD_DIR:-$HOME/data/squad-server}
 SQUADHEIGHT=${SQUADHEIGHT:-$HOME/data/squadheight-v1.3.0/x}
 WORK=${WORK:-$HOME/data/squad-extract}
+SCENES=${SCENES:-$HOME/data/squad-scene}
+CLIENT_DIR=${CLIENT_DIR:-$HOME/data/squad-client}
 OUT=${OUT:-$HOME/data/squad-heightmaps}
 OUT_WEBP=${OUT_WEBP:-$HOME/data/squad-heightmaps-webp}
 DIST=${DIST:-$HOME/apps/squadcalc/dist}
@@ -35,6 +41,10 @@ game_build() {
     sed -n 's/.*"buildid"[[:space:]]*"\([0-9]*\)".*/\1/p' "$SQUAD_DIR/steamapps/appmanifest_403240.acf"
 }
 
+client_build() {
+    sed -n 's/.*"buildid"[^"]*"\([0-9]*\)".*/\1/p' "$CLIENT_DIR/steamapps/appmanifest_393380.acf" | head -1
+}
+
 extractor() {
     # shellcheck disable=SC2086
     docker run --rm $USER_FLAGS -v "$WORK:/work" -v "$SQUAD_DIR/SquadGame/Content/Paks:/paks:ro" -w /work/bin \
@@ -43,8 +53,8 @@ extractor() {
 
 python_tool() {
     # shellcheck disable=SC2086
-    docker run --rm $USER_FLAGS -v "$HERE/py:/py:ro" -v "$SQUADHEIGHT:/squadheight:ro" -v "$WORK:/work" -v "$OUT:/out" -w /py \
-        "$PY_IMAGE" python -W ignore "$@"
+    docker run --rm $USER_FLAGS -e CLIENT_BUILD="$(client_build)" -v "$HERE/py:/py:ro" -v "$SQUADHEIGHT:/squadheight:ro" -v "$WORK:/work" \
+        -v "$SCENES:/scene:ro" -v "$OUT:/out" -w /py "$PY_IMAGE" python -W ignore "$@"
 }
 
 case "${1:-}" in
@@ -73,8 +83,8 @@ extract)
     ;;
 build)
     shift
-    mkdir -p "$OUT"
-    python_tool build_all.py /squadheight /work /out "$(game_build)" "$@"
+    mkdir -p "$OUT" "$SCENES"
+    python_tool build_all.py /squadheight /work /scene /out "$(game_build)" "$@"
     ;;
 deploy)
     backup="$DIST/heightmaps.bak.$(date +%Y%m%d-%H%M)"
@@ -108,7 +118,7 @@ switch-webp)
     echo "switched $(find "$OUT_WEBP" -name meta.json | wc -l) heightmaps to WebP in $DIST/heightmaps"
     ;;
 *)
-    sed -n '2,15p' "$0"
+    sed -n '2,17p' "$0"
     exit 2
     ;;
 esac
