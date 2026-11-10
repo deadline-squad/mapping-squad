@@ -26,6 +26,10 @@ The grid (documented here, so that a regression in any corner shows up):
   (past every maximum range), with 51 m and 340 m just inside the minimum of the mortars (51.8 m)
   and of the M1064 (358 m);
 * heights of the target above the weapon's ground (m): HEIGHTS, 9 values from -300 to +200;
+* inside the barrel's length: solve.mjs adds, for every weapon whose muzzle is ahead of its pivot (a tank
+  gun's is 5 m ahead), the fractions 0.3, 0.6 and 0.9 of the level muzzle's distance at -0.5, 0 and +0.5 m
+  from its height. The projectile starts at the muzzle, so an angle that only lays the barrel's line
+  through such a target is no solution in either app;
 * near the maximum range: solve.mjs adds, for every weapon that has gravity, the fractions
   0.5, 0.9, 0.99, 0.999, 1.001 and 1.01 of SquadCalc's own getMaxDistance() at -40, 0 and
   +25 m.

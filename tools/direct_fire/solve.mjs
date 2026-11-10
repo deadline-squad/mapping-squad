@@ -1,16 +1,21 @@
 // Solve cases with the real SquadCalc Weapon + SquadFiringSolution; print JSON lines.
 // Every shell of every weapon with a `ballistics` name is solved on the given (distance, height) cases and,
 // for the weapons that fly a gravity trajectory, on a few more distances around the weapon's own maximum
-// range (fractions NEAR_MAX of getMaxDistance) at NEAR_MAX_HEIGHTS. Each line carries the entry's
+// range (fractions NEAR_MAX of getMaxDistance) at NEAR_MAX_HEIGHTS. A weapon whose muzzle is ahead of its
+// pivot is also solved on targets the level muzzle is not short of (fractions BEHIND_MUZZLE of the muzzle's
+// distance ahead, BEHIND_MUZZLE_HEIGHTS around its height). Each line carries the entry's
 // `ballisticsViews` (`views`), the other Squad Ballistics names the same solution stands for.
 import { App } from "./stub-app.mjs";
 const root = process.argv[2];
 const { WEAPONS } = await import(`${root}/src/data/weapons.js`);
 const { Weapon } = await import(`${root}/src/js/squadWeapons.js`);
 const { default: SquadFiringSolution } = await import(`${root}/src/js/squadFiringSolution.js`);
+const { launchPoint } = await import(`${root}/src/js/squadBallistics.js`);
 const cases = JSON.parse(process.argv[3]);
 const NEAR_MAX = [0.5, 0.9, 0.99, 0.999, 1.001, 1.01];
 const NEAR_MAX_HEIGHTS = [-40, 0, 25];
+const BEHIND_MUZZLE = [0.3, 0.6, 0.9];
+const BEHIND_MUZZLE_HEIGHTS = [-0.5, 0, 0.5];
 const out = [];
 for (const w of WEAPONS) {
     if (!w.ballistics) continue;
@@ -32,6 +37,10 @@ for (const w of WEAPONS) {
         const all = cases.map(([distance, height]) => [distance, height, false]);
         if (w.gravityScale !== 0) {
             for (const fraction of NEAR_MAX) for (const height of NEAR_MAX_HEIGHTS) all.push([max * fraction, height, true]);
+        }
+        const muzzle = launchPoint(weapon.getShot(), 0);
+        if (muzzle.x > 0) {
+            for (const fraction of BEHIND_MUZZLE) for (const above of BEHIND_MUZZLE_HEIGHTS) all.push([muzzle.x * fraction, muzzle.y + above, false]);
         }
         for (const [distance, height, nearMax] of all) {
             const fs = new SquadFiringSolution({ lat: 0, lng: 0, h: 0 }, { lat: 0, lng: distance, h: height }, map, 0);
