@@ -46,7 +46,8 @@ def trunk_collision(features_dir):
 
 
 def silhouette(vertices, indices, ranges):
-    """(stamp uint8 [STAMP_PX, STAMP_PX, 2]: coverage, height share; reach cm) of a mesh seen from above.
+    """Stamp uint8 [STAMP_PX, STAMP_PX, 2] (coverage, height share) of a mesh seen from above, spanning its horizontal reach; None
+    when nothing of it is shown.
 
     The coverage is closed over the gaps of loose leaves and smoothed, the height share is the top surface over the mesh's
     highest point, extended into the closed gaps from the nearest surface.
@@ -75,7 +76,7 @@ def silhouette(vertices, indices, ranges):
     height = ndimage.gaussian_filter(np.clip(height, 0, None) / max(z_top, 1.0), 0.8)
     coverage = ndimage.gaussian_filter(closed.astype(np.float64), 0.7)
     stamp = np.stack([np.clip(coverage * 255, 0, 255), np.clip(height * 255, 0, 255)], axis=-1).astype(np.uint8)
-    return stamp, reach
+    return stamp
 
 
 def scene_crowns(scene_dir, features_dir):
@@ -123,7 +124,7 @@ def scene_crowns(scene_dir, features_dir):
             made = silhouette(vertices, indices, scene.visible_ranges(info, (), materials))
             reaches[path] = len(names)
             names.append(path)
-            stamps.append(made[0] if made else np.zeros((STAMP_PX, STAMP_PX, 2), np.uint8))
+            stamps.append(made if made is not None else np.zeros((STAMP_PX, STAMP_PX, 2), np.uint8))
         n = len(matrices)
         columns["x"].append(matrices[:, 3, 0] / 100)
         columns["y"].append(matrices[:, 3, 1] / 100)

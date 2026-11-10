@@ -10,8 +10,8 @@ The highest surface over each sample point is what an orthographic camera lookin
 mesh is one instanced draw of its triangles, its placements the instances, and the fragment writes its height and class.
 Everything else (the ground below, the 2 x 2 samples of a cell, coverage, thin objects) is scene_objects.raster_block, shared with
 the CPU path, so the two differ only in the points that lie on a triangle's edge to within the rasteriser's sub-pixel precision
-(1/256 of a 5 cm sample): the CPU counts an edge point in, the GPU follows the top-left rule. test_scene_gpu.py and bench.py
-measure the difference.
+(1/256 of a 5 cm sample): the CPU counts an edge point in, the GPU follows the top-left rule. test_scene_gpu.py measures the
+difference.
 """
 
 import argparse

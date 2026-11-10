@@ -131,27 +131,27 @@ def hd_alignment(slug, tiles, labels):
     size_px = round(HD_WINDOW_M / HD_PIXEL_M)
     centres = hd_window_centres(labels, json.load(open(os.path.join(tiles, "meta.json")))["bounds_m"])
     windows, offsets = [], []
-    previous_px = compare_crops.OUT_PX
-    compare_crops.OUT_PX = size_px
-    try:
-        for x, y in centres:
-            ours = np.asarray(compare_crops.window(tiles, (x, y), HD_WINDOW_M))
-            theirs = np.asarray(compare_crops.window(hd, (x, y), HD_WINDOW_M))
-            dx, dy, peak = peak_offset(edge_strength(ours), edge_strength(theirs), HD_SEARCH_PX)
-            measured = max(abs(dx), abs(dy)) < HD_SEARCH_PX - 0.5 and peak >= HD_MIN_PEAK
-            if measured:
-                offsets.append((dx * HD_PIXEL_M, dy * HD_PIXEL_M))
-            windows.append({"centre_m": [round(x, 1), round(y, 1)], "dx_m": round(dx * HD_PIXEL_M, 3), "dy_m": round(dy * HD_PIXEL_M, 3),
-                            "correlation": round(peak, 3), "measured": measured})
-            Image.fromarray(np.concatenate([ours, theirs], axis=1)).save(f"/check/{slug}_hd_{x:.0f}_{y:.0f}.png")
-    finally:
-        compare_crops.OUT_PX = previous_px
-    report = {"windows": windows, "measured": len(offsets), "pass": False}
+    for x, y in centres:
+        ours = np.asarray(compare_crops.window(tiles, (x, y), HD_WINDOW_M, size_px))
+        theirs = np.asarray(compare_crops.window(hd, (x, y), HD_WINDOW_M, size_px))
+        dx, dy, peak = peak_offset(edge_strength(ours), edge_strength(theirs), HD_SEARCH_PX)
+        measured = max(abs(dx), abs(dy)) < HD_SEARCH_PX - 0.5 and peak >= HD_MIN_PEAK
+        if measured:
+            offsets.append((dx * HD_PIXEL_M, dy * HD_PIXEL_M))
+        windows.append({"centre_m": [round(x, 1), round(y, 1)], "dx_m": round(dx * HD_PIXEL_M, 3), "dy_m": round(dy * HD_PIXEL_M, 3),
+                        "correlation": round(peak, 3), "measured": measured})
+        Image.fromarray(np.concatenate([ours, theirs], axis=1)).save(f"/check/{slug}_hd_{x:.0f}_{y:.0f}.png")
+    return {"windows": windows, **hd_verdict(offsets)}
+
+
+def hd_verdict(offsets):
+    """The HD gate over the measured windows' offsets (m): their number, median offset, the largest deviation of one window from
+    the median, how many lie within HD_PASS_M, and pass (at least HD_MIN_WINDOWS, the median within HD_PASS_M on both axes)."""
+    report = {"measured": len(offsets), "pass": False}
     if offsets:
         dx, dy = float(np.median([o[0] for o in offsets])), float(np.median([o[1] for o in offsets]))
         report["offset_m"] = [round(dx, 3), round(dy, 3)]
-        spread = [max(abs(o[0] - dx), abs(o[1] - dy)) for o in offsets]
-        report["max_deviation_m"] = round(max(spread), 3)
+        report["max_deviation_m"] = round(max(max(abs(o[0] - dx), abs(o[1] - dy)) for o in offsets), 3)
         report["within_pass_m"] = sum(max(abs(o[0]), abs(o[1])) < HD_PASS_M for o in offsets)
         report["pass"] = abs(dx) < HD_PASS_M and abs(dy) < HD_PASS_M and len(offsets) >= HD_MIN_WINDOWS
     return report

@@ -21,6 +21,7 @@ from scipy import ndimage
 
 import features
 import objects
+import spline_mesh
 
 CELL_M = 0.1
 SUBSAMPLES = 2
@@ -28,10 +29,11 @@ OBJECT_MIN_CM = 5
 COVERAGE_MIN_M = 0.3
 THIN_WIDTH_M = 0.3
 THIN_MARGIN = 4
-# Service volumes that count: walls (their short side) up to SERVICE_THIN_M, or boxes up to SERVICE_SMALL_M2
+# A placement wider and longer than this (m) is scenery beyond the map, no object (SceneObjects.scenery)
 SCENERY_MIN_SIDE_M = 800.0
 # A sky sphere is scenery too wide for the map, but no ground
 SKY_NAME = re.compile(r"sky", re.IGNORECASE)
+# Service volumes that count: walls (their short side) up to SERVICE_THIN_M, or boxes up to SERVICE_SMALL_M2
 SERVICE_THIN_M = 30.0
 SERVICE_SMALL_M2 = 2500.0
 # tools/maprender/scene_render.py: SKIPPED_LEVEL_PARTS, SKIPPED_BLENDS, DEVELOPER_MATERIAL
@@ -165,33 +167,9 @@ def read_mesh(scene_dir, info):
 
 
 def bend_along_spline(vertices, spline, bounds):
-    """Positions [n, 3] (cm) of a mesh deformed along its spline (USplineMeshComponent, forward axis from the file).
-
-    The same deformation as tools/maprender/scene_render.py bend_along_spline: cubic Hermite position, smoothstep scale and offset.
-    """
-    p = spline["p"]
-    vec = lambda v: np.array([v["X"], v["Y"], v["Z"]], np.float64)
-    p0, t0, p1, t1 = vec(p["StartPos"]), vec(p["StartTangent"]), vec(p["EndPos"]), vec(p["EndTangent"])
-    axis = {"X": 0, "Y": 1, "Z": 2}[spline["axis"][-1]]
-    side, up = [(1, 2), (2, 0), (0, 1)][axis]
-    lo, hi = bounds[0][axis], bounds[1][axis]
-    a = np.clip((vertices[:, axis] - lo) / max(hi - lo, 1e-3), 0, 1)[:, None]
-    a2, a3 = a * a, a * a * a
-    position = (2 * a3 - 3 * a2 + 1) * p0 + (a3 - 2 * a2 + a) * t0 + (-2 * a3 + 3 * a2) * p1 + (a3 - a2) * t1
-    direction = (6 * a2 - 6 * a) * p0 + (3 * a2 - 4 * a + 1) * t0 + (-6 * a2 + 6 * a) * p1 + (3 * a2 - 2 * a) * t1
-    direction /= np.maximum(np.linalg.norm(direction, axis=1, keepdims=True), 1e-6)
-    world_up = vec(spline["up"]) if any(spline["up"][k] for k in "XYZ") else np.array([0.0, 0.0, 1.0])
-    right = np.cross(world_up, direction)
-    right /= np.maximum(np.linalg.norm(right, axis=1, keepdims=True), 1e-6)
-    upward = np.cross(direction, right)
-    start_scale, end_scale = p.get("StartScale", {"X": 1, "Y": 1}), p.get("EndScale", {"X": 1, "Y": 1})
-    start_offset, end_offset = p.get("StartOffset", {"X": 0, "Y": 0}), p.get("EndOffset", {"X": 0, "Y": 0})
-    blend = a * a * (3 - 2 * a)
-    scale_x = start_scale["X"] * (1 - blend) + end_scale["X"] * blend
-    scale_y = start_scale["Y"] * (1 - blend) + end_scale["Y"] * blend
-    offset_x = start_offset["X"] * (1 - blend) + end_offset["X"] * blend
-    offset_y = start_offset["Y"] * (1 - blend) + end_offset["Y"] * blend
-    return position + right * (vertices[:, side:side + 1] * scale_x + offset_x) + upward * (vertices[:, up:up + 1] * scale_y + offset_y)
+    """Positions [n, 3] (cm) of a mesh deformed along its spline (USplineMeshComponent), bent with the spline's scale, offset and
+    roll: spline_mesh.bend_along_spline of tools/heightmaps, the deformation tools/maprender/scene_render.py draws too."""
+    return spline_mesh.bend_along_spline(vertices[:, :3], spline, bounds)[0]
 
 
 def corners_of(vertices, indices, ranges):
@@ -330,6 +308,32 @@ def surface_groups(scene_dir):
     return land, water
 
 
+def sheet_groups(scene_dir):
+    """Groups (as surface_groups') of the flat sheets that the game does not show from above: placements of meshes no thicker than
+    OBJECT_MIN_CM whose component is hidden or whose sections are all hidden materials, water meshes and skipped levels aside
+    (surface_groups has those).
+
+    The server's collision holds such a sheet as an object that stands at the sheet's height over the ground below it
+    (scene_prep.legacy_sheets): Goose Bay's ponds and rivers are covered by 18 ``BasicShapes/Plane`` placements with a translucent
+    ice material, 195 000 m2 of them, and 17 are too large for service_boxes.
+    """
+    materials = json.load(open(os.path.join(scene_dir, "materials.json")))
+    sheets, thickness = [], {}
+    for item, path, info in read_instances(scene_dir, shown_only=False):
+        if item["type"] == FOLIAGE_TYPE or item["spline"] is not None or is_water_mesh(path) or any(part in item["level"] for part in SKIPPED_LEVEL_PARTS):
+            continue
+        if not item["hidden"] and visible_ranges(info, tuple(item.get("overrides") or ()), materials):
+            continue
+        if info["id"] not in thickness:
+            vertices, _ = read_mesh(scene_dir, info)
+            thickness[info["id"]] = float(np.ptp(vertices[:, 2])) if len(vertices) else np.inf
+        matrices = component_matrices(item)
+        flat = thickness[info["id"]] * np.linalg.norm(matrices[:, 2, :3], axis=1) <= OBJECT_MIN_CM
+        if flat.any():
+            sheets.append({"mesh": info["id"], "name": path, "cls": 0, "ranges": [(0, info["indices"])], "spline": None, "matrices": matrices[flat]})
+    return sheets
+
+
 def water_planes(scene_dir, z_min):
     """Water surfaces of the scene (lakes, ponds, river planes): [{polygon [[x, y] * 4] in m, z in m above z_min}].
 
@@ -409,6 +413,20 @@ def ground_on_grid(ground, z_min, rows_m, cols_m):
     return (along_rows @ weights).astype(ground.dtype) + z_min
 
 
+def ground_points(ground, z_min, rows_m, cols_m):
+    """Absolute ground height (m) at scattered points rows_m metres south and cols_m metres east of the minimum corner: bilinear
+    on the 1 m grid, the edge values beyond it (ground_on_grid's answer at points that make no grid)."""
+    def axis(coordinates, size):
+        clamped = np.clip(coordinates, 0, size - 1)
+        low = np.minimum(np.floor(clamped).astype(np.int64), max(size - 2, 0))
+        return low, np.minimum(low + 1, size - 1), clamped - low
+    r_low, r_high, r_share = axis(rows_m, ground.shape[0])
+    c_low, c_high, c_share = axis(cols_m, ground.shape[1])
+    north = ground[r_low, c_low] * (1 - c_share) + ground[r_low, c_high] * c_share
+    south = ground[r_high, c_low] * (1 - c_share) + ground[r_high, c_high] * c_share
+    return north * (1 - r_share) + south * r_share + z_min
+
+
 def remove_thin(height_cm, cls, cover):
     """Drop the parts of objects narrower than THIN_WIDTH_M (wires, cables, antennas) in place; walls and bridges are kept at any width.
 
@@ -447,14 +465,15 @@ def block_samples(scene, bounds, r0, r1, c0, c1, sampler):
     return sampler(scene, hits, x0, y0, step, rows, cols) if hits else None
 
 
-def block_cells(samples, ground, z_min, bounds, r0, r1, c0, c1):
+def block_cells(samples, ground, z_min, bounds, r0, r1, c0, c1, thin=True):
     """The second half of raster_block: its result from block_samples' (top, class) or None. Needs no scene, so it can run in another
-    process than the sampling (scene_raster_gpu.py)."""
+    process than the sampling (scene_raster_gpu.py). ``thin=False`` keeps the objects that remove_thin would take out."""
     rows, cols = r1 - r0, c1 - c0
     if samples is None:
         return np.zeros((rows, cols), np.uint16), np.zeros((rows, cols), np.uint8), np.zeros((rows, cols), np.uint8)
     height_cm, cell_class, cover = _cells(*samples, ground, z_min, bounds, r0 - THIN_MARGIN, c0 - THIN_MARGIN)
-    remove_thin(height_cm, cell_class, cover)
+    if thin:
+        remove_thin(height_cm, cell_class, cover)
     inner = (slice(THIN_MARGIN, -THIN_MARGIN), slice(THIN_MARGIN, -THIN_MARGIN))
     return height_cm[inner], cell_class[inner], cover[inner]
 

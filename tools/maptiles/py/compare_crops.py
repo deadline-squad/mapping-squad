@@ -22,8 +22,8 @@ def finest(folder):
     return meta["maxNativeZoom"], meta["bounds_m"]
 
 
-def window(folder, centre, width_m):
-    """RGB picture [OUT_PX, OUT_PX] of the world window of width_m around centre, from the finest zoom of the folder."""
+def window(folder, centre, width_m, out_px=OUT_PX):
+    """RGB picture [out_px, out_px] of the world window of width_m around centre, from the finest zoom of the folder."""
     zoom, b = finest(folder)
     size_x, size_y = b["max_x"] - b["min_x"], b["max_y"] - b["min_y"]
     pixels = 256 * 2 ** zoom
@@ -38,7 +38,7 @@ def window(folder, centre, width_m):
             if os.path.exists(path):
                 mosaic.paste(Image.open(path).convert("RGB"), ((tx - tx0) * 256, (ty - ty0) * 256))
     box = (gx0 - tx0 * 256, gy0 - ty0 * 256, gx1 - tx0 * 256, gy1 - ty0 * 256)
-    return mosaic.resize((OUT_PX, OUT_PX), Image.BILINEAR, box=box)
+    return mosaic.resize((out_px, out_px), Image.BILINEAR, box=box)
 
 
 def pair(before, after, centre, width_m, caption):

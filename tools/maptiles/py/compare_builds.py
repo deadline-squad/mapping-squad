@@ -4,7 +4,7 @@ Usage: compare_builds.py <map> [<map> ...]   (prints JSON; container paths as sc
 
 The detailed tiles take the ground, foliage trunks and the old collision raster from the dedicated server's files (build 26005357,
 /extract/statics) and the visible meshes and crowns from the client's scene (build 26234431, /scene). For every static mesh
-that the server places (outside the skipped levels) the nearest client placement of the same mesh is looked for; a placement
+that the server places (outside the levels the scene skips, scene_objects.SKIPPED_LEVEL_PARTS) the nearest client placement of the same mesh is looked for; a placement
 within MATCH_M counts as the same object. The same is done for foliage: instances per mesh in both builds.
 """
 
@@ -22,8 +22,8 @@ MATCH_M = 0.5
 
 
 def server_placements(statics_dir):
-    """{mesh name: world positions [n, 3] in m} of the server's static meshes (the placements of objects.placements)."""
-    by_mesh, _ = objects.placements(statics_dir)
+    """{mesh name: world positions [n, 3] in m} of the server's static meshes (objects.placements) outside the levels the scene skips."""
+    by_mesh, _ = objects.placements(statics_dir, scene.SKIPPED_LEVEL_PARTS)
     result = {}
     for mesh, mats in by_mesh.items():
         info = json.load(open(os.path.join(statics_dir, "bodies", f"{mesh}.json")))
@@ -37,8 +37,6 @@ def client_placements(scene_dir):
     statics, foliage = {}, {}
     for item, path, _ in scene.read_instances(scene_dir):
         name = path.rsplit("/", 1)[-1].split(".")[0]
-        if any(part in item["level"] for part in objects.SKIPPED_LEVEL_PARTS):
-            continue
         matrices = scene.component_matrices(item)
         if not len(matrices):
             continue

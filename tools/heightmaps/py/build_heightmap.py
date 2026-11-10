@@ -13,7 +13,9 @@ heightmap.png; samples sit on the bounds' min corner and every `cell` from it, t
 
 Fused height where the game has landscape: the highest of T, O, and S where S rises
 OBJECT_MIN_M above T (an object the SDK has; below that S is open ground, or old terrain, and T
-wins). Where the game has no landscape: the highest of S and O.
+wins) and a placement of the game explains it (evidence.py: the SDK's map is not the installed
+build's, and an object that only the SDK has is no height of the game). Where the game has no
+landscape: the highest of S and O.
 
 Output, in <out>/<map>/:
     heightmap.png  16-bit grayscale, height above the map's lowest point = value * z_step_m
@@ -105,12 +107,29 @@ def game_terrain(level_dirs, meta, shape, cell=None):
     return terrain
 
 
-def fuse(terrain, surface, objects=None):
-    """Return (fused heights, statistics) of the sources; `objects` is -inf where no mesh stands."""
+def above_terrain(terrain, surface):
+    """Bool grid: the landscape covers the point and SquadHeight's surface rises OBJECT_MIN_M and more above it (an object of the SDK's map)."""
+    with np.errstate(invalid="ignore"):
+        return surface - terrain >= OBJECT_MIN_M
+
+
+def fuse(terrain, surface, objects=None, explained=None, below=None):
+    """Return (fused heights, statistics) of the sources; `objects` is -inf where no mesh stands.
+
+    `explained`: bool grid of the points of above_terrain where a placement of the game holds SquadHeight's surface
+    (evidence.explained). At the other points of above_terrain the surface is an object that only the SDK's map has, and the
+    game's own surfaces stand: its terrain, its objects and `below`, the terrain or water of a vast client mesh under SquadHeight's
+    surface there (evidence.surface_below, -inf where none). Without `explained` every point of above_terrain takes SquadHeight's
+    surface.
+    """
     diff = surface - terrain
     covered = ~np.isnan(terrain)
-    sdk_objects = covered & (diff >= OBJECT_MIN_M)
+    sdk_objects = above_terrain(terrain, surface)
+    unexplained = np.zeros(sdk_objects.shape, bool) if explained is None else sdk_objects & ~explained
+    sdk_objects = sdk_objects & ~unexplained
     fused = np.where(covered, np.fmax(terrain, np.where(sdk_objects, surface, -np.inf)), surface)
+    if below is not None:
+        fused = np.fmax(fused, np.where(unexplained, below, -np.inf))
     d = diff[covered]
     near = np.abs(d) < NEAR_M
     stats = {
@@ -121,6 +140,8 @@ def fuse(terrain, surface, objects=None):
         "sdk_object_cells": int(sdk_objects.sum()),
         "terrain_above_sdk_cells": int((covered & (diff <= -OBJECT_MIN_M)).sum()),
     }
+    if explained is not None:
+        stats["sdk_unexplained_cells"] = int(unexplained.sum())
     if objects is not None:
         ground = np.where(covered, terrain, surface)
         game_objects = objects - ground >= OBJECT_MIN_M
@@ -165,6 +186,9 @@ def write(out_dir, name, fused, meta, stats, build, cell=None):
             "objects": f"Squad dedicated server build {build}, static mesh collision"
                        if "game_object_cells" in stats else None,
             "sdk_surface": f"SquadHeight {meta.get('exported_utc', '')} (Squad SDK collision trace)",
+            "sdk_objects_kept": f"where a static mesh placement of the server build {build} or a mesh placement of the client scene, "
+                                f"Squad client build {os.environ.get('CLIENT_BUILD', 'unknown')}, holds the surface"
+                                if "sdk_unexplained_cells" in stats else None,
         },
         "object_min_m": OBJECT_MIN_M,
         "stats": stats,

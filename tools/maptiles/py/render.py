@@ -10,14 +10,14 @@ the same as squadGrid.js (gameToMapScale for X, gameToMapScaleY for Y). The fine
 first with at most FINEST_M_PER_PX metres per pixel.
 
 Output in /tiles/<map>/ (swapped in whole when the map is done): <z>/<x>_<y>.webp and meta.json
-(maxNativeZoom, bounds, sources) that the SquadCalc frontend reads.
+(maxNativeZoom, bounds, sources, the legend's symbols) that the SquadCalc frontend reads.
 
 Every input is sampled at the global pixel position, and the label and symbol placements depend
 only on world data, so blocks rendered separately join without seams (a block's margin is wider than
 the longest shadow, the biggest crown and a label). Layers, bottom to top: ground cover (landscape
-physical materials), hillshade and slope tint, contours, water, roads and tracks, object shadows,
-objects (visible meshes of the scene, scene_prep.py), crowns (silhouettes of the real meshes), contour
-labels, roof height labels.
+physical materials), crop fields, tracks painted into the landscape, hillshade and slope tint, contours,
+water, roads and tracks, object shadows, objects (visible meshes of the scene, scene_prep.py), crowns
+(silhouettes of the real meshes), contour labels, summits, roof height labels.
 """
 
 import argparse
@@ -60,7 +60,6 @@ FINEST_M_PER_PX = 0.125
 LEGACY_FINEST_M_PER_PX = 0.33
 OBJECT_CELL_M = 0.1
 NEAR_LEVEL = 3  # pyramid level (0.8 m cells) that tells the contour labels where objects are
-OBJECT_MIN_M = 0.3
 WEBP_QUALITY = 88
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
@@ -74,16 +73,29 @@ COVER_RGB = {
     "PhysMat_Default": (212, 206, 190),
 }
 NO_COVER_RGB = (214, 208, 192)
+# Beyond the game's landscape (cover NO_COVER: SquadHeight's world or the client's low-poly scenery, never played on) the ground is
+# drawn towards this grey by OUTSIDE_ALPHA and without contours, contour labels or summits: a low-poly backdrop shaded and contoured
+# like real ground was the loudest surface of Kohat, Skorpo, Chora, Mestia and Sumari
+OUTSIDE_RGB = (212, 211, 207)
+OUTSIDE_ALPHA = 0.7
 STEEP_RGB = (172, 156, 128)
 WATER_RGB = np.array((156, 196, 226), np.float32)
 WATER_DEEP_RGB = np.array((92, 142, 192), np.float32)
 SHORE_RGB = np.array((62, 112, 168), np.float32)
+# The water's colour runs from shallow to deep with the square root of the depth up to WATER_DEEP_M: half of the range is spent on
+# the first quarter of it (3 m), where a ford differs from a channel; a linear ramp over 12 m left a wadeable stream and a 2 m
+# channel 4 grey levels apart
+WATER_DEEP_M = 12.0
+# The water's depth is cut at this much above the surface before the shore is smoothed, so the smoothing moves a shore by
+# centimetres; the "no surface" of a plane's or river mesh's edge (a billion metres down) ate 4 sigma of water along it
+SHORE_DRY_M = 0.3
+SHORE_LINE_PX = 1.2  # width of the shore line, the level line where the water's cover is a half
 CONTOUR_RGB = np.array((150, 92, 40), np.float32)
 CONTOUR_LABEL_RGB = (128, 72, 24)
 HALO_RGB = (250, 246, 236)
 # Spline layers: fill colour, casing colour (None: no casing), minimum width in pixels
 SPLINE_STYLE = {
-    "dirt": ((204, 170, 118), None, 1.2),
+    "dirt": ((212, 176, 116), (128, 96, 58), 1.2),
     "pavement": ((214, 210, 202), (120, 116, 110), 1.0),
     "asphalt": ((226, 224, 218), (92, 86, 78), 1.6),
     "rail": ((86, 82, 78), None, 1.4),
@@ -91,6 +103,15 @@ SPLINE_STYLE = {
     "hedge": ((104, 140, 76), (70, 102, 50), 1.2),
 }
 ROAD_CLASSES = ("dirt", "pavement", "asphalt")  # spline classes coloured by the "road" field
+# Strength of a spline class's casing (0..1): a dirt road's is half an asphalt road's, enough to carry it across grass for a
+# red-green colour-blind reader (its fill differs from grass mostly in hue: CIEDE2000 2.6 under deuteranopia) without the weight of a road
+CASING_ALPHA = {"dirt": 0.45}
+CASING_ALPHA_DEFAULT = 0.85
+# A railway is its line with cross ties every RAIL_TIE_M metres, RAIL_TIE_REACH times the line's width to each side, where a pixel
+# is at most RAIL_TIE_MAX_PX_M: without them it was a dark line 2.7 CIEDE2000 from a wall
+RAIL_TIE_M = 4.0
+RAIL_TIE_REACH = 1.6
+RAIL_TIE_MAX_PX_M = 1.0
 SPLINE_ORDER = ["dirt", "pavement", "asphalt", "rail", "trench", "hedge"]
 # Weights (0..1) of the landscape's path layers between which a painted track fades in
 PAINTED_TRACK_EDGE = (0.4, 0.6)
@@ -98,7 +119,7 @@ PAINTED_TRACK_EDGE = (0.4, 0.6)
 # tall ones (maize, cannabis) by their height (m), which is what they hide; a diagonal hatch every CROP_HATCH_PX pixels marks them
 # as fields where a pixel is CROP_HATCH_MAX_M or finer
 CROP_EDGE = (0.3, 0.7)
-CROP_RGB = ((0.6, (206, 202, 142)), (2.0, (146, 166, 98)))
+CROP_RGB = ((0.6, (226, 200, 112)), (2.0, (146, 166, 98)))
 CROP_ALPHA = 0.55
 CROP_HATCH_PX = 6.0
 CROP_HATCH_MAX_M = 1.0
@@ -107,7 +128,7 @@ FOLIAGE_STYLE = {
     features.CONIFER: ((40, 98, 56), 0.56, (22, 62, 34)),
     features.DECIDUOUS: ((92, 150, 68), 0.5, (48, 98, 40)),
     features.BUSH: ((128, 160, 86), 0.55, (78, 110, 52)),
-    features.ROCK: ((150, 146, 140), 0.9, (92, 88, 84)),
+    features.ROCK: ((166, 161, 153), 0.9, (124, 119, 112)),
     features.PALM: ((112, 164, 74), 0.62, (64, 110, 44)),
 }
 # Colour of a species (mesh name pattern) over its class colour: crowns of different species differ in colour as in the game
@@ -129,8 +150,11 @@ CROWN_SPRITE_STEP_PX = 0.25
 CROWN_SPRITE_CACHE = 20000
 CROWN_OUTLINE_PX = 2.5
 # Objects: colour ramp of structures by height above ground (m), other classes by colour
-STRUCTURE_RAMP = [(0.3, (222, 214, 200)), (2.0, (196, 186, 170)), (5.0, (170, 158, 142)), (10.0, (140, 130, 118)),
-                  (20.0, (108, 102, 96)), (40.0, (78, 76, 74))]
+# The ramp is a slate (CIELAB hue 285 degrees, chroma 6-8) in even lightness steps L* 74, 62, 52, 42, 33, 25: a hue no ground cover,
+# crown or rock has, so a building differs from a conifer by 2-3 times the colour distance of the earlier grey-brown under the
+# red-green deficiencies, which keep the blue-yellow axis (py/palette_contrast.py)
+STRUCTURE_RAMP = [(0.3, (179, 181, 194)), (2.0, (147, 149, 163)), (5.0, (121, 123, 137)), (10.0, (96, 99, 112)),
+                  (20.0, (75, 77, 88)), (40.0, (57, 59, 68))]
 # A roof is darker than the ground around it by at least ROOF_CONTRAST grey levels (0-255 luma), as far as the ramp allows: the
 # ramp's lightest roofs (low buildings, light beige) vanish on snow or sand, and the edges of a building are what the eye reads on a
 # map. The ramp is squeezed, not cut, so the order of heights stays; ROOF_MIN_SCALE keeps some of it on the darkest ground.
@@ -143,16 +167,18 @@ ROOF_MIN_SCALE = 0.25
 OBJECT_SOLID_PX_M = 1.0
 GROUND_LUMA_LEVEL = 5  # pyramid level (3.2 m cells) of the map of ground luma that roofs are held against
 LUMA = np.array((0.299, 0.587, 0.114), np.float32)
-OBJECT_RGB = {features.WALL: (98, 92, 86), features.ROCK_OBJECT: (160, 154, 146), features.VEGETATION: (118, 152, 86),
+OBJECT_RGB = {features.WALL: (84, 82, 92), features.ROCK_OBJECT: (166, 161, 153), features.VEGETATION: (118, 152, 86),
               features.BRIDGE: (224, 222, 216)}
-OUTLINE_RGB = np.array((52, 48, 44), np.float32)
-# Outlines of the classes that are not buildings: hedges get a green rim, bridge decks the casing of roads
-OUTLINE_BY_CLASS = {features.VEGETATION: np.array((76, 108, 54), np.float32), features.BRIDGE: np.array((92, 86, 78), np.float32)}
+OUTLINE_RGB = np.array((40, 40, 48), np.float32)
+# Outlines of the classes that are not buildings: hedges get a green rim, rocks a grey one (a rock is cover, but its dark rim made
+# it louder than the buildings), bridge and quay decks a rim darker than a road's casing, so a bridge differs from the road on it
+OUTLINE_BY_CLASS = {features.VEGETATION: np.array((76, 108, 54), np.float32), features.BRIDGE: np.array((56, 52, 48), np.float32),
+                    features.ROCK_OBJECT: np.array((124, 119, 112), np.float32)}
+# A deck-class cell (features.BRIDGE: decks, pavements, kerbs, road lines) lower than this above the ground lies on it: a paved
+# surface, drawn in the pavement's colour without rim or relief; higher, it is a bridge or quay deck
+PAVED_MAX_M = 1.0
 STEP_OUTLINE_M = 0.8
 STEP_OUTLINE_PX_M = 1.5
-# The ground a structure's colour measures its height from: the ground smoothed by a Gaussian of this sigma (m), so the edge of a
-# jetty or a rock under a deck, or the landscape's 1 m steps, do not show through a flat roof as a colour edge
-GROUND_BASE_SIGMA_M = 6.0
 SHADOW_FACTOR = 0.72
 # Relief and line strengths a style may change (see apply_style)
 STEEP_ALPHA = 0.4
@@ -184,6 +210,17 @@ ROOF_LABEL_CELL = 64
 ROOF_LABEL_PAD = 3
 ROOF_LABEL_HALF_HEIGHT = 8
 LABEL_FONT_PT = {"contour": 11, "roof": 12}
+# Summits (spot heights): the tops of the ground that stand SUMMIT_RISE_M and more above the mean ground SUMMIT_RING_M around them
+# and are the highest point within SUMMIT_REACH_M, found on the ground smoothed by SUMMIT_SMOOTH_M; drawn as a dot of
+# SUMMIT_DOT_PX radius with the height, the highest rise first, never closer than SUMMIT_SPACING_PX
+SUMMIT_SMOOTH_M = 4.0
+SUMMIT_REACH_M = 40.0
+SUMMIT_RING_M = 60.0
+SUMMIT_RISE_M = 4.0
+SUMMIT_EDGE_M = 8.0  # the highest point of a slope that the map's edge cuts is the top of no hill
+SUMMIT_SPACING_PX = 180
+SUMMIT_DOT_PX = 2.4
+SUMMIT_RGB = (96, 52, 14)
 SHADOW_MIN_CASTER_PX = 2  # an object narrower than this casts no shadow: it is not visible on its own at that zoom
 
 STYLES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles")
@@ -198,7 +235,7 @@ def apply_style(path):
 
     Keys, all optional: COVER_RGB {physical material: rgb}, NO_COVER_RGB, STEEP_RGB, WATER_RGB, WATER_DEEP_RGB,
     SHORE_RGB, CONTOUR_RGB, CONTOUR_LABEL_RGB, SPLINE_FILL {spline class: rgb}, FOLIAGE_RGB {conifer, deciduous,
-    bush, rock: rgb}, FOLIAGE_ALPHA {the same names: opacity of the canopy colour}, STRUCTURE_RAMP [[height m, rgb]], OBJECT_RGB {wall, rock, vegetation: rgb}, SHADOW_FACTOR,
+    bush, rock, palm: rgb}, FOLIAGE_ALPHA {the same names: opacity of the canopy colour}, STRUCTURE_RAMP [[height m, rgb]], OBJECT_RGB {wall, rock, vegetation, bridge: rgb}, SHADOW_FACTOR,
     FIELDS {colour group: {file, cell_m}} (fit_fields.py: the game's regional colours of the ground, water, road, object,
     conifer, deciduous and bush groups, sampled instead of the class colours), STEEP_ALPHA, SHADE_STRENGTH, LIGHT_FROM (azimuth of the light of the ground relief in degrees, image axes: x east,
     y south, the default -135 is the north-west), CONTOUR_ALPHA [minor, major] and GRADE {gain, offset}. Unnamed colours stay
@@ -240,6 +277,36 @@ def apply_style(path):
         STRUCTURE_RAMP[:] = [(float(h), colour(rgb)) for h, rgb in style["STRUCTURE_RAMP"]]
 
 
+def legend():
+    """The map's symbols for a legend, in reading order: [{"key", "kind" ("area", "line" or "point"), "rgb", "outline" (optional)}].
+
+    Written into meta.json, so the page's legend shows the colours of the tiles it has loaded (a style changes them) and
+    needs none of its own. The keys are the page's label keys (SquadCalc src/js/detailedLegend.js, LEGEND_KEYS).
+    """
+    def entry(key, kind, rgb, outline=None):
+        item = {"key": key, "kind": kind, "rgb": [int(round(float(c))) for c in rgb]}
+        if outline is not None:
+            item["outline"] = [int(round(float(c))) for c in outline]
+        return item
+    ramp = dict(STRUCTURE_RAMP)
+    spline = lambda cls: SPLINE_STYLE[cls][0]
+    foliage = lambda cls: FOLIAGE_STYLE[cls][0]
+    return [
+        entry("building_low", "area", ramp[2.0], OUTLINE_RGB), entry("building_tall", "area", ramp[20.0], OUTLINE_RGB),
+        entry("wall", "line", OBJECT_RGB[features.WALL]), entry("deck", "area", OBJECT_RGB[features.BRIDGE], OUTLINE_BY_CLASS[features.BRIDGE]),
+        entry("road_asphalt", "line", spline("asphalt"), SPLINE_STYLE["asphalt"][1]), entry("road_dirt", "line", spline("dirt"), SPLINE_STYLE["dirt"][1]),
+        entry("railway", "line", spline("rail")), entry("trench", "line", spline("trench")),
+        entry("water_shallow", "area", WATER_RGB, SHORE_RGB), entry("water_deep", "area", WATER_DEEP_RGB, SHORE_RGB),
+        entry("contour", "line", CONTOUR_RGB), entry("summit", "point", SUMMIT_RGB),
+        entry("conifer", "point", foliage(features.CONIFER)), entry("deciduous", "point", foliage(features.DECIDUOUS)),
+        entry("bush", "point", foliage(features.BUSH)), entry("rock", "point", foliage(features.ROCK), FOLIAGE_STYLE[features.ROCK][2]),
+        entry("crop_low", "area", CROP_RGB[0][1]), entry("crop_tall", "area", CROP_RGB[1][1]),
+        entry("grass", "area", COVER_RGB["PhysMat_Grass"]), entry("dirt", "area", COVER_RGB["PhysMat_Dirt"]), entry("sand", "area", COVER_RGB["PhysMat_Sand"]),
+        entry("rock_ground", "area", COVER_RGB["PhysMat_Rock"]), entry("snow", "area", COVER_RGB["PhysMat_Snow"]),
+        entry("asphalt_ground", "area", COVER_RGB["PhysMat_Asphalt"]), entry("outside", "area", OUTSIDE_RGB),
+    ]
+
+
 def finest_zoom(size_m, m_per_px=FINEST_M_PER_PX):
     """Smallest zoom whose pixels are at most m_per_px metres."""
     return max(0, math.ceil(math.log2(size_m / (TILE * m_per_px))))
@@ -273,6 +340,7 @@ def load(slug):
         "ground_base": np.load(os.path.join(base, "top_ground_base.npy"), mmap_mode="r"),
         "paths": np.load(os.path.join(base, "top_paths.npy"), mmap_mode="r"),
         "crops": np.load(os.path.join(base, "top_crops.npy"), mmap_mode="r"),
+        "water_top": np.load(os.path.join(base, "top_water_surface.npy"), mmap_mode="r"),
         "cover": np.load(os.path.join(base, "cover.npy"), mmap_mode="r"),
         "foliage": dict(np.load(os.path.join(base, "crowns.npz"))),
         "stamps": np.load(os.path.join(base, "crowns_stamps.npy")),
@@ -311,7 +379,34 @@ def load(slug):
         p = np.asarray(plane["polygon"])
         plane["box"] = (p[:, 0].min(), p[:, 1].min(), p[:, 0].max(), p[:, 1].max())
     d["species_rgb"] = {i: colour for i, name in enumerate(names) for pattern, colour in SPECIES_RGB if re.search(pattern, name, re.IGNORECASE)}
+    # no summit on a rise of a lake's bed
+    tops = summits(np.asarray(ground), np.asarray(d["cover"]), d["sea"])
+    d["summits"] = [s for s in tops if not under_water(d, np.array([d["min_x"] + s["u"]]), np.array([d["min_y"] + s["v"]]), np.array([s["h"]]))[0]]
+    d["summit_cache"] = {}
     return d
+
+
+def summits(ground, cover, sea):
+    """Summits of the ground [{u, v, h, rise}] (u, v: metres east and south of the map's corner; h: the height contours are labelled
+    with), the highest rise first; see SUMMIT_RISE_M. Not beyond the landscape, nor at or below the sea."""
+    step = 2
+    coarse = ndimage.gaussian_filter(np.asarray(ground[::step, ::step], np.float32), SUMMIT_SMOOTH_M / step, mode="nearest")
+    reach = int(round(SUMMIT_REACH_M / step))
+    top = (coarse == ndimage.maximum_filter(coarse, 2 * reach + 1, mode="nearest"))
+    ring = int(round(SUMMIT_RING_M / step))
+    around = ndimage.uniform_filter(coarse, 2 * ring + 1, mode="nearest")
+    found = []
+    edge = int(round(SUMMIT_EDGE_M / step))
+    top[:edge], top[-edge:], top[:, :edge], top[:, -edge:] = False, False, False, False
+    for r, c in zip(*np.nonzero(top & (coarse - around >= SUMMIT_RISE_M))):
+        window = ground[max(0, r * step - step):r * step + step + 1, max(0, c * step - step):c * step + step + 1]
+        dr, dc = np.unravel_index(int(np.argmax(window)), window.shape)
+        v, u = max(0, r * step - step) + dr, max(0, c * step - step) + dc
+        h = float(ground[v, u])
+        if cover[min(v, cover.shape[0] - 1), min(u, cover.shape[1] - 1)] == features.NO_COVER or (sea is not None and h <= sea + 0.5):
+            continue
+        found.append({"u": float(u), "v": float(v), "h": h, "rise": float(coarse[r, c] - around[r, c])})
+    return sorted(found, key=lambda s: (-s["rise"], s["u"], s["v"]))
 
 
 def field_colour(d, group, frame):
@@ -499,25 +594,55 @@ def downsample(canvas, frame):
     return np.asarray(canvas.resize((frame.width, frame.height), Image.BOX), np.float32) / 255
 
 
-def draw_water(d, frame, h, rgb):
-    """Water wherever the ground lies below a water surface: the sea (ocean actors' level), static
-    water planes and river splines (their ribbons at the spline's height: the river mesh is laid
-    bank to bank and the banks rise above it). Returns the water coverage [H, W]."""
+def water_surfaces(d, box):
+    """[(height above the map's lowest point, polygon [n, 2] in world metres)] of the flat water surfaces that reach into a world
+    box: the static water planes and the lakes. Rivers are no planes: see water_top_at."""
     surfaces = []
-    box = frame.world_box(4)
     for plane in d["planes"]:
         b = plane["box"]
         if b[2] < box[0] or b[0] > box[2] or b[3] < box[1] or b[1] > box[3]:
             continue
         surfaces.append((plane["z"], np.asarray(plane["polygon"])))
-    for line in d["lines"]:
-        b = line["box"]
-        if line["cls"] != "river" or b[2] < box[0] or b[0] > box[2] or b[3] < box[1] or b[1] > box[3]:
+    return surfaces
+
+
+def water_top_at(d, u, v):
+    """Height of the scene's river and pond meshes (top_water_surface.npy, scene_prep.river_surface) at points (u, v: metres east
+    and south of the map's corner, arrays of one shape): the nearest sample of the 1 m grid, far below any ground where no mesh lies."""
+    grid = d["water_top"]
+    rows = np.clip(np.floor(v + 0.5).astype(np.int64), 0, grid.shape[0] - 1)
+    cols = np.clip(np.floor(u + 0.5).astype(np.int64), 0, grid.shape[1] - 1)
+    r0, c0 = int(rows.min()), int(cols.min())
+    return np.asarray(grid[r0:int(rows.max()) + 1, c0:int(cols.max()) + 1])[rows - r0, cols - c0]
+
+
+def in_polygon(polygon, x, y):
+    """Bool array: whether the points (x, y arrays) lie in a polygon [n, 2] (even-odd rule)."""
+    inside = np.zeros(np.shape(x), bool)
+    for (x0, y0), (x1, y1) in zip(polygon, np.roll(polygon, -1, axis=0)):
+        if y0 == y1:
             continue
-        z = line["center"][:, 2] - d["meta"]["z_min_m"]
-        for k in range(len(z) - 1):
-            surfaces.append((float(max(z[k], z[k + 1])), np.array([line["left"][k], line["right"][k], line["right"][k + 1], line["left"][k + 1]])))
-    level = np.full(h.shape, -np.inf if d["sea"] is None else d["sea"], np.float32)
+        crosses = ((y0 > y) != (y1 > y)) & (x < (x1 - x0) * (y - y0) / (y1 - y0) + x0)
+        inside ^= crosses
+    return inside
+
+
+def under_water(d, x, y, h):
+    """Bool array: whether the ground of height h at the world points (x, y arrays) lies below the sea or a water surface."""
+    level = np.maximum(-np.inf if d["sea"] is None else d["sea"], water_top_at(d, x - d["min_x"], y - d["min_y"]).astype(np.float64))
+    box = (float(np.min(x)), float(np.min(y)), float(np.max(x)), float(np.max(y)))
+    for z, polygon in water_surfaces(d, box):
+        level = np.where(in_polygon(polygon, x, y), np.maximum(level, z), level)
+    return level > h
+
+
+def draw_water(d, frame, h, rgb):
+    """Water wherever the ground lies below a water surface: the sea (ocean actors' level), static water planes, lakes and the
+    scene's river and pond meshes (a river mesh is laid bank to bank and the banks rise above it; a pixel coarser than its 1 m
+    grid takes the highest of its cells, so a stream stays a line at the overview zooms). Returns the water coverage [H, W]."""
+    surfaces = water_surfaces(d, frame.world_box(4))
+    level = np.maximum(-np.inf if d["sea"] is None else d["sea"],
+                       sample_grid(d["water_top"], frame.u, frame.v, frame.px, 0, np.float32, separable=True, pool="max")).astype(np.float32)
     if surfaces:
         # Painter's order: the higher surface wins where two overlap
         canvas = Image.new("F", (frame.width, frame.height), -1e9)
@@ -526,7 +651,7 @@ def draw_water(d, frame, h, rgb):
             px, py = frame.to_px(polygon[:, 0], polygon[:, 1])
             draw.polygon(list(zip(px.tolist(), py.tolist())), fill=z)
         level = np.maximum(level, np.asarray(canvas, np.float32))
-    depth = level - h
+    depth = np.maximum(level - h, -SHORE_DRY_M)
     # The shore is where the surface meets the ground: smoothed over SHORE_SMOOTH_M so that it is a clean curve at fine zooms
     sigma = min(6.0, SHORE_SMOOTH_M / frame.px)
     if sigma >= 0.4:
@@ -534,7 +659,7 @@ def draw_water(d, frame, h, rgb):
     water = smoothstep(-0.05, 0.15, depth)
     if not water.any():
         return np.zeros(h.shape, np.float32)
-    deep = smoothstep(0.0, 12.0, depth)[..., None]
+    deep = np.sqrt(np.clip(depth / WATER_DEEP_M, 0.0, 1.0))[..., None]
     if d.get("trace") is not None:
         d["trace"]["deep"] = deep[..., 0]
     field = field_colour(d, "water", frame)
@@ -544,9 +669,16 @@ def draw_water(d, frame, h, rgb):
         # The field is the colour of shallow water; the deep and shore colours keep the style's ratios to it
         colour, shore = field * (1 - deep + deep * WATER_DEEP_RGB / WATER_RGB), field * (SHORE_RGB / WATER_RGB)
     blend(rgb, colour, water)
-    edge = np.clip(ndimage.maximum_filter(water, 3) - ndimage.minimum_filter(water, 3), 0, 1) * water
-    blend(rgb, shore, edge * (0.6 if frame.px < 2 else 0.35))
+    blend(rgb, shore, shore_line(water) * (0.75 if frame.px < 2 else 0.45))
     return water
+
+
+def shore_line(water):
+    """Alpha [H, W] of the shore: the level line where the water's cover [H, W] is a half, SHORE_LINE_PX wide whatever the width of
+    the cover's ramp (at the finest zooms the ramp is several pixels and its max-min rim was a faint band)."""
+    gy, gx = np.gradient(water)
+    distance = np.abs(water - 0.5) / (np.hypot(gx, gy) + 1e-6)
+    return np.clip(SHORE_LINE_PX / 2 + 0.5 - distance, 0, 1) * (np.hypot(gx, gy) > 1e-3)
 
 
 def polygon_mask(frame, lines, box, min_width_px):
@@ -624,8 +756,32 @@ def draw_splines(d, frame, rgb, water):
             d["trace"]["splines"][cls] = mask
         if casing_rgb is not None and frame.px < 4:
             grown = ndimage.grey_dilation(mask, size=(3, 3))
-            blend(rgb, casing_rgb, np.clip(grown - mask, 0, 1) * 0.85 * (1 - water))
+            blend(rgb, casing_rgb, np.clip(grown - mask, 0, 1) * CASING_ALPHA.get(cls, CASING_ALPHA_DEFAULT) * (1 - water))
         blend(rgb, fill_rgb, mask * (0.92 if cls != "dirt" else 0.75) * (1 - water * 0.5))
+        if cls == "rail" and frame.px <= RAIL_TIE_MAX_PX_M:
+            blend(rgb, fill_rgb, rail_ties(frame, lines, box, min_width) * 0.92)
+
+
+def rail_ties(frame, lines, box, min_width_px):
+    """Coverage [H, W] of the cross ties of railway splines: a tick across the track every RAIL_TIE_M metres of each segment's
+    centre line (counted from its start, so every block draws the same ticks), RAIL_TIE_REACH line widths to each side."""
+    def draw(canvas, s):
+        for line in lines:
+            b = line["box"]
+            if b[2] < box[0] or b[0] > box[2] or b[3] < box[1] or b[1] > box[3]:
+                continue
+            centre = line["center"][:, :2]
+            along = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(centre, axis=0).T))])
+            width_m = float(np.median(np.hypot(*(line["left"][:, :2] - line["right"][:, :2]).T)))
+            reach = RAIL_TIE_REACH * max(width_m, min_width_px * frame.px)
+            for at in np.arange(RAIL_TIE_M / 2, along[-1], RAIL_TIE_M):
+                k = min(int(np.searchsorted(along, at, side="right")) - 1, len(centre) - 2)
+                direction = (centre[k + 1] - centre[k]) / max(along[k + 1] - along[k], 1e-9)
+                point = centre[k] + direction * (at - along[k])
+                normal = np.array([-direction[1], direction[0]]) * reach
+                (x0, x1), (y0, y1) = frame.to_px(*np.stack([point - normal, point + normal], 1))
+                canvas.line([(x0 * s, y0 * s), (x1 * s, y1 * s)], fill=255, width=max(1, int(round(max(0.5 / frame.px, 1.0) * s))))
+    return supersampled_mask(frame, draw)
 
 
 def contour_alpha(h, gx, gy, interval, width):
@@ -693,6 +849,10 @@ def contour_labels(d, frame, minor, major):
                 ok &= ~objects_near(d, u, v, LABEL_HALF_PX * scale * frame.px)
             if d["sea"] is not None:
                 ok &= level > d["sea"] + 0.5
+            if ok.any():
+                # a label names ground a player can stand on: none on a lake or river (the contours run on under the water) nor
+                # beyond the landscape
+                ok &= ~under_water(d, d["min_x"] + u, d["min_y"] + v, h) & ~outside_landscape(d, u, v)
             if not ok.any():
                 continue
             centre = (cell_px - 1) / 2
@@ -711,6 +871,15 @@ def contour_labels(d, frame, minor, major):
             half = font.getlength(text) / 2 + 3 * scale
             labels.append((x - frame.gx0, y - frame.gy0, angle, text, half))
     return labels
+
+
+def outside_landscape(d, u, v):
+    """Bool array: whether the points (u, v: metres east and south of the map's corner) lie beyond the game's landscape."""
+    cover = d["cover"]
+    rows = np.clip(np.floor(v).astype(np.int64), 0, cover.shape[0] - 1)
+    cols = np.clip(np.floor(u).astype(np.int64), 0, cover.shape[1] - 1)
+    r0, c0 = int(rows.min()), int(cols.min())
+    return np.asarray(cover[r0:int(rows.max()) + 1, c0:int(cols.max()) + 1])[rows - r0, cols - c0] == features.NO_COVER
 
 
 def objects_near(d, u, v, radius_m):
@@ -967,7 +1136,7 @@ def draw_objects(d, frame, rgb, water):
     roofs shaded by the slope of their top so ridges and levels show, a 1 px outline, and shadows cast to the south-east.
 
     The shading and the height steps of the outline follow the top itself (ground + height), and a structure's colour its height
-    over the smoothed ground (GROUND_BASE_SIGMA_M): a flat deck or roof over uneven ground stays flat, the ground's relief does not
+    over the smoothed ground (top_ground_base.npy, scene_prep.GROUND_BASE_SIGMA_M): a flat deck or roof over uneven ground stays flat, the ground's relief does not
     show through it. The ground added back is bilinear between the 1 m samples, as scene_objects.ground_on_grid measured the heights
     from (the cubic ground of the relief rounds a jetty's edge off and would leave a ridge along it on the deck above).
     """
@@ -1016,8 +1185,11 @@ def draw_objects(d, frame, rgb, water):
         colour = roof_contrast(colour, luma)
         for c, value in OBJECT_RGB.items():
             colour[cls == c] = value
+        paved = (cls == features.BRIDGE) & (height < PAVED_MAX_M)
+        colour[paved] = SPLINE_STYLE["pavement"][0]
     else:
         colour = field[box]
+        paved = np.zeros(cls.shape, bool)
     # Roof relief: hillshade of the object's top over the pixel grid
     gy, gx = np.gradient(ndimage.gaussian_filter(top, 0.5))
     gx /= frame.px
@@ -1025,7 +1197,8 @@ def draw_objects(d, frame, rgb, water):
     normal_z = 1 / np.sqrt(1 + gx * gx + gy * gy)
     lam = (-gx * LIGHT[0] - gy * LIGHT[1] + LIGHT[2]) * normal_z
     shade = np.clip(1 + 0.8 * (lam - LIGHT[2]), 0.55, 1.25)
-    shade = np.where(np.isin(cls, (features.VEGETATION, features.BRIDGE)), np.clip(shade, 0.92, 1.08), shade)[..., None]
+    shade = np.where(np.isin(cls, (features.VEGETATION, features.BRIDGE)), np.clip(shade, 0.92, 1.08), shade)
+    shade = np.where(paved, 1.0, shade)[..., None]
     blend(rgb, np.clip(colour * shade, 0, 255), alpha)
     # Outline: the rim of the footprint, 1 px wide at every zoom, and where a pixel is at most STEP_OUTLINE_PX_M metres the height
     # steps over STEP_OUTLINE_M inside it (at a wider pixel every cluster of objects is full of them)
@@ -1039,7 +1212,7 @@ def draw_objects(d, frame, rgb, water):
     line = np.broadcast_to(OUTLINE_RGB, rgb.shape).copy()
     for c, value in OUTLINE_BY_CLASS.items():
         line[cls == c] = value
-    blend(rgb, line, np.clip(strength, 0, 1) * 0.85)
+    blend(rgb, line, np.clip(strength, 0, 1) * 0.85 * ~paved)
 
 
 def roof_labels_of(d, frame):
@@ -1087,6 +1260,52 @@ def roof_labels(d, frame, canvas):
         if not (-MARGIN < x < frame.width + MARGIN and -MARGIN < y < frame.height + MARGIN):
             continue
         paste(canvas, text_patch(text, font, 0, LABEL_TEXT_RGB, HALO_RGB, LABEL_HALO_PX * scale), x, y)
+
+
+def summits_of(d, frame):
+    """Summit labels placed on the pixel grid of this zoom: ([(x px, y px, text)], [label boxes]) in global pixels, the highest rise
+    first, none within SUMMIT_SPACING_PX (times label_scale) of one already placed, none on a roof label. Computed once per zoom."""
+    cache = d["summit_cache"]
+    if frame.z in cache:
+        return cache[frame.z]
+    scale = label_scale(d, frame.z)
+    font = label_font(d, "contour", scale)
+    spacing = SUMMIT_SPACING_PX * scale
+    roofs = roof_labels_of(d, frame)[1] if frame.z >= d["legacy_finest"] - 1 else []
+    placed, boxes, taken = [], [], {}
+    for summit in d["summits"]:
+        gx, gy = summit["u"] / frame.px_x, summit["v"] / frame.px_y
+        cell = (int(gx // spacing), int(gy // spacing))
+        near = [p for i in range(cell[0] - 1, cell[0] + 2) for j in range(cell[1] - 1, cell[1] + 2) for p in taken.get((i, j), ())]
+        if any(math.hypot(gx - x, gy - y) < spacing for x, y in near):
+            continue
+        text = f"{summit['h']:.0f}"
+        box = (gx - SUMMIT_DOT_PX * scale - 2, gy - ROOF_LABEL_HALF_HEIGHT * scale, gx + (SUMMIT_DOT_PX + 4) * scale + font.getlength(text), gy + ROOF_LABEL_HALF_HEIGHT * scale)
+        if any(b[0] < box[2] and b[2] > box[0] and b[1] < box[3] and b[3] > box[1] for b in roofs):
+            continue
+        if frame.px <= 1 and objects_near(d, np.array([summit["u"]]), np.array([summit["v"]]), 2.0)[0]:
+            continue
+        taken.setdefault(cell, []).append((gx, gy))
+        placed.append((gx, gy, text))
+        boxes.append(box)
+    cache[frame.z] = (placed, boxes)
+    return cache[frame.z]
+
+
+def summit_labels(d, frame, canvas):
+    """The summits of summits_of in a block: a dot on the top and its height to the right."""
+    scale = label_scale(d, frame.z)
+    font = label_font(d, "contour", scale)
+    draw = ImageDraw.Draw(canvas)
+    radius = SUMMIT_DOT_PX * scale
+    for gx, gy, text in summits_of(d, frame)[0]:
+        x, y = gx - frame.gx0, gy - frame.gy0
+        reach = radius + 6 * scale + font.getlength(text)
+        if not (-reach < x < frame.width + reach and -reach < y < frame.height + reach):
+            continue
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=SUMMIT_RGB + (255,), outline=HALO_RGB + (255,), width=max(1, scale))
+        patch = text_patch(text, font, 0, SUMMIT_RGB, HALO_RGB, LABEL_HALO_PX * scale)
+        paste(canvas, patch, x + radius + 2 * scale + patch.width / 2, y)
 
 
 def block_margin(d, z):
@@ -1144,6 +1363,8 @@ def render_block(d, z, bx, by):
     gy, gx = np.gradient(h)  # metres per pixel
     slope = np.hypot(gx / frame.px_x, gy / frame.px_y)
 
+    outside = sample_grid(d["cover"], frame.u, frame.v, px, 1, np.float32, transform=lambda w: (w == features.NO_COVER).astype(np.float32),
+                          separable=True, smooth_m=0.7).astype(np.float32)
     # Material boundaries softened by 0.7 m (bilinear alone leaves diamond-shaped steps at fine zooms)
     rgb = field_colour(d, "ground", frame)
     if rgb is None:
@@ -1151,12 +1372,14 @@ def render_block(d, z, bx, by):
                           separable=True, smooth_m=0.7).astype(np.float32)
         steep = smoothstep(0.6, 1.5, slope) * STEEP_ALPHA
         blend(rgb, STEEP_RGB, steep.astype(np.float32))
+        blend(rgb, OUTSIDE_RGB, outside * OUTSIDE_ALPHA)
 
     exaggeration = 1.0 if px <= 2 else min(4.0, 1.0 + 0.5 * math.log2(px / 2) * 1.5)
     sx = gx / frame.px_x * exaggeration
     sy = gy / frame.px_y * exaggeration
     strength = SHADE_STRENGTH * (MDOW_CONTRAST if MULTIDIRECTIONAL_RELIEF else 1.0)
     shade = np.clip(1 + strength * (ground_light(sx, sy) - LIGHT[2]), 0.6, 1.18)
+    shade = 1 + (shade - 1) * (1 - OUTSIDE_ALPHA * outside)
     rgb *= shade[..., None].astype(np.float32)
     trace = d.get("trace")
     if trace is not None:
@@ -1170,15 +1393,14 @@ def render_block(d, z, bx, by):
     minor, major = contour_intervals(d, px)
     scale = label_scale(d, z)
     labels = contour_labels(d, frame, minor, major)
-    if z >= d["legacy_finest"] - 1:
-        roof_boxes = roof_labels_of(d, frame)[1]
-        labels = [label for label in labels if not any_overlap(label, roof_boxes, frame, scale)]
+    taken_boxes = summits_of(d, frame)[1] + (roof_labels_of(d, frame)[1] if z >= d["legacy_finest"] - 1 else [])
+    labels = [label for label in labels if not any_overlap(label, taken_boxes, frame, scale)]
     a_minor, level = contour_alpha(h, gx, gy, minor, (0.9 if px < 1 else 0.7) * scale)
     is_major = (np.abs(np.round(level / major) * major - level) < 1e-3)
     a_major, _ = contour_alpha(h, gx, gy, major, (1.5 if px < 4 else 1.1) * scale)
     a_minor = np.where(is_major, 0, a_minor) * CONTOUR_ALPHA[0]
     a_major *= CONTOUR_ALPHA[1]
-    contours = np.maximum(a_minor, a_major)
+    contours = np.maximum(a_minor, a_major) * (1 - outside)
     knockout(contours, labels, 7.0 * scale)
     blend(rgb, CONTOUR_RGB, contours.astype(np.float32))
 
@@ -1197,6 +1419,7 @@ def render_block(d, z, bx, by):
     font = label_font(d, "contour", scale)
     for x, y, angle, text, _ in labels:
         paste(canvas, text_patch(text, font, angle, CONTOUR_LABEL_RGB, HALO_RGB, LABEL_HALO_PX * scale), x, y)
+    summit_labels(d, frame, canvas)
     roof_labels(d, frame, canvas)
     return canvas.convert("RGB")
 
@@ -1222,7 +1445,7 @@ def _render(task):
     if uniform is not None:
         shared = d.setdefault("uniform_tiles", {})
         for tx, ty in places:
-            path = os.path.join(folder, f"{bx * BLOCK_TILES + tx}_{by * BLOCK_TILES + ty}.webp")
+            path = vacant(os.path.join(folder, f"{bx * BLOCK_TILES + tx}_{by * BLOCK_TILES + ty}.webp"))
             if (z, uniform) in shared:
                 os.link(shared[(z, uniform)], path)
             else:
@@ -1234,8 +1457,16 @@ def _render(task):
     for tx, ty in places:
         left, top = margin + tx * TILE, margin + ty * TILE
         tile = image.crop((left, top, left + TILE, top + TILE))
-        tile.save(os.path.join(folder, f"{bx * BLOCK_TILES + tx}_{by * BLOCK_TILES + ty}.webp"), "WEBP", quality=WEBP_QUALITY, method=4)
+        tile.save(vacant(os.path.join(folder, f"{bx * BLOCK_TILES + tx}_{by * BLOCK_TILES + ty}.webp")), "WEBP", quality=WEBP_QUALITY, method=4)
     return len(places)
+
+
+def vacant(path):
+    """path, with the tile a previous render left there removed (a render into a folder that holds tiles, --out): the tiles of a
+    uniform block are hard links to one file, which writing over one of them would change for all."""
+    if os.path.lexists(path):
+        os.unlink(path)
+    return path
 
 
 def tasks_for(zooms, blocks=None):
@@ -1246,13 +1477,6 @@ def tasks_for(zooms, blocks=None):
     if blocks:
         tasks = [t for t in tasks if t in blocks]
     return tasks
-
-
-def write_ground_base(base):
-    """top_ground_base.npy in a map's prep directory: top_ground (1 m grid) smoothed by GROUND_BASE_SIGMA_M (draw_objects), written
-    once before the workers start."""
-    ground = np.load(os.path.join(base, "top_ground.npy")).astype(np.float32)
-    np.save(os.path.join(base, "top_ground_base.npy"), ndimage.gaussian_filter(ground, GROUND_BASE_SIGMA_M, mode="nearest"))
 
 
 def main():
@@ -1279,7 +1503,6 @@ def main():
     os.makedirs(staging, exist_ok=True)
     tasks = tasks_for(zooms, blocks)
     started = time.time()
-    write_ground_base(os.path.join(PREP_DIR, slug))
     done = 0
     with multiprocessing.Pool(args.workers, _init, (slug, staging, style)) as pool:
         for i, count in enumerate(pool.imap_unordered(_render, tasks), 1):
@@ -1298,8 +1521,9 @@ def main():
         "metresPerPixel": round(m_per_px, 4),
         "bounds_m": b,
         "url": "{z}/{x}_{y}.webp",
+        "legend": legend(),
         "sources": f"{build}: landscape collision and physical materials (ground), foliage collision (trunks), landscape splines, water, "
-                   f"static mesh collision and SquadHeight (Blueprint objects the scene lacks); Squad client build "
+                   f"static mesh collision (objects the scene raster leaves out) and SquadHeight (ground beyond the landscape); Squad client build "
                    f"{os.environ.get('CLIENT_BUILD', 'unknown')}: visible LOD 0 meshes and foliage (objects, roofs, crowns), scenery meshes "
                    f"(ground beyond the landscape where the server has none) (tools/maptiles)",
         "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

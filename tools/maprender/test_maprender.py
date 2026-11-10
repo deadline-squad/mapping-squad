@@ -4,6 +4,7 @@ Everything that decides a colour or what is drawn is tested on small arrays and 
 RealSceneTest renders a scene of the game client on the GPU and needs MAPRENDER_SCENE=<slug> with its texture name in MAPRENDER_TEXTURE.
 """
 import json
+import math
 import os
 import tempfile
 import unittest
@@ -609,6 +610,34 @@ class CalibrateMaterialsTest(unittest.TestCase):
         scene = FakeMaterialScene("/a/Roof.Roof", "BLEND_Opaque", lit)
         ground_fit.calibrate_materials(scene, reference, (0.0, 0.0), 32.0, block=32, step_m=1.0, iterations=1, roof_target=(219, 206, 191))
         np.testing.assert_allclose(np.array(scene.material_gains[scene.path]) * scene.gain[0], [(v / 100) ** 2.2 for v in (219, 206, 191)], rtol=0.01)
+
+
+class SplineBendTest(unittest.TestCase):
+    """A spline mesh is turned about its spline by the component's roll: a slab 10 m long (Y, its forward axis), 4 m wide (X) and
+    0.5 m thick (Z), its top facing up, along a straight spline that runs east."""
+
+    @staticmethod
+    def bent(roll):
+        corners = [(x, y, z) for x in (-200.0, 200.0) for y in (0.0, 1000.0) for z in (0.0, 50.0)]
+        vertices = np.array([[x, y, z, 0.0, 0.0, 1.0, x / 400.0, y / 1000.0] for x, y, z in corners])
+        east = {"X": 1000.0, "Y": 0.0, "Z": 0.0}
+        spline = {"p": {"StartPos": {"X": 0.0, "Y": 0.0, "Z": 0.0}, "StartTangent": east, "StartRoll": roll, "EndPos": east, "EndTangent": east, "EndRoll": roll},
+                  "axis": "Y", "up": {"X": 0.0, "Y": 0.0, "Z": 1.0}}
+        return vertices, scene_render.bend_along_spline(vertices, spline, (vertices[:, :3].min(0), vertices[:, :3].max(0)))
+
+    def test_the_quarter_turn_of_a_landscape_spline_stands_a_mesh_that_runs_along_y_up(self):
+        # Manicouagan's double pipeline, crash barriers, railway tracks, fences: without the roll they lay on their side, a thin line off the spline
+        vertices, bent = self.bent(-math.pi / 2)
+        np.testing.assert_allclose(bent[:, :3].min(0), (0, -200, 0), atol=1e-6)
+        np.testing.assert_allclose(bent[:, :3].max(0), (1000, 200, 50), atol=1e-6)
+        np.testing.assert_allclose(bent[:, 3:6], np.tile((0.0, 0.0, 1.0), (8, 1)), atol=1e-6)
+        np.testing.assert_array_equal(bent[:, 6:], vertices[:, 6:])
+
+    def test_without_a_roll_the_x_axis_of_such_a_mesh_is_up(self):
+        _, bent = self.bent(0.0)
+        np.testing.assert_allclose(bent[:, :3].min(0), (0, 0, -200), atol=1e-6)
+        np.testing.assert_allclose(bent[:, :3].max(0), (1000, 50, 200), atol=1e-6)
+        np.testing.assert_allclose(bent[:, 3:6], np.tile((0.0, 1.0, 0.0), (8, 1)), atol=1e-6)
 
 
 class DepthRangeTest(unittest.TestCase):

@@ -63,10 +63,59 @@ page and checks their grid, decode time and page heights at the game's vertices.
 | Terrain | landscape collision heightfields (`LandscapeHeightfieldCollisionComponent` cooked Chaos heightfield) of the map's landscape levels, placed with the landscape actor's transform (location, yaw, scale) | 16-bit per tile, ~0.3 mm; grid 1–1.2 m |
 | Objects | collision of every static mesh placed on the map (`StaticMeshComponent`, instanced components, spline meshes with their bent BodySetup): complex triangle meshes from the cooked Chaos data, else the simple shapes (boxes, spheres, capsules, convex hulls) | the collision itself, sampled at each grid point |
 | SDK surface | [SquadHeight](https://github.com/Metroseksuaali/SquadHeight) 1.3.0: top-most trace of the Squad SDK collision | 1.6 cm |
+| Placements | which of SquadHeight's objects the game has (`py/evidence.py`): the collision boxes of the server's static mesh placements, and the mesh placements that the client scene shows (`SquadExtract scene` of `tools/maprender`, `$SCENES`) | a box and 1 m around it; the mesh's own surface, within 1 m, for a placement wider and longer than 800 m |
 
 Fused height: the highest of the game terrain, the game objects, and SquadHeight where it rises
-0.5 m above the game terrain (an object the SDK has, for example a Blueprint actor). Outside the
-game landscape SquadHeight's surface is used.
+0.5 m above the game terrain (an object the SDK has) and a placement of the game explains it.
+Outside the game landscape SquadHeight's surface is used.
+
+### Which of SquadHeight's objects are taken
+
+SquadHeight was traced in the Squad SDK, whose version of a map is not the installed build's, so what it holds above the
+terrain is a height of the game only where the game has something there. The server's static collision cannot say so alone:
+`SquadExtract statics` has no foliage (trees, rocks) and none of the components whose mesh is set in their Blueprint (the lake
+planes of Manicouagan, the houses of Al Basrah's village clusters, Fools Road's barns and village houses), and for those
+SquadHeight is the heightmap's only source. `py/evidence.py` therefore asks both builds. A grid point keeps SquadHeight's surface
+when
+
+* it lies under the collision box of a static mesh placement of the server, or under the box of a mesh placement that the client
+  scene shows (static, instanced, foliage and spline meshes, Blueprint components, water planes; not hidden, not in a `_Vista`,
+  `/Coop/`, `/Tutorials/` or editor level), 1 m around the box included, and its height lies between the box's bottom and top,
+  1 m beyond them included: a block standing on a road mesh or over the sea is not explained by them;
+* or a mesh of the client scene wider and longer than 800 m passes within 1 m of it, above or below. Such a placement is no
+  object over a point (its box holds the whole map) but terrain or water that the game shows: Kamdesh's background mountains
+  `Mountain1Final`, whose foot stands on the landscape and which SquadHeight follows to 0.25 m over 381 093 m2; the ocean plane,
+  143 km wide; the lakes. A sky sphere passes near nothing.
+
+Everywhere else SquadHeight's object is one that only the SDK's map has, and the game's own surfaces stand: its terrain, its
+static collision, and the terrain or water of a client mesh wider than 800 m under SquadHeight's surface there (48 of Al Basrah's
+blocks' points stand in the river: they take the water's level, not the river bed under it).
+`meta.json` counts those points (`stats.sdk_unexplained_cells`) and names the builds (`sources.sdk_objects_kept`). A map without a
+client scene keeps every object of SquadHeight, as before, and `build` prints that.
+
+Measured on the 25 maps, the served heightmaps of server build 26005357 against this rule with the client scenes of build
+26234431: SquadHeight stands 0.5 m and more above the terrain at 28 515 530 grid points; a placement explains 27 949 202 of them
+(20 946 035 only one of the client: 18 713 366 the water and the mountains of a mesh wider than 800 m, the rest foliage and
+Blueprint components; 25 566 only one of the server). Of the 566 328 others, 554 201 lie on the server's own static collision at
+the same height and do not change (Gorodok 405 962, Narva 148 238: a mesh wider than 800 m that SquadHeight traced too), and
+12 127 points, 11 480 m2, change:
+
+| Map | Points lowered | m2 | of them by 2 m and more | Largest, m (median) | What SquadHeight held there, and what stands now |
+|---|---|---|---|---|---|
+| Al Basrah | 11 226 | 11 226 | 10 086 | 22.48 (6.17) | the background city of the `_Vista` level along the map's edge (largest regions 1 311, 1 138 and 1 108 m2, 3.5 to 6.6 m above the ground on the median and up to 13.4 m) and walls in open sand; the server has that level with collision switched off on 300 of its 338 static mesh components. Now the terrain (11 166 points), the river's water (48) and the server's collision (12) |
+| Chora (0.5 m grid) | 792 | 198 | 259 | 8.44 (1.59) | strips 1.4 and 3.5 m above the terrain on the median (the largest 57.5 and 30 m2) and objects above the server's collision of a river plane; now the terrain (473 points), that collision (254) and the water (65) |
+| Kokan (0.5 m grid) | 71 | 17.8 | 59 | 9.41 (5.91) | objects that the game's collision has lower (its three largest regions 6.9, 8.6 and 7.6 m above the ground on the median, the game's collision there at most 0.7, 3.1 and 6.4 m), which they now take (58 points; the terrain at 13) |
+| Skorpo | 16 | 16 | 4 | 30.70 (0.61) | single points, and a tree crown 30.7 m above the terrain (3 m2) that no tree of the game reaches; now the terrain |
+| Anvil | 17 | 17 | 0 | 0.72 (0.53) | single points 0.5 to 0.7 m above the terrain; now the terrain |
+| Gorodok | 5 | 5 | 0 | 1.84 (1.15) | single points 0.5 to 1.8 m above the terrain; now the terrain |
+
+The other 19 maps do not change. At every changed point the client's landscape collision (build 26234431, extracted like the
+server's) is the server's (largest difference 0.00 m) and nowhere comes within 0.5 m of SquadHeight's surface, so none of it is
+terrain of the game; no mesh of the client's own levels passes within 1 m of it either (on Al Basrah a mesh of the `_Vista` level
+does at 4 299 of the 11 226 points: scenery the game shows and the server does not collide with).
+`build` of the six maps writes exactly this: their heightmaps differ from the served ones at the points above, by the measured
+lowering to 1 cm, and nowhere else but at 12 764 points of Gorodok, one 16-bit level (1.4 mm) lower, where the server's collision
+holds SquadHeight's surface to the millimetre.
 
 Checks (Squad build 26005357):
 
@@ -135,18 +184,22 @@ index lists with `SquadExtract list`, so the install is complete) and the pak co
 
 Requirements: Docker, the Squad dedicated server installed with SteamCMD (app 403240, anonymous),
 the SquadHeight release unpacked (`heightmap_images_16bit_png.zip` and the `meta.json` files of
-`heightmaps_1m_fullres.zip`).
+`heightmaps_1m_fullres.zip`), and for `build` the client scenes of `tools/maprender` (`maprender.sh scene`, which
+needs the game client): `$SCENES/<map>` says which of SquadHeight's objects the game has.
 
 ```sh
 tools/heightmaps/heightmaps.sh setup     # CUE4Parse at the pinned commit + cue4parse.patch, extractor, Python image
 tools/heightmaps/heightmaps.sh extract   # landscapes and static meshes of every map (about 1 h)
 tools/heightmaps/heightmaps.sh build     # fused heightmaps into $OUT (about 1–2 h); "build skorpo" for one map
-tools/heightmaps/heightmaps.sh deploy    # copy into the served SquadCalc, previous copy kept as heightmaps.bak.<date>
+tools/heightmaps/heightmaps.sh deploy    # replace the built files in the served SquadCalc, previous copy kept as heightmaps.bak.<date>
 ```
 
-Paths are set with `SQUAD_DIR`, `SQUADHEIGHT`, `WORK`, `OUT` and `DIST` (see the script header).
-After a game patch: update the server with SteamCMD, then `extract`, `build`, `deploy`; a new map
-goes into `py/maps.py` (its SquadHeight name and landscape levels).
+Paths are set with `SQUAD_DIR`, `SQUADHEIGHT`, `WORK`, `SCENES`, `CLIENT_DIR`, `OUT` and `DIST` (see the script header).
+After a game patch: update the server with SteamCMD and the client scenes (`tools/maprender/maprender.sh scene`), then
+`extract`, `build`, `deploy`; a new map goes into `py/maps.py` (its SquadHeight name and landscape levels).
+`deploy` replaces in each served map folder only what `build` wrote for it (`heightmap.png`, `heightmap.webp` and the keys of
+`meta.json`); the volume layer of `tools/volumetric` (`volume.vcol`, `terrain.bin` and the `volume` key of `meta.json`) stays,
+and so do the maps `$OUT` does not hold. A map of `$OUT` that lacks one of its three files stops it before anything is touched.
 
 ## Interpolation: the game's triangles
 
@@ -195,7 +248,7 @@ verdicts for 1, 0.5 and 0.25 m grids written by `py/compare_resolution.py`.
 
 Files:
 
-* `py/compare_native_vertices.py` — the table above; `py/test_build_heightmap.py` — grid arithmetic tests
+* `py/compare_native_vertices.py` — the table above; `py/test_build_heightmap.py` — grid arithmetic and fusion tests
   (`python -m unittest test_build_heightmap`);
 * `extractor/` — SquadExtract (C#, [CUE4Parse](https://github.com/FabianFG/CUE4Parse)): `list`,
   `landscape`/`extractall` (landscape collision), `statics` (static mesh placements and collision),
@@ -205,9 +258,13 @@ Files:
   landscape collision that CUE4Parse skips.
 * `py/heightmap_webp.py`, `py/convert_webp.py` — the WebP form above;
 * `py/landscape.py` — cooked Chaos heightfield reader and landscape assembly;
-  `py/objects.py` — static mesh collision rasterizer; `py/build_heightmap.py`, `py/build_all.py` —
+  `py/objects.py` — static mesh collision rasterizer; `py/evidence.py` — the placements of the server and the
+  client that explain SquadHeight's objects (`py/test_evidence.py`); `py/build_heightmap.py`, `py/build_all.py` —
   fusion and output; `py/maps.py` — SquadCalc map → SquadHeight name and landscape levels;
   `py/compare_*.py` — the checks above.
+* `py/spline_mesh.py` — the deformation of a mesh along a spline segment as the engine does it, with the spline's scale,
+  offset and roll (`py/test_spline_mesh.py`): the one implementation that `tools/maprender` and `tools/maptiles` draw their
+  spline meshes with, and that `py/evidence.py` boxes them with.
 * `py/audit_ground_truth.py`, `log_points.awk`, `py/compare_interpolation.py`, `py/compare_resolution.py`: the
   checks above.
 

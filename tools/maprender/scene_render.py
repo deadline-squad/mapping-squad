@@ -11,12 +11,16 @@ import json
 import math
 import os
 import re
+import sys
 from pathlib import Path
 
 import moderngl
 import numpy as np
 from PIL import Image
 from scipy import ndimage
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "heightmaps", "py"))
+import spline_mesh
 
 # "_Vista": the scenery beyond the map, whose mountains would lie over the edge of the landscape
 SKIPPED_LEVEL_PARTS = ("/Coop/", "/Tutorials/", "/Sound_Layers/", "Profiling", "Navmesh", "_Vista", "_Editor_Only")
@@ -305,35 +309,10 @@ def crown_dome(lo, hi, seed, rings=7, segments=28):
 
 
 def bend_along_spline(vertices, spline, bounds):
-    """Vertices of a mesh deformed along its spline (USplineMeshComponent, X forward): positions and normals in component space."""
-    p = spline["p"]
-    vec = lambda v: np.array([v["X"], v["Y"], v["Z"]], np.float64)
-    p0, t0, p1, t1 = vec(p["StartPos"]), vec(p["StartTangent"]), vec(p["EndPos"]), vec(p["EndTangent"])
-    axis = {"X": 0, "Y": 1, "Z": 2}[spline["axis"][-1]]
-    side, up = [(1, 2), (2, 0), (0, 1)][axis]
-    lo, hi = bounds[0][axis], bounds[1][axis]
-    a = np.clip((vertices[:, axis] - lo) / max(hi - lo, 1e-3), 0, 1)[:, None]
-    # Cubic Hermite position and its derivative
-    a2, a3 = a * a, a * a * a
-    position = (2 * a3 - 3 * a2 + 1) * p0 + (a3 - 2 * a2 + a) * t0 + (-2 * a3 + 3 * a2) * p1 + (a3 - a2) * t1
-    direction = (6 * a2 - 6 * a) * p0 + (3 * a2 - 4 * a + 1) * t0 + (-6 * a2 + 6 * a) * p1 + (3 * a2 - 2 * a) * t1
-    direction /= np.maximum(np.linalg.norm(direction, axis=1, keepdims=True), 1e-6)
-    world_up = vec(spline["up"]) if any(spline["up"][k] for k in "XYZ") else np.array([0.0, 0.0, 1.0])
-    right = np.cross(world_up, direction)
-    right /= np.maximum(np.linalg.norm(right, axis=1, keepdims=True), 1e-6)
-    upward = np.cross(direction, right)
-    start_scale, end_scale = p.get("StartScale", {"X": 1, "Y": 1}), p.get("EndScale", {"X": 1, "Y": 1})
-    start_offset, end_offset = p.get("StartOffset", {"X": 0, "Y": 0}), p.get("EndOffset", {"X": 0, "Y": 0})
-    blend = a * a * (3 - 2 * a)
-    scale_x = start_scale["X"] * (1 - blend) + end_scale["X"] * blend
-    scale_y = start_scale["Y"] * (1 - blend) + end_scale["Y"] * blend
-    offset_x = start_offset["X"] * (1 - blend) + end_offset["X"] * blend
-    offset_y = start_offset["Y"] * (1 - blend) + end_offset["Y"] * blend
+    """Vertices [n, 8] of a mesh deformed along its spline (USplineMeshComponent): positions and normals in component space, bent
+    with the spline's scale, offset and roll (spline_mesh.bend_along_spline of tools/heightmaps, shared with tools/maptiles)."""
     out = vertices.copy()
-    out[:, :3] = position + right * (vertices[:, side:side + 1] * scale_x + offset_x) + upward * (vertices[:, up:up + 1] * scale_y + offset_y)
-    normal = vertices[:, 3:6]
-    n = direction * normal[:, axis:axis + 1] + right * normal[:, side:side + 1] + upward * normal[:, up:up + 1]
-    out[:, 3:6] = n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-6)
+    out[:, :3], out[:, 3:6] = spline_mesh.bend_along_spline(vertices[:, :3], spline, bounds, vertices[:, 3:6])
     return out
 
 

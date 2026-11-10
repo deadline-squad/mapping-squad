@@ -11,6 +11,9 @@
 #   maptiles.sh render [map ...]       webp tiles into $DIST/maptiles/<map> (written in place, map by map)
 #   maptiles.sh all [map ...]          extract, prep, scene and render
 #   maptiles.sh check [map ...]        alignment of the tiles with the Standard HD layer, the heightmap and the upstream images
+#   maptiles.sh measure [map ...]      accuracy of the tiles against Standard HD and the served heightmap (py/measure_accuracy.py:
+#                                      roads, water, crowns, heights, contours) into $WORK/check/<map>_<measure>.json
+#   maptiles.sh palette                contrast of the map's classes under normal and colour-deficient vision (py/palette_contrast.py)
 #   maptiles.sh outline [map ...]      building outlines of the tiles, the HD layer and OUTLINE_BEFORE against the game's own
 #                                      Seed and Skirmish minimap textures (py/outline_accuracy.py) into
 #                                      $WORK/check/<map>_outline_<pair>.json; needs the scene rasters (run after "scene")
@@ -187,6 +190,22 @@ check)
         -w /py "$PY_IMAGE" \
         python -W ignore check_alignment.py $(maps "$@")
     ;;
+measure)
+    shift
+    mkdir -p "$WORK/check"
+    for measure in roads water crowns heights contours; do
+        # shellcheck disable=SC2086
+        nice docker run --rm $USER_FLAGS --memory="$MEMORY" --memory-swap="$MEMORY" -e PYTHONPATH=/py:/hmpy -v "$HERE/py:/py:ro" \
+            -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" -v "$WORK/prep:/prep:ro" -v "$DIST/maptiles:/tiles:ro" \
+            -v "${HEIGHTMAPS_SERVED:-$DIST/heightmaps}:/heightmaps:ro" -v "$WORK/check:/check" -v "${HD_TILES:-$DIST/maptiles}:/hd:ro" \
+            -w /py "$PY_IMAGE" python -W ignore measure_accuracy.py "$measure" $(maps "$@")
+    done
+    ;;
+palette)
+    # shellcheck disable=SC2086
+    docker run --rm $USER_FLAGS -e PYTHONPATH=/py:/hmpy -v "$HERE/py:/py:ro" -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" -w /py "$PY_IMAGE" \
+        python -W ignore palette_contrast.py
+    ;;
 colour-fit)
     shift
     for slug in $(maps "$@"); do
@@ -239,7 +258,7 @@ colour-distance)
     colour_tool colour_distance.py "$slug" "/tiles/$folder" "$@"
     ;;
 *)
-    sed -n '2,30p' "$0"
+    sed -n '2,/^set -eu$/{/^#/p;}' "$0"
     exit 2
     ;;
 esac

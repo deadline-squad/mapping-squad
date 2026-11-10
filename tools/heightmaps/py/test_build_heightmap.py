@@ -78,6 +78,63 @@ class UpsampleSurface(unittest.TestCase):
         self.assertTrue(np.all(fused[:, 6:] == 100.0))
 
 
+class Fuse(unittest.TestCase):
+    """Flat terrain at 10 m with two objects of SquadHeight: a house 5 m high at rows 2..3, a block 7 m high at rows 6..7."""
+
+    def setUp(self):
+        self.terrain = np.full((10, 10), 10.0)
+        self.surface = self.terrain.copy()
+        self.surface[2:4, 2:6] = 15.0
+        self.surface[6:8, 2:6] = 17.0
+        self.house = np.zeros((10, 10), bool)
+        self.house[2:4, 2:6] = True
+
+    def test_every_object_of_squadheight_is_taken_when_nothing_is_said_of_them(self):
+        fused, stats = build_heightmap.fuse(self.terrain, self.surface)
+        np.testing.assert_array_equal(fused, self.surface)
+        self.assertEqual(stats["sdk_object_cells"], 16)
+        self.assertNotIn("sdk_unexplained_cells", stats)
+
+    def test_an_object_that_no_placement_of_the_game_explains_is_left_out(self):
+        # Al Basrah: blocks of the SDK's background city over open sand, which neither the server nor the client has
+        fused, stats = build_heightmap.fuse(self.terrain, self.surface, explained=self.house)
+        np.testing.assert_array_equal(fused[2:4, 2:6], 15.0)
+        np.testing.assert_array_equal(fused[6:8, 2:6], 10.0)
+        self.assertEqual((stats["sdk_object_cells"], stats["sdk_unexplained_cells"]), (8, 8))
+
+    def test_under_an_unexplained_object_the_games_own_collision_stands(self):
+        objects = np.full((10, 10), -np.inf)
+        objects[6, 2:6] = 12.0
+        fused, stats = build_heightmap.fuse(self.terrain, self.surface, objects, self.house)
+        np.testing.assert_array_equal(fused[6, 2:6], 12.0)
+        np.testing.assert_array_equal(fused[7, 2:6], 10.0)
+        self.assertEqual((stats["game_object_cells"], stats["sdk_only_object_cells"]), (4, 8))
+
+    def test_under_an_unexplained_object_the_water_of_the_game_stands(self):
+        # Al Basrah: the block stands in the river, whose bed is the terrain and whose surface is the ocean plane
+        below = np.full((10, 10), -np.inf)
+        below[6:8, 2:6] = 12.5
+        below[2:4, 2:6] = 11.0  # under the house too, which is explained and keeps SquadHeight's height
+        fused, _ = build_heightmap.fuse(self.terrain, self.surface, explained=self.house, below=below)
+        np.testing.assert_array_equal(fused[6:8, 2:6], 12.5)
+        np.testing.assert_array_equal(fused[2:4, 2:6], 15.0)
+        np.testing.assert_array_equal(fused[0], 10.0)
+
+    def test_outside_the_landscape_squadheight_is_the_ground_whatever_explains_it(self):
+        self.terrain[:, 5:] = np.nan
+        fused, stats = build_heightmap.fuse(self.terrain, self.surface, explained=self.house)
+        np.testing.assert_array_equal(fused[6:8, 5], 17.0)
+        np.testing.assert_array_equal(fused[6:8, 2:5], 10.0)
+        self.assertEqual(stats["sdk_unexplained_cells"], 6)
+
+    def test_above_terrain_is_the_points_that_rise_half_a_metre_on_the_landscape(self):
+        self.surface[0, 0] = 10.49
+        self.surface[0, 1] = 10.5
+        self.terrain[9, 9] = np.nan
+        rising = build_heightmap.above_terrain(self.terrain, self.surface)
+        self.assertEqual((bool(rising[0, 0]), bool(rising[0, 1]), bool(rising[9, 9]), int(rising.sum())), (False, True, False, 17))
+
+
 class CellSize(unittest.TestCase):
     def test_native_half_metre_maps_and_the_default(self):
         self.assertEqual(maps.cell_m("chora"), 0.5)

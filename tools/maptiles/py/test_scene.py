@@ -85,6 +85,30 @@ class Scene:
             handle.write("\n".join(json.dumps(item) for item in self.items))
 
 
+class Statics:
+    """A directory of the server's static meshes (SquadExtract statics) written piece by piece: placements and their bounds."""
+
+    def __init__(self, directory):
+        self.directory = directory
+        os.makedirs(os.path.join(directory, "bodies"))
+        self.items = []
+
+    def add_mesh(self, name, box):
+        """box: the mesh's corners (cm)."""
+        mesh = str(len(os.listdir(os.path.join(self.directory, "bodies"))))
+        low, high = np.array(box[:3], float), np.array(box[3:], float)
+        bounds = {"Origin": dict(zip("XYZ", ((low + high) / 2).tolist())), "BoxExtent": dict(zip("XYZ", ((high - low) / 2).tolist()))}
+        json.dump({"path": f"/Game/M/{name}.{name}", "bounds": bounds}, open(os.path.join(self.directory, "bodies", f"{mesh}.json"), "w"))
+        return mesh
+
+    def place(self, mesh, at, collision=None):
+        self.items.append({"level": "SquadGame/Content/Maps/T/L_Art.umap", "type": "StaticMeshComponent", "mesh": mesh, "chain": chain(*at), "collision": collision, "instances": None})
+
+    def write(self):
+        with open(os.path.join(self.directory, "instances.ndjson"), "w") as handle:
+            handle.write("\n".join(json.dumps(item) for item in self.items))
+
+
 def flat_ground(size=61):
     return np.zeros((size, size), np.float32)
 
@@ -291,8 +315,7 @@ class CrownStamps(unittest.TestCase):
 
     def test_stamp_is_the_outline_of_the_mesh_seen_from_above(self):
         vertices, indices = cross_crown()
-        stamp, reach = crowns.silhouette(vertices, indices, [(0, len(indices))])
-        self.assertAlmostEqual(reach, 300, delta=1)
+        stamp = crowns.silhouette(vertices, indices, [(0, len(indices))])
         n = crowns.STAMP_PX
         cover, relief = stamp[..., 0], stamp[..., 1]
         self.assertGreater(cover[n // 2, n // 2], 250)
@@ -302,8 +325,8 @@ class CrownStamps(unittest.TestCase):
 
     def test_stamp_is_the_same_on_every_run(self):
         vertices, indices = cross_crown()
-        a = crowns.silhouette(vertices, indices, [(0, len(indices))])[0]
-        b = crowns.silhouette(vertices, indices, [(0, len(indices))])[0]
+        a = crowns.silhouette(vertices, indices, [(0, len(indices))])
+        b = crowns.silhouette(vertices, indices, [(0, len(indices))])
         self.assertEqual(a.tobytes(), b.tobytes())
 
     def test_scene_crowns_scale_turn_and_flag_trunks(self):
@@ -412,7 +435,7 @@ class LegacyOutlines(unittest.TestCase):
 class CrownSprites(unittest.TestCase):
     def setUp(self):
         vertices, indices = cross_crown()
-        stamp, _ = crowns.silhouette(vertices, indices, [(0, len(indices))])
+        stamp = crowns.silhouette(vertices, indices, [(0, len(indices))])
         self.d = {"stamps": {0: stamp}}
 
     def test_a_small_crown_is_the_exact_stamp_at_the_nearest_steps(self):
@@ -460,11 +483,12 @@ class OldRasterMerge(unittest.TestCase):
         np.save(os.path.join(self.dir, "obj_h2.npy"), old_h[::4, ::4][:n, :n])
         np.save(os.path.join(self.dir, "obj_c2.npy"), old_c[::4, ::4][:n, :n])
 
-    def merge(self):
+    def merge(self, seen=None):
+        """``seen``: what the scene shows before its thin objects are taken out; by default all that is asked about."""
         new_h1, _ = sp.pool_metres(self.dir)
         service = np.zeros(new_h1.shape, bool)
         service[3:28, 36:40] = True
-        return sp.merge_old(self.dir, new_h1, new_h1.shape, service, np.zeros(new_h1.shape, bool))
+        return sp.merge_old(self.dir, new_h1, new_h1.shape, service, np.zeros(new_h1.shape, bool), lambda wanted: wanted if seen is None else seen)
 
     def test_blueprint_is_kept_halo_and_service_wall_are_not(self):
         old, keep, old_only = self.merge()
@@ -476,6 +500,81 @@ class OldRasterMerge(unittest.TestCase):
         self.assertEqual(int(h0[300:380, 250:330].max()), 0)  # the old raster's rock
         self.assertGreater(int(old_only.sum()), 0)
         self.assertEqual(int(keep.sum()), 25)
+
+    def test_a_run_the_scene_shows_nothing_of_is_not_kept(self):
+        # Manicouagan: the dam meshes' collision stands 2 to 3 m above the reservoir, where the game shows water
+        old, keep, _ = self.merge(seen=np.zeros((40, 40), bool))
+        h0 = np.load(os.path.join(self.dir, "top_h0.npy"))
+        self.assertEqual(int(h0[300:360, 40:110].max()), 0)
+        self.assertEqual(int(keep.sum()), 0)
+        self.assertTrue(old[30:35, 5:10].all())
+
+    def test_runs_the_scene_shows_stay_whole_and_the_others_go(self):
+        keep = np.zeros((30, 30), bool)
+        keep[2:4, 2:12] = True  # a tent frame: seen along its whole run
+        keep[8, 2:12] = True  # a fence whose mesh stands a metre beside its collision
+        keep[14:18, 2:12] = True  # a block of collision with a pole at one corner
+        keep[22:26, 2:12] = True  # collision over water
+        seen = np.zeros((30, 30), bool)
+        seen[2:4, 2:11] = True
+        seen[9, 2:12] = True
+        seen[14, 2] = True
+        kept = sp.shown_runs(keep, seen)
+        self.assertTrue(kept[2:4, 2:12].all() and kept[8, 2:12].all())
+        self.assertFalse(kept[14:18, 2:12].any() or kept[22:26, 2:12].any())
+        np.testing.assert_array_equal(sp.shown_runs(np.zeros((5, 5), bool), np.ones((5, 5), bool)), np.zeros((5, 5), bool))
+
+    def test_the_unthinned_raster_sees_what_the_tiles_raster_drops_as_thin(self):
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory)
+        s = Scene(directory)
+        s.place(s.add_mesh("TentFrame", [((0, 0, 0, 600, 10, 300), OPAQUE)]), (10, 10))  # a bar 6 m long, 0.1 m wide and 3 m high
+        s.place(s.add_mesh("Hut", [((0, 0, 0, 300, 300, 250), OPAQUE)]), (40, 40))
+        s.write()
+        scene = so.SceneObjects(directory)
+        ground = flat_ground()
+        tiles_raster, _, _ = so.raster_block(scene, ground, 0.0, BOUNDS, 80, 130, 80, 180)
+        self.assertEqual(int(tiles_raster.max()), 0)  # the bar is thinner than THIN_WIDTH_M
+        wanted = np.zeros((60, 60), bool)
+        wanted[10, 10:16] = True  # the collision of the bar
+        wanted[30, 30] = True  # collision with nothing of the scene near it
+        seen = sp.unthinned_objects(scene, ground, 0.0, BOUNDS, wanted)
+        self.assertTrue(seen[10, 10:16].all())
+        self.assertFalse(seen[30, 30] or seen[12, 10:16].any())
+        self.assertFalse(seen[40:43, 40:43].any())  # the hut's tile holds nothing wanted and is not drawn
+        self.assertTrue(sp.unthinned_objects(scene, ground, 0.0, BOUNDS, np.ones((60, 60), bool))[40:43, 40:43].all())
+
+    def test_a_wire_between_the_rasters_points_is_seen_by_its_edges(self):
+        # A wire 1 cm thick along the grid, between two rows of points 5 cm apart, and a fence of one upright sheet: no point of
+        # the raster falls in either, and the server's collision of both is a run of the old raster
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory)
+        s = Scene(directory)
+        s.place(s.add_mesh("Wire", [((0, 3, 800, 2000, 4, 801), OPAQUE)]), (10, 10))
+        s.place(s.add_mesh("FenceSheet", [((0, 0, 0, 1000, 0, 200), OPAQUE)]), (10, 30.02))
+        s.place(s.add_mesh("Kerb", [((0, 0, 0, 1000, 0, 20), OPAQUE)]), (10, 40.02))  # too low to be an object
+        s.write()
+        scene = so.SceneObjects(directory)
+        ground = flat_ground()
+        raster, _, _ = so.raster_block(scene, ground, 0.0, BOUNDS, 80, 320, 80, 320)
+        self.assertEqual(int(raster.max()), 0)
+        wanted = np.zeros((60, 60), bool)
+        wanted[10, 10:30] = wanted[30, 10:20] = wanted[40, 10:20] = True
+        seen = sp.unthinned_objects(scene, ground, 0.0, BOUNDS, wanted)
+        self.assertTrue(seen[10, 10:30].all() and seen[30, 10:20].all())
+        self.assertFalse(seen[40, 10:20].any() or seen[20, 10:30].any())
+
+    def test_points_along_the_edges_of_a_triangle(self):
+        points = sp.edge_points(np.array([[[0.0, 0.0, 7.0], [1.0, 0.0, 7.0], [1.0, 2.0, 7.0]]]), 0.5)
+        self.assertEqual(sorted(map(tuple, points[:, :2].round(3).tolist())), sorted([(0.0, 0.0), (0.5, 0.0), (1.0, 0.0), (1.0, 0.5), (1.0, 1.0), (1.0, 1.5),
+                                                                                   (1.0, 2.0), (0.8, 1.6), (0.6, 1.2), (0.4, 0.8), (0.2, 0.4)]))
+        np.testing.assert_array_equal(points[:, 2], 7.0)
+
+    def test_the_ground_under_scattered_points_is_that_of_the_grid(self):
+        ground = np.arange(36, dtype=np.float32).reshape(6, 6)
+        rows, cols = np.array([0.0, 1.5, 4.25, 9.0]), np.array([0.0, 2.5, 0.75, 9.0])
+        np.testing.assert_allclose(so.ground_points(ground, 10.0, rows, cols), [10.0, 10 + 1.5 * 6 + 2.5, 10 + 4.25 * 6 + 0.75, 10 + 35.0])
+        np.testing.assert_allclose(so.ground_points(ground, 10.0, rows[1:3], cols[1:3]), np.diag(so.ground_on_grid(ground, 10.0, rows[1:3], cols[1:3])))
 
     def test_lake_surface_of_the_old_raster_is_found(self):
         ground = np.zeros((40, 40), np.float32)
@@ -534,10 +633,11 @@ def synthetic_map(directory, sea_level=None, empty=False):
     np.save(os.path.join(base, "ground.npy"), ground)
     np.save(os.path.join(base, "cover.npy"), np.zeros((61, 61), np.uint8))
     np.save(os.path.join(base, "top_ground.npy"), ground)
-    render.write_ground_base(base)
+    np.save(os.path.join(base, "top_ground_base.npy"), sp.ground_base(ground))
     paths = np.zeros((61, 61), np.uint8)
     paths[30:33, :] = 0 if empty else 255
     np.save(os.path.join(base, "top_paths.npy"), paths)
+    np.save(os.path.join(base, "top_water_surface.npy"), sp.river_surface(np.full((61, 61), -np.inf, np.float32), 0.0))
     crops = np.zeros((61, 61, 2), np.uint8)
     if not empty:
         crops[5:15, 40:55] = (255, 20)
@@ -563,6 +663,24 @@ def synthetic_map(directory, sea_level=None, empty=False):
     np.save(os.path.join(base, "crowns_stamps.npy"), stamp[None])
     json.dump(["/Game/M/SM_OliveTree.SM_OliveTree"], open(os.path.join(base, "crowns.json"), "w"))
     return slug
+
+
+class FoliageNames(unittest.TestCase):
+    def test_a_palm_is_a_palm_not_a_broadleaf_tree(self):
+        for name in ("SM_PalmTree_01", "Palm_Date_Tall"):
+            self.assertEqual(features._classify(name, features._FOLIAGE_RULES, None), features.PALM, name)
+        self.assertEqual(features._classify("SM_OliveTree", features._FOLIAGE_RULES, None), features.DECIDUOUS)
+
+
+class SceneLakes(unittest.TestCase):
+    def test_the_scene_lakes_are_water_of_the_render(self):
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory)
+        slug = synthetic_map(directory)
+        lake = {"polygon": [[5.0, 5.0], [25.0, 5.0], [25.0, 25.0], [5.0, 25.0]], "z": 1.0}
+        json.dump({"planes": [lake]}, open(os.path.join(directory, "prep", slug, "top_water.json"), "w"))
+        with mock.patch.object(render, "PREP_DIR", os.path.join(directory, "prep")):
+            self.assertIn(lake["polygon"], [plane["polygon"] for plane in render.load(slug)["planes"]])
 
 
 class VegetationAndGroundCover(unittest.TestCase):
@@ -692,7 +810,7 @@ class RoofRelief(unittest.TestCase):
         frame.v = (np.arange(n) + 0.5) * px
         grid = np.where(np.arange(61) >= 30, step_m, 0.0).astype(np.float32)[None, :].repeat(61, 0)
         d["ground"] = grid
-        d["ground_base"] = ndimage.gaussian_filter(grid, render.GROUND_BASE_SIGMA_M, mode="nearest")
+        d["ground_base"] = sp.ground_base(grid)
         d["ground_luma_level"] = 0
         d["ground_luma"] = np.full((n, n), 200.0, np.float32)
         ground = np.broadcast_to(np.interp(frame.u, np.arange(61), grid[0]), (n, n)).astype(np.float32)
@@ -847,10 +965,12 @@ class TileSeams(unittest.TestCase):
 class UniformBlocks(unittest.TestCase):
     """Blocks of open sea are not drawn: their tiles link one tile of the colour the drawing gives."""
 
-    def tiles(self, sea_level, empty, draw_everything=False):
-        directory = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, directory)
-        slug = synthetic_map(directory, sea_level=sea_level, empty=empty)
+    def tiles(self, sea_level, empty, draw_everything=False, directory=None):
+        if directory is None:
+            directory = tempfile.mkdtemp()
+            self.addCleanup(shutil.rmtree, directory)
+            synthetic_map(directory, sea_level=sea_level, empty=empty)
+        slug, = os.listdir(os.path.join(directory, "prep"))
         with mock.patch.object(render, "PREP_DIR", os.path.join(directory, "prep")), mock.patch.object(render, "BLOCK_TILES", 1):
             render._data.clear()
             render._data.update(render.load(slug))
@@ -868,6 +988,16 @@ class UniformBlocks(unittest.TestCase):
         self.assertTrue(all(os.stat(os.path.join(folder, name)).st_nlink == 16 for name in linked))
         _, drawn, _ = self.tiles(20.0, empty=True, draw_everything=True)
         self.assertEqual(linked, drawn)
+
+    def test_a_render_into_a_folder_with_tiles_replaces_them(self):
+        # The recovery render (--out <the .tmp folder>) writes over linked tiles: every tile is replaced, none changes its twins
+        _, linked, folder = self.tiles(20.0, empty=True)
+        directory = os.path.dirname(os.path.dirname(folder))
+        _, again, _ = self.tiles(20.0, empty=True, directory=directory)
+        self.assertEqual(again, linked)
+        _, drawn, _ = self.tiles(20.0, empty=True, draw_everything=True, directory=directory)
+        self.assertEqual(drawn, linked)
+        self.assertTrue(all(os.stat(os.path.join(folder, name)).st_nlink == 1 for name in drawn))
 
     def test_shallow_sea_land_and_anything_on_the_water_are_drawn(self):
         self.assertEqual(set(self.tiles(10.0, empty=True)[0]), {None})
@@ -929,6 +1059,7 @@ class TerrainAndWaterMeshes(unittest.TestCase):
         self.ground[:, :20] = 5.0
         self.cover = np.full((61, 61), features.NO_COVER, np.uint8)
         self.cover[:, :20] = 0
+        self.no_terrain = np.zeros((61, 61), bool)
 
     def test_terrain_is_the_scenery_and_the_vista_but_not_the_sky_and_water_the_water_meshes(self):
         self.assertEqual(sorted(g["name"].rsplit(".", 1)[-1] for g in self.land), ["FinalMesh", "MountainLow", "SM_T_LOD1"])
@@ -936,24 +1067,24 @@ class TerrainAndWaterMeshes(unittest.TestCase):
 
     def test_a_void_takes_the_top_of_the_scenery(self):
         top = sp.surface_top(self.scene, self.land, self.ground.shape, BOUNDS)
-        filled, count = sp.scenery_ground(self.ground, self.cover, top, 0.0)
+        filled, count, _ = sp.scenery_ground(self.ground, self.cover, top, 0.0, self.no_terrain)
         self.assertEqual(float(filled[30, 50]), 25.0)
         self.assertEqual(count, 61 * 21)
 
     def test_a_void_without_scenery_keeps_its_floor(self):
         top = sp.surface_top(self.scene, self.land, self.ground.shape, BOUNDS)
-        filled, _ = sp.scenery_ground(self.ground, self.cover, top, 0.0)
+        filled, _, _ = sp.scenery_ground(self.ground, self.cover, top, 0.0, self.no_terrain)
         self.assertAlmostEqual(float(filled[30, 30]), 0.0001, places=6)
 
     def test_the_landscape_and_small_voids_keep_their_ground(self):
         self.ground[:, 20:] = 7.0
         self.ground[10:13, 50:53] = 0.0
         top = sp.surface_top(self.scene, self.land, self.ground.shape, BOUNDS)
-        filled, count = sp.scenery_ground(self.ground, self.cover, top, 0.0)
+        filled, count, raised = sp.scenery_ground(self.ground, self.cover, top, 0.0, self.no_terrain)
         self.assertEqual(float(filled[30, 10]), 5.0)
         self.assertEqual(float(filled[11, 51]), 0.0)
         self.assertEqual(float(filled[30, 50]), 7.0)
-        self.assertEqual(count, 0)
+        self.assertEqual((count, raised), (0, 0))
 
     def test_old_collision_of_terrain_and_water_meshes_is_no_object(self):
         ground = np.zeros((61, 61), np.float32)
@@ -965,13 +1096,208 @@ class TerrainAndWaterMeshes(unittest.TestCase):
         old[8, 8] = 500  # a house only the server has
         old[30, 58] = 3000  # a mast on the mountain, 5 m above it
         old[20, 10] = 120  # a wall on the low-poly copy of the landscape, a metre above it
-        surfaces = sp.legacy_surfaces(land_top, water_top, ground, 0.0, old, (61, 61))
+        surfaces = sp.legacy_terrain(land_top, ground, 0.0, old, (61, 61)) | sp.legacy_water(water_top, ground, 0.0, old, (61, 61))
         self.assertTrue(surfaces[28:33, 48:53].all())
         self.assertFalse(surfaces[30, 58])
         self.assertTrue(surfaces[30, 26])
         self.assertTrue(surfaces[50, 5])
         self.assertFalse(surfaces[8, 8])
         self.assertFalse(surfaces[20, 10])
+
+
+class ScenerySurface(unittest.TestCase):
+    """The old raster's cells on a scenery mesh over ground that lies below it: the server traced the mesh, the scene has it as ground."""
+
+    def surfaces(self, mesh_top_cm, old_cells):
+        """legacy_terrain over flat ground at 0 m with one scenery mesh covering the grid, its top at mesh_top_cm; old_cells: [(rows, cols, cm)]."""
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory)
+        s = Scene(directory)
+        s.place(s.add_mesh("EdgeMountain", [((0, 0, 0, 100000, 100000, mesh_top_cm), OPAQUE)]), (-500, -500))
+        s.write()
+        scene = so.SceneObjects(directory)
+        land, _ = so.surface_groups(directory)
+        ground = flat_ground()
+        old = np.zeros(ground.shape, np.uint16)
+        for rows, cols, height_cm in old_cells:
+            old[rows, cols] = height_cm
+        self.land_top = sp.surface_top(scene, land, ground.shape, BOUNDS)
+        return sp.legacy_terrain(self.land_top, ground, 0.0, old, ground.shape)
+
+    def test_a_mesh_a_little_above_the_ground_is_the_surface_the_old_raster_holds(self):
+        # Gorodok's east edge: the landscape lies flat at 19.9 m, the mesh over it rises from 0.4 to 2.3 m, the old raster holds that rise
+        old = [(slice(20, 40), slice(20, 40), 60), (50, 50, 560), (5, 5, 100)]
+        surfaces = self.surfaces(60, old)
+        self.assertTrue(surfaces[20:40, 20:40].all())
+        self.assertFalse(surfaces[50, 50])  # a mast 5 m above the mesh
+        self.assertFalse(surfaces[5, 5])  # a wall 0.4 m above it
+
+    def test_objects_beside_a_mountain_do_not_make_it_an_object(self):
+        # Gorodok's west edge: the collision of a mountain and of what stands beside it are one run of the old raster
+        old = [(slice(20, 25), slice(20, 25), 2500), (slice(25, 33), slice(20, 25), 500)]
+        surfaces = self.surfaces(2500, old)
+        self.assertTrue(surfaces[20:25, 20:25].all())
+        self.assertFalse(surfaces[25:33, 20:25].any())
+
+    def test_the_landscape_under_a_mesh_the_server_collides_with_takes_the_meshs_height(self):
+        # Gorodok's east edge: the landscape falls away under the Vista mesh, its last metres repeating one height per row
+        self.surfaces(60, [])
+        ground = np.full((61, 61), 1.0, np.float32)
+        ground[:, 40:] = -2.0 - np.arange(61, dtype=np.float32)[:, None] * 0.1
+        ground[10:20, 10:20] = -1.0  # a hollow under the mesh that the server holds nothing over
+        old = np.zeros(ground.shape, np.uint16)
+        old[:, 40:] = np.rint((0.6 - ground[:, 40:]) * 100)
+        terrain = sp.legacy_terrain(self.land_top, ground, 0.0, old, ground.shape)
+        filled, voids, raised = sp.scenery_ground(ground, np.zeros(ground.shape, np.uint8), self.land_top, 0.0, terrain)
+        self.assertTrue(np.allclose(filled[:, 40:], 0.6))
+        self.assertTrue(np.array_equal(filled[:, :40], ground[:, :40]))
+        self.assertEqual((voids, raised), (0, 61 * 21))
+
+    def test_a_block_standing_on_the_ground_is_no_hill(self):
+        # Vista buildings with collision: the server holds their roofs, but lifted to them the ground would be a cliff all around
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory)
+        s = Scene(directory)
+        s.place(s.add_mesh("VistaBlock", [((0, 0, 0, 1000, 1000, 1200), OPAQUE)]), (20, 20), level="SquadGame/Content/Maps/T/L_080_Vista_T.umap")
+        s.write()
+        land_top = sp.surface_top(so.SceneObjects(directory), so.surface_groups(directory)[0], (61, 61), BOUNDS)
+        ground = flat_ground()
+        old = np.zeros(ground.shape, np.uint16)
+        old[20:31, 20:31] = 1200
+        terrain = sp.legacy_terrain(land_top, ground, 0.0, old, ground.shape)
+        self.assertTrue(terrain[20:31, 20:31].all())
+        filled, _, raised = sp.scenery_ground(ground, np.zeros(ground.shape, np.uint8), land_top, 0.0, terrain)
+        self.assertTrue(np.array_equal(filled, ground))
+        self.assertEqual(raised, 0)
+
+    def test_the_rim_of_an_area_and_its_steps(self):
+        area = np.zeros((5, 5), bool)
+        area[1:4, 1:5] = True
+        ground = np.zeros((5, 5), np.float32)
+        ground[0] = 3.0
+        rim, step = sp.rim_steps(area, np.full((5, 5), 1.0, np.float32), ground)
+        self.assertFalse(rim[2, 2] or rim[2, 4])  # inside, and at the grid's edge
+        self.assertEqual((float(step[1, 2]), float(step[3, 2]), float(step[2, 1])), (2.0, 1.0, 1.0))
+
+    def test_scenery_the_server_has_no_collision_for_is_not_the_ground(self):
+        # Al Basrah: the Vista city's blocks stand over the landscape, and only SquadHeight holds them
+        ground = flat_ground()
+        self.surfaces(1200, [])
+        filled, _, raised = sp.scenery_ground(ground, np.zeros(ground.shape, np.uint8), self.land_top, 0.0, np.zeros(ground.shape, bool))
+        self.assertTrue(np.array_equal(filled, ground))
+        self.assertEqual(raised, 0)
+
+
+class SplineRoll(unittest.TestCase):
+    """A spline mesh is turned about its spline by the component's roll, as the engine bends it."""
+
+    def bent(self, roll):
+        """A slab 10 m long (Y, its forward axis), 4 m wide (X) and 0.5 m thick (Z) along a straight spline that runs east."""
+        vertices, _ = box_mesh(-200, 0, 0, 200, 1000, 50)
+        positions = vertices[:, :3].astype(np.float64)
+        end = {"X": 1000.0, "Y": 0.0, "Z": 0.0}
+        spline = {"p": {"StartPos": {"X": 0.0, "Y": 0.0, "Z": 0.0}, "StartTangent": end, "StartRoll": roll, "EndPos": end, "EndTangent": end, "EndRoll": roll},
+                  "axis": "Y", "up": {"X": 0.0, "Y": 0.0, "Z": 1.0}}
+        return so.bend_along_spline(positions, spline, (positions.min(0), positions.max(0)))
+
+    def test_a_quarter_turn_stands_a_mesh_that_runs_along_y_up(self):
+        # Manicouagan's pipeline, crash barriers, railway tracks: the landscape splines give every such mesh this roll
+        bent = self.bent(-math.pi / 2)
+        np.testing.assert_allclose(bent.min(0), (0, -200, 0), atol=1e-6)
+        np.testing.assert_allclose(bent.max(0), (1000, 200, 50), atol=1e-6)
+
+    def test_without_a_roll_its_x_axis_is_up(self):
+        bent = self.bent(0.0)
+        np.testing.assert_allclose(bent.min(0), (0, 0, -200), atol=1e-6)
+        np.testing.assert_allclose(bent.max(0), (1000, 50, 200), atol=1e-6)
+
+
+class OldRasterNonObjects(unittest.TestCase):
+    """What the old raster holds and the game does not show as an object is not kept: sheets, ground cover, SquadHeight's own, cells off the landscape."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        s = Scene(os.path.join(self.dir, "scene"))
+        ice = s.add_mesh("Plane", [((0, 0, 0, 2000, 2000, 0), GLASS)])
+        deck = s.add_mesh("Deck", [((0, 0, 0, 800, 800, 0), OPAQUE)])
+        zone = s.add_mesh("Cube", [((0, 0, 0, 800, 800, 600), VOLUME)])
+        s.place(ice, (5, 5, 3.0))  # translucent ice over a pond at x, y 5..25 m, 3 m up
+        s.place(deck, (30, 5, 3.0))  # a deck the game shows
+        s.place(deck, (30, 20, 3.0), hidden=True)  # the same sheet, hidden
+        s.place(deck, (45, 30, 0.0), hidden=True)  # and one that lies on the ground
+        s.place(zone, (45, 5))  # a volume the game does not show: no sheet
+        s.write()
+        statics = Statics(os.path.join(self.dir, "statics"))
+        wall = statics.add_mesh("Wall", (0, 0, 0, 800, 50, 200))
+        maize = statics.add_mesh("SM_Crop_Corn_Maize_A", (-60, -60, 0, 60, 60, 240))
+        statics.place(wall, (30, 40))
+        statics.place(maize, (10, 50))
+        statics.place(maize, (20, 50), collision={"CollisionProfileName": "NoCollision"})
+        statics.write()
+        self.scene = so.SceneObjects(s.directory)
+        self.statics = statics.directory
+        self.ground = flat_ground()
+        self.ground[5:26, 5:26] = -2.0  # the pond's bed
+        self.cover = np.zeros(self.ground.shape, np.uint8)
+        self.cover[:, 0] = features.NO_COVER
+
+    def masks(self, old_cells):
+        old = np.zeros(self.ground.shape, np.uint16)
+        for rows, cols, height_cm in old_cells:
+            old[rows, cols] = height_cm
+        edges = {"left": [[5.0, 55.0], [25.0, 55.0]], "right": [[5.0, 57.6], [25.0, 57.6]], "center": [[5.0, 56.3, 0.0], [25.0, 56.3, 0.0]], "meshes": []}
+        lines = [{"cls": "rail", **edges}, {"cls": "dirt", **{k: [[x + 25.0, *rest] for x, *rest in v] for k, v in edges.items() if k != "meshes"}, "meshes": []}]
+        return sp.old_non_objects(self.scene, self.statics, [], lines, self.ground, self.cover, 0.0, old, BOUNDS, (60, 60))[0]
+
+    def test_sheets_are_the_flat_meshes_the_game_does_not_show(self):
+        sheets = so.sheet_groups(self.scene.directory)
+        self.assertEqual([(g["name"].rsplit(".", 1)[-1], len(g["matrices"])) for g in sheets], [("Plane", 1), ("Deck", 1), ("Deck", 1)])
+        self.assertEqual([float(g["matrices"][0][3, 1]) for g in sheets[1:]], [2000.0, 3000.0])  # the hidden decks
+
+    def test_the_collision_of_an_ice_sheet_is_no_object(self):
+        # Goose Bay: the server holds the ice over a pond as an object that stands at the sheet's height over the bed
+        old = [(slice(5, 25), slice(5, 25), 500), (slice(12, 15), slice(12, 15), 900), (slice(8, 12), slice(32, 36), 300), (slice(22, 26), slice(32, 36), 300),
+               (slice(31, 35), slice(46, 52), 80)]
+        sheets = self.masks(old)["sheets"]
+        self.assertTrue(sheets[5:12, 5:25].all())  # the ice, up to the pond's bank: the height is over the lowest ground of the metre
+        self.assertFalse(sheets[12:15, 12:15].any())  # a hut on the ice, 4 m above it
+        self.assertFalse(sheets[8:12, 32:36].any())  # what the server holds at the height of the deck the game shows
+        self.assertTrue(sheets[22:26, 32:36].all())  # and of the hidden one
+        self.assertFalse(sheets[31:35, 46:52].any())  # Harju: a crash barrier beside a sheet that lies on the ground
+
+    def test_the_lowest_ground_of_a_metre_is_that_of_the_old_rasters_points(self):
+        ground = np.array([[0.0, 4.0, 4.0], [0.0, 4.0, 0.0]], np.float32)
+        lowest = sp.lowest_ground(ground, (2, 2))
+        # the points reach three quarters of the way to the next node: towards a corner 4 m lower, and along the grid's last row
+        self.assertEqual(lowest.tolist(), [[0.0, 1.75], [0.0, 1.0]])
+
+    def test_the_collision_of_ground_cover_is_no_object(self):
+        # Yehorivka: maize plants set by hand block; the plants of a field do not, and a wall beside them stays
+        masks = self.masks([])
+        self.assertTrue(masks["ground_cover"][50, 10])
+        self.assertFalse(masks["ground_cover"][50, 20])
+        self.assertFalse(masks["ground_cover"][40, 34])
+
+    def test_what_no_static_mesh_explains_is_squadheights_and_no_object(self):
+        # Al Basrah: SquadHeight holds blocks of a Vista city that the game build does not have
+        masks = self.masks([])
+        self.assertTrue(masks["without_collision"][30, 30])
+        self.assertFalse(masks["without_collision"][40, 34])  # the server's wall
+        self.assertFalse(masks["without_collision"][50, 10])  # ground cover has collision: its own mask takes it
+
+    def test_the_collision_of_a_railway_track_is_no_object(self):
+        # Manicouagan: the tracks' collision is 0.3 to 0.45 m high; the tiles draw the railway from its spline
+        masks = self.masks([])
+        self.assertTrue(masks["railway"][55:58, 5:26].all())
+        self.assertFalse(masks["railway"][53, 15] or masks["railway"][59, 15])
+        self.assertFalse(masks["railway"][55:58, 30:51].any())  # a dirt road's segment
+
+    def test_cells_off_the_landscape_are_no_objects(self):
+        # Gorodok: the first column lies on SquadHeight's surface, 15 m above the landscape's first node
+        masks = self.masks([])
+        self.assertTrue(masks["off_landscape"][:, 0].all())
+        self.assertFalse(masks["off_landscape"][:, 1:].any())
 
 
 class RoadWidth(unittest.TestCase):
@@ -1015,14 +1341,17 @@ class RoadWidth(unittest.TestCase):
         pixels.tofile(os.path.join(self.directory, "textures", f"{index}.bin"))
         self.textures[path] = {"file": str(index), "format": "PF_R8G8B8A8", "width": len(alpha), "height": 2}
 
-    def road_mesh(self, name, materials, flip_u=False, sections=1):
-        """A mesh 900 cm long and 400 cm wide with U across it (increasing with Y, or decreasing with ``flip_u``), cut into ``sections`` strips across."""
+    def road_mesh(self, name, materials, flip_u=False, sections=1, along_y=False):
+        """A mesh 900 cm long and 400 cm wide with U across it (increasing with Y, or decreasing with ``flip_u``), cut into ``sections`` strips across.
+
+        ``along_y``: the mesh runs along its Y axis and is 400 cm wide in X, with U increasing with X.
+        """
         ys = np.linspace(-200, 200, sections + 1)
         vertices = []
         for y in ys:
             u = 0.5 - y / 400 if flip_u else 0.5 + y / 400
             for x, v in ((-450, 0.0), (450, 1.0)):
-                vertices.append((x, y, 0, 0, 0, 1, u, v))
+                vertices.append((y, x, 0, 0, 0, 1, u, v) if along_y else (x, y, 0, 0, 0, 1, u, v))
         indices, info = [], []
         for k in range(sections):
             a = 2 * k
@@ -1037,15 +1366,20 @@ class RoadWidth(unittest.TestCase):
         self.meshes[path] = {"id": mesh_id, "materials": list(materials), "lod": 0, "vertices": len(vertices), "indices": len(indices), "sections": info}
         return path
 
-    def lay(self, mesh_path, x, y, overrides=(), flip=False, owner="Landscape"):
-        """A spline mesh component laid straight along X with its middle at world (x, y) metres."""
-        mesh = self.meshes[mesh_path]
+    def spline(self, flip=False, axis="X", roll=0.0):
+        """A straight spline 9 m east; ``flip``: the scale of the frame's X vector is negative."""
         side = -1.0 if flip else 1.0
-        spline = {"p": {"StartPos": {"X": -450.0, "Y": 0.0, "Z": 0.0}, "StartTangent": {"X": 900.0, "Y": 0.0, "Z": 0.0}, "StartScale": {"X": 1.0, "Y": side},
-                        "EndPos": {"X": 450.0, "Y": 0.0, "Z": 0.0}, "EndTangent": {"X": 900.0, "Y": 0.0, "Z": 0.0}, "EndScale": {"X": 1.0, "Y": side}},
-                  "axis": "X", "up": {"X": 0.0, "Y": 0.0, "Z": 1.0}}
+        return {"p": {"StartPos": {"X": -450.0, "Y": 0.0, "Z": 0.0}, "StartTangent": {"X": 900.0, "Y": 0.0, "Z": 0.0}, "StartScale": {"X": side, "Y": 1.0},
+                      "StartRoll": roll, "EndPos": {"X": 450.0, "Y": 0.0, "Z": 0.0}, "EndTangent": {"X": 900.0, "Y": 0.0, "Z": 0.0},
+                      "EndScale": {"X": side, "Y": 1.0}, "EndRoll": roll},
+                "axis": axis, "up": {"X": 0.0, "Y": 0.0, "Z": 1.0}}
+
+    def lay(self, mesh_path, x, y, overrides=(), owner="Landscape", **spline):
+        """A spline mesh component laid straight along X with its middle at world (x, y) metres (``spline``: the arguments of self.spline)."""
+        mesh = self.meshes[mesh_path]
         self.items.append({"level": "SquadGame/Content/Maps/T/L.umap", "name": "SplineMeshComponent_0", "type": "SplineMeshComponent", "owner": owner,
-                           "mesh": mesh["id"], "hidden": False, "cull": [0, 0, 0, 0], "overrides": list(overrides), "chain": chain(x, y), "instances": None, "spline": spline})
+                           "mesh": mesh["id"], "hidden": False, "cull": [0, 0, 0, 0], "overrides": list(overrides), "chain": chain(x, y), "instances": None,
+                           "spline": self.spline(**spline)})
 
     def write(self):
         json.dump(self.meshes, open(os.path.join(self.directory, "meshes.json"), "w"))
@@ -1054,11 +1388,11 @@ class RoadWidth(unittest.TestCase):
         with open(os.path.join(self.directory, "instances.ndjson"), "w") as handle:
             handle.write("\n".join(json.dumps(item) for item in self.items))
 
-    def span_of(self, mesh_path, materials=None, axis="X"):
+    def span_of(self, mesh_path, materials=None, side=1):
         self.write()
         info = self.meshes[mesh_path]
         vertices, indices = so.read_mesh(self.directory, info)
-        return rw.mesh_span(vertices, indices, info, materials or info["materials"], self.materials, rw.Textures(self.directory), axis)
+        return rw.mesh_span(vertices, indices, info, materials or info["materials"], self.materials, rw.Textures(self.directory), side)
 
     def test_an_opaque_material_shows_the_whole_width(self):
         span, sources = self.span_of(self.road_mesh("Opaque", [OPAQUE]))
@@ -1153,6 +1487,38 @@ class RoadWidth(unittest.TestCase):
         self.assertAlmostEqual(mirrored["span"][0], 1 - straight["span"][1], places=3)
         self.assertAlmostEqual(mirrored["span"][1], 1 - straight["span"][0], places=3)
 
+    def test_a_mesh_that_runs_along_y_is_measured_across_the_axis_its_roll_lays_level(self):
+        # Al Basrah's and Fallujah's pavements, the rail crossings of Narva and Harju: road meshes modelled along Y, which the
+        # landscape spline rolls by -90 degrees to stand them up
+        mesh = self.road_mesh("FringeAlongY", [self.MASKED], along_y=True)
+        across_x, _ = self.span_of(mesh, side=0)
+        self.assertAlmostEqual(across_x[0], 3 / 16 + rw.OPACITY_CLIP * 2 / 16, delta=0.01)
+        self.assertAlmostEqual(across_x[1], 13 / 16 + (1 - rw.OPACITY_CLIP) * 2 / 16, delta=0.01)
+        # Z, the side axis of the bend without the roll, is the mesh's height: it has no width to show a part of
+        self.assertIsNone(self.span_of(mesh, side=2)[0])
+
+    def test_a_rolled_mesh_narrows_its_segment_on_the_side_the_roll_turns_it_to(self):
+        mesh = self.road_mesh("FringeAlongY", [self.MASKED], along_y=True)
+        self.lay(mesh, 30, 10, axis="Y", roll=-math.pi / 2)
+        self.write()
+        (line,) = rw.narrowed_lines(self.directory, [self.line(10, meshes=[mesh])])
+        # The wide transparent fringe is at the mesh's -X edge, which the bend lays south of the spline, the segment's right
+        vertices, _ = so.read_mesh(self.directory, self.meshes[mesh])
+        bent = so.bend_along_spline(vertices.astype(np.float64), self.spline(axis="Y", roll=-math.pi / 2), (vertices[:, :3].min(0), vertices[:, :3].max(0)))
+        np.testing.assert_allclose(bent[vertices[:, 0] < 0, 1], 200.0, atol=1e-6)
+        self.assertIn("span", line, "the segment keeps its whole width")
+        self.assertAlmostEqual(line["span"][0], 1 - (13 / 16 + (1 - rw.OPACITY_CLIP) * 2 / 16), delta=0.01)
+        self.assertAlmostEqual(line["span"][1], 1 - (3 / 16 + rw.OPACITY_CLIP * 2 / 16), delta=0.01)
+        self.assertAlmostEqual(line["right"][0][1], 8 + 4 * line["span"][1], places=2)
+
+    def test_a_quarter_turn_the_other_way_keeps_the_sides_of_the_mesh(self):
+        mesh = self.road_mesh("FringeAlongY", [self.MASKED], along_y=True)
+        self.lay(mesh, 30, 10, axis="Y", roll=math.pi / 2)
+        self.write()
+        (line,) = rw.narrowed_lines(self.directory, [self.line(10, meshes=[mesh])])
+        self.assertIn("span", line, "the segment keeps its whole width")
+        self.assertAlmostEqual(line["span"][0], 3 / 16 + rw.OPACITY_CLIP * 2 / 16, delta=0.01)
+
     def test_components_that_are_not_the_landscapes_are_ignored(self):
         mesh = self.road_mesh("Dirt", [self.DIRT])
         self.lay(mesh, 30, 10, owner="BP_Prop_C")
@@ -1233,6 +1599,19 @@ class HdWindows(unittest.TestCase):
         labels = [{"x": 2031.5, "y": 333.5, "area": 900}, {"x": 764.5, "y": -1427.5, "area": 500}, {"x": -1993.6, "y": 0.0, "area": 400},
                   {"x": 800.0, "y": -1400.0, "area": 300}, {"x": -311.5, "y": -1431.5, "area": 200}]
         self.assertEqual(check_alignment.hd_window_centres(labels, bounds), [(764.5, -1427.5), (-1993.6, 0.0), (-311.5, -1431.5)])
+
+    def test_the_gate_passes_on_the_median_of_enough_windows(self):
+        offsets = [(0.04, -0.02), (0.06, 0.0), (0.05, -0.01), (0.30, 0.10)]
+        report = check_alignment.hd_verdict(offsets)
+        self.assertTrue(report["pass"])
+        self.assertEqual(report["offset_m"], [0.055, -0.005])
+        self.assertEqual(report["max_deviation_m"], 0.245)
+        self.assertEqual(report["within_pass_m"], 3)
+
+    def test_the_gate_fails_on_too_few_windows_or_a_median_beyond_the_limit(self):
+        self.assertFalse(check_alignment.hd_verdict([(0.0, 0.0)] * (check_alignment.HD_MIN_WINDOWS - 1))["pass"])
+        self.assertFalse(check_alignment.hd_verdict([(0.0, 0.12)] * check_alignment.HD_MIN_WINDOWS)["pass"])
+        self.assertEqual(check_alignment.hd_verdict([]), {"measured": 0, "pass": False})
 
 
 class HeightmapGridTest(unittest.TestCase):
