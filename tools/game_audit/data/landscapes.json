@@ -1,0 +1,532 @@
+{
+ "AlBasrah": {
+  "origin_m": [-2040.01, -2040.0],
+  "size_vertices": [4081, 4081],
+  "scale_m": [1.0, 1.0, 1.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "L_070_Landscape_AlBasrah_01",
+    "actor": "Landscape_0",
+    "components": 64,
+    "location_m": [-2040.01, -2040.0, 234.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2040.01, -2040.0],
+    "size_vertices": [4081, 4081],
+    "scale_m": [1.0, 1.0, 1.0]
+   }
+  ]
+ },
+ "Anvil": {
+  "origin_m": [-2040.0, -2040.0],
+  "size_vertices": [4081, 4081],
+  "scale_m": [0.75, 0.75, 0.45],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Anvil_GEO",
+    "actor": "Landscape_1",
+    "components": 256,
+    "location_m": [-2040.0, -2040.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2040.0, -2040.0],
+    "size_vertices": [4081, 4081],
+    "scale_m": [0.75, 0.75, 0.45]
+   }
+  ]
+ },
+ "BlackCoast": {
+  "origin_m": [-2040.006, -2142.504],
+  "size_vertices": [4065, 4065],
+  "scale_m": [1.003937, 1.003937, 0.8],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Black_Coast_Geo",
+    "actor": "Landscape_1",
+    "components": 256,
+    "location_m": [-2040.006, -2142.504, 68.9],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2040.006, -2142.504],
+    "size_vertices": [4065, 4065],
+    "scale_m": [1.003937, 1.003937, 0.8]
+   }
+  ]
+ },
+ "Chora": {
+  "origin_m": [-2464.0, -1902.0],
+  "size_vertices": [8129, 4827],
+  "scale_m": [0.5, 0.5, 4.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Chora",
+    "actor": "Landscape_0",
+    "components": 341,
+    "location_m": [-2464.0, -2664.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 1524],
+    "origin_m": [-2464.0, -1902.0],
+    "size_vertices": [8129, 4827],
+    "scale_m": [0.5, 0.5, 4.0]
+   }
+  ]
+ },
+ "Fallujah": {
+  "origin_m": [-2040.0, -2040.0],
+  "size_vertices": [4081, 4081],
+  "scale_m": [1.0, 1.0, 1.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "L_070_Landscape_Fallujah_00",
+    "actor": "LandscapeStreamingProxy",
+    "components": 28,
+    "location_m": [-510.0, -2040.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [-1530, 0],
+    "origin_m": [-2040.0, -2040.0],
+    "size_vertices": [2041, 4081],
+    "scale_m": [1.0, 1.0, 1.0]
+   },
+   {
+    "level": "L_070_Landscape_Fallujah_01",
+    "actor": "LandscapeStreamingProxy_0",
+    "components": 31,
+    "location_m": [0.0, -2040.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [0.0, -2040.0],
+    "size_vertices": [2041, 4081],
+    "scale_m": [1.0, 1.0, 1.0]
+   },
+   {
+    "level": "L_070_Landscape_Fallujah_03",
+    "actor": "LandscapeStreamingProxy_1",
+    "components": 1,
+    "location_m": [0.0, -510.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [0.0, -510.0],
+    "size_vertices": [511, 511],
+    "scale_m": [1.0, 1.0, 1.0]
+   },
+   {
+    "level": "L_070_Landscape_Fallujah_04",
+    "actor": "LandscapeStreamingProxy_0",
+    "components": 2,
+    "location_m": [-1020.0, -1020.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-1020.0, -1020.0],
+    "size_vertices": [511, 1021],
+    "scale_m": [1.0, 1.0, 1.0]
+   },
+   {
+    "level": "L_070_Landscape_Fallujah_05",
+    "actor": "LandscapeStreamingProxy_1",
+    "components": 1,
+    "location_m": [-510.0, -510.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-510.0, -510.0],
+    "size_vertices": [511, 511],
+    "scale_m": [1.0, 1.0, 1.0]
+   },
+   {
+    "level": "L_070_Landscape_Fallujah_05",
+    "actor": "LandscapeStreamingProxy_2",
+    "components": 1,
+    "location_m": [-510.0, 0.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-510.0, 0.0],
+    "size_vertices": [511, 511],
+    "scale_m": [1.0, 1.0, 1.0]
+   }
+  ]
+ },
+ "FoolsRoad": {
+  "origin_m": [-1598.095, -1866.3],
+  "size_vertices": [2806, 2806],
+  "scale_m": [1.0, 1.0, 3.2],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Fools_Road_Landscape_and_Geo",
+    "actor": "Landscape_0",
+    "components": 97,
+    "location_m": [-2618.095, -2631.3, 750.6],
+    "yaw": 0.0,
+    "first_quad": [1020, 765],
+    "origin_m": [-1598.095, -1866.3],
+    "size_vertices": [2806, 2806],
+    "scale_m": [1.0, 1.0, 3.2]
+   }
+  ]
+ },
+ "GooseBay": {
+  "origin_m": [-2032.569, -2032.748],
+  "size_vertices": [4065, 4065],
+  "scale_m": [1.0, 1.0, 0.4],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Goose_Bay",
+    "actor": "Landscape_1",
+    "components": 256,
+    "location_m": [-2032.569, -2032.748, -146.03],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2032.569, -2032.748],
+    "size_vertices": [4065, 4065],
+    "scale_m": [1.0, 1.0, 0.4]
+   }
+  ]
+ },
+ "Gorodok": {
+  "origin_m": [-2031.992, -2032.0],
+  "size_vertices": [4065, 4065],
+  "scale_m": [1.0, 1.0, 10.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "L_070_Landscape_Gorodok",
+    "actor": "Landscape_1",
+    "components": 256,
+    "location_m": [-2031.992, -2032.0, 2100.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2031.992, -2032.0],
+    "size_vertices": [4065, 4065],
+    "scale_m": [1.0, 1.0, 10.0]
+   }
+  ]
+ },
+ "Harju": {
+  "origin_m": [-2015.994, -2016.008],
+  "size_vertices": [4033, 4033],
+  "scale_m": [1.0, 1.0, 1.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Harju_Landscape",
+    "actor": "Landscape_1",
+    "components": 918,
+    "location_m": [-2015.994, -2016.008, 202.6],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2015.994, -2016.008],
+    "size_vertices": [4033, 4033],
+    "scale_m": [1.0, 1.0, 1.0]
+   }
+  ]
+ },
+ "Jensen": {
+  "origin_m": [-2040.514, -2040.141],
+  "size_vertices": [4081, 4081],
+  "scale_m": [1.0, 1.0, 1.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Jensens_Range_Geo",
+    "actor": "Landscape_0",
+    "components": 64,
+    "location_m": [-2040.514, -2040.141, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2040.514, -2040.141],
+    "size_vertices": [4081, 4081],
+    "scale_m": [1.0, 1.0, 1.0]
+   }
+  ]
+ },
+ "Kamdesh": {
+  "origin_m": [-2016.0, -2016.0],
+  "size_vertices": [4033, 4033],
+  "scale_m": [1.0, 1.0, 1.35],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Kamdesh_Highlands",
+    "actor": "Landscape_0",
+    "components": 1024,
+    "location_m": [-2016.0, -2016.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2016.0, -2016.0],
+    "size_vertices": [4033, 4033],
+    "scale_m": [1.0, 1.0, 1.35]
+   }
+  ]
+ },
+ "Kohat": {
+  "origin_m": [-2016.023, -2016.0],
+  "size_vertices": [4065, 4065],
+  "scale_m": [1.0, 1.0, 0.75],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Kohat_landscape",
+    "actor": "Landscape_0",
+    "components": 256,
+    "location_m": [-2016.023, -2016.0, 200.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2016.023, -2016.0],
+    "size_vertices": [4065, 4065],
+    "scale_m": [1.0, 1.0, 0.75]
+   }
+  ]
+ },
+ "Kokan": {
+  "origin_m": [-1332.996, -1714.0],
+  "size_vertices": [6097, 7367],
+  "scale_m": [0.5, 0.5, 1.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Kokan_Valley_Landscape",
+    "actor": "Landscape_0",
+    "components": 514,
+    "location_m": [-1078.996, -1079.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [-508, -1270],
+    "origin_m": [-1332.996, -1714.0],
+    "size_vertices": [6097, 7367],
+    "scale_m": [0.5, 0.5, 1.0]
+   }
+  ]
+ },
+ "Lashkar": {
+  "origin_m": [-2167.0, -2167.0],
+  "size_vertices": [4336, 4336],
+  "scale_m": [1.0, 1.0, 1.5],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Lashkar_GEO",
+    "actor": "Landscape_0",
+    "components": 289,
+    "location_m": [-2167.0, -2167.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2167.0, -2167.0],
+    "size_vertices": [4336, 4336],
+    "scale_m": [1.0, 1.0, 1.5]
+   }
+  ]
+ },
+ "Logar": {
+  "origin_m": [-1386.043, -1260.056],
+  "size_vertices": [2773, 1891],
+  "scale_m": [0.9999, 0.9999, 0.4999],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Logar_Valley_landscape",
+    "actor": "Landscape3",
+    "components": 330,
+    "location_m": [-2015.98, -2015.98, 2.78],
+    "yaw": 0.0,
+    "first_quad": [630, 756],
+    "origin_m": [-1386.043, -1260.056],
+    "size_vertices": [2773, 1891],
+    "scale_m": [0.9999, 0.9999, 0.4999]
+   }
+  ]
+ },
+ "Manicouagan": {
+  "origin_m": [-2032.216, -2032.099],
+  "size_vertices": [4065, 4065],
+  "scale_m": [1.0, 1.0, 3.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Manicouagan_geo",
+    "actor": "Landscape_0",
+    "components": 256,
+    "location_m": [-2032.216, -2032.099, 672.894],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2032.216, -2032.099],
+    "size_vertices": [4065, 4065],
+    "scale_m": [1.0, 1.0, 3.0]
+   }
+  ]
+ },
+ "Mestia": {
+  "origin_m": [-1545.0, -1161.955],
+  "size_vertices": [3061, 2551],
+  "scale_m": [1.0, 1.0, 1.2],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Mestia_Geo",
+    "actor": "Landscape_0",
+    "components": 87,
+    "location_m": [-2310.0, -1926.955, 1.0],
+    "yaw": 0.0,
+    "first_quad": [765, 765],
+    "origin_m": [-1545.0, -1161.955],
+    "size_vertices": [3061, 2551],
+    "scale_m": [1.0, 1.0, 1.2]
+   }
+  ]
+ },
+ "Mutaha": {
+  "origin_m": [-1785.02, -1785.0],
+  "size_vertices": [4081, 4081],
+  "scale_m": [1.0, 1.0, 0.3],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "L_070_Mutaha_Landscape",
+    "actor": "Landscape_1",
+    "components": 64,
+    "location_m": [-3825.02, -3825.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [2040, 2040],
+    "origin_m": [-1785.02, -1785.0],
+    "size_vertices": [4081, 4081],
+    "scale_m": [1.0, 1.0, 0.3]
+   }
+  ]
+ },
+ "Narva": {
+  "origin_m": [-2032.0, -2032.0],
+  "size_vertices": [4065, 4065],
+  "scale_m": [1.0, 1.0, 1.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "L_070_Landscape_Narva",
+    "actor": "Landscape_1",
+    "components": 256,
+    "location_m": [-2032.0, -2032.0, 1.0],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2032.0, -2032.0],
+    "size_vertices": [4065, 4065],
+    "scale_m": [1.0, 1.0, 1.0]
+   }
+  ]
+ },
+ "Pacific": {
+  "origin_m": [-2016.0, -2016.0],
+  "size_vertices": [4033, 4033],
+  "scale_m": [1.0, 1.0, 0.28],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "PacificProvingGrounds_Geo",
+    "actor": "Landscape_0",
+    "components": 1024,
+    "location_m": [-2016.0, -2016.0, -7.5],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2016.0, -2016.0],
+    "size_vertices": [4033, 4033],
+    "scale_m": [1.0, 1.0, 0.28]
+   }
+  ]
+ },
+ "Sanxian": {
+  "origin_m": [-2040.0, -2040.0],
+  "size_vertices": [4081, 4081],
+  "scale_m": [1.0, 1.0, 1.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "L_070_Landscape_Sanxian_01",
+    "actor": "Landscape_0",
+    "components": 64,
+    "location_m": [-2040.0, -2040.0, 143.5],
+    "yaw": 0.0,
+    "first_quad": [0, 0],
+    "origin_m": [-2040.0, -2040.0],
+    "size_vertices": [4081, 4081],
+    "scale_m": [1.0, 1.0, 1.0]
+   }
+  ]
+ },
+ "Skorpo": {
+  "origin_m": [-4138.024, -2141.579],
+  "size_vertices": [7113, 5081],
+  "scale_m": [1.2, 1.2, 3.5],
+  "yaw": -2.006195,
+  "actors": [
+   {
+    "level": "Skorpo_Baselayer",
+    "actor": "Uskedal",
+    "components": 391,
+    "location_m": [-4811.273, -3947.918, 393.0],
+    "yaw": -2.006195,
+    "first_quad": [508, 1524],
+    "origin_m": [-4138.024, -2141.579],
+    "size_vertices": [7113, 5081],
+    "scale_m": [1.2, 1.2, 3.5]
+   }
+  ]
+ },
+ "Sumari": {
+  "origin_m": [-682.008, -371.994],
+  "size_vertices": [1427, 1055],
+  "scale_m": [1.0, 1.0, 0.75],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Sumari_master",
+    "actor": "Landscape_0",
+    "components": 391,
+    "location_m": [-992.008, -991.995, 1.0],
+    "yaw": 0.0,
+    "first_quad": [310, 620],
+    "origin_m": [-682.008, -371.994],
+    "size_vertices": [1427, 1055],
+    "scale_m": [1.0, 1.0, 0.75]
+   }
+  ]
+ },
+ "Tallil": {
+  "origin_m": [-2285.907, -2285.768],
+  "size_vertices": [4573, 4573],
+  "scale_m": [1.0, 1.0, 1.25],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "Tallil_Outskirts",
+    "actor": "Landscape_1",
+    "components": 324,
+    "location_m": [-2031.907, -2031.768, 1.0],
+    "yaw": 0.0,
+    "first_quad": [-254, -254],
+    "origin_m": [-2285.907, -2285.768],
+    "size_vertices": [4573, 4573],
+    "scale_m": [1.0, 1.0, 1.25]
+   }
+  ]
+ },
+ "Yehorivka": {
+  "origin_m": [-3301.97, -3302.0],
+  "size_vertices": [6351, 6351],
+  "scale_m": [1.0, 1.0, 4.0],
+  "yaw": 0.0,
+  "actors": [
+   {
+    "level": "L_070_Landscape_Yehorivka",
+    "actor": "Landscape_0",
+    "components": 625,
+    "location_m": [-4063.97, -4064.0, 991.0],
+    "yaw": 0.0,
+    "first_quad": [762, 762],
+    "origin_m": [-3301.97, -3302.0],
+    "size_vertices": [6351, 6351],
+    "scale_m": [1.0, 1.0, 4.0]
+   }
+  ]
+ }
+}

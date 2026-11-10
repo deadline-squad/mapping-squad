@@ -16,7 +16,10 @@ Usage (from the deployment repository)::
 Game values: ``resolved.json`` (``collect.py``: every weapon Blueprint with its WeaponConfig and projectile merged along
 the Blueprint chain), ``gamecheck.py`` (effective flight model, explosion, spread curves) and Squad Ballistics'
 ``tests/data/game_weapons.json`` (the snapshot ``tools/game_weapons.py`` writes, which also holds the seven weapons whose
-Blueprints ``resolved.json`` lacks). Labels (the vocabulary of ``docs/thesis-methods-and-results.md`` section 0):
+Blueprints ``resolved.json`` lacks). The elevation limits of the weapons the snapshot derives none for (mortar, UB-32,
+Hell Cannon, BTR-4 AGS) and the stop every minimum distance is computed at come from
+``tools/game_audit/data/mount_limits.json``: the pitch range of each mount and what its sight adds to it, read from the
+game files by ``tools/game_audit/mounts.py``. Labels (the vocabulary of ``docs/thesis-methods-and-results.md`` section 0):
 
 * VERIFIED   the value is read from the game files by a committed tool and the app's value equals it;
 * INFERRED   derived from verified data by a stated argument (a native default, a curve's resting value, a limit
@@ -43,6 +46,7 @@ sys.path.insert(0, HERE)
 import gamecheck  # noqa: E402
 
 DIRECT_FIRE = os.path.join(HERE, "..", "direct_fire")
+MOUNT_LIMITS = os.path.join(HERE, "..", "game_audit", "data", "mount_limits.json")
 LABELS = ("VERIFIED", "INFERRED", "UNVERIFIED", "ASSUMED")
 
 # The inputs of the firing solution (columns of the TSV and of the counts table)
@@ -64,6 +68,8 @@ KNOWN = {
 
 # Origin of the app inputs the game files do not decide (or the tools do not read): weapon -> input -> (label, text).
 # Sources: the comments of weapons.js, the `_comment` of weapons.json and the 1.6.0 release notes of Squad Ballistics.
+# The limits and minimum distances of the weapons of mount_limits.json are not here: mount_limits() and
+# mount_stop() derive their rows from that file.
 SKELETON = ("UNVERIFIED", "one-off read of the weapon's skeletons (Squad build 26005357), recorded in the comment of SC weapons.js; "
             "tools/game_weapons.py does not read tripods and deployables")
 FITTED_HOLD = ("UNVERIFIED", "fitted to 67 in-game hold-time measurements of the owner (not in the repositories); the game files give 9.00 deg/s "
@@ -76,14 +82,8 @@ ORIGIN = {
     ("AGS-17 · emplacement · optic (RMB ×2.5)", "launch"): ("UNVERIFIED", "1 m chosen with the fit of the hold model; the files say 0.347 m (SB 1.6.0 release notes #13, not reproducible by a committed tool)"),
     ("AGS-17 · emplacement · no optic", "launch"): ("UNVERIFIED", "same as the optic entry: 1 m, the files say 0.347 m (#13)"),
     ("AGS-17 · iron sights emplacement", "launch"): ("UNVERIFIED", "same as the optic entry: 1 m, the files say 0.347 m (#13)"),
-    ("Mortar (M252 / 2B14 / L16 / Type 63)", "limits"): ("ASSUMED", "45..88.875 degrees (1580 mil) inherited from the upstream SquadCalc table; game_weapons.json records the mount's PitchInterval 0..43.8, no committed tool derives these limits from it"),
-    ("Mortar (M252 / 2B14 / L16 / Type 63)", "min_distance"): ("ASSUMED", "51 m inherited from the upstream table; this model's range at the top elevation 88.875 degrees is 48.5 m"),
     ("Mortar (M252 / 2B14 / L16 / Type 63)", "hold"): ("UNVERIFIED", "9 deg/s read by hand from the game's input settings (keyboard pitch x300/s x turret input x0.03, SB weapons.json note); no committed tool reads it; Calibrate refits it in the app"),
     ("Technical Mortar", "angle_offset"): ("INFERRED", "5 degrees is the upstream value; the HUD table of the game (readout in degrees against range) puts the barrel 4.8 +- 0.3 degrees above the readout (SB release notes 1.6.0), which supports it"),
-    ("Technical Mortar", "min_distance"): ("ASSUMED", "51 m inherited from the upstream table; this model's range at the barrel's top (83.8 + 5 = 88.8 degrees) is 51.8 m"),
-    ("M1064 M121 (120mm)", "min_distance"): ("ASSUMED", "340 m inherited from the upstream SquadCalc table"),
-    ("Hell Cannon", "limits"): ("ASSUMED", "10..90 degrees inherited from the upstream SquadCalc table; tripod limits not read by game_weapons.py"),
-    ("UB-32 (S-5 rockets)", "limits"): ("ASSUMED", "-25..35 degrees inherited from the upstream SquadCalc table"),
 }
 ELEVATION_AIMED_LIMITS = ("INFERRED", "the mount's pitch limits plus the barrel socket's pitch (game_weapons.json sources.mount_limits and barrel)")
 
@@ -163,6 +163,12 @@ class Data:
         self.movement_keys = set()
         for entry in self.resolved.values():
             self.movement_keys |= set(((entry.get("projectile") or {}).get("movement") or {}))
+        with open(MOUNT_LIMITS, encoding="utf-8") as source:
+            mounts = json.load(source)
+        # SquadCalc weapon -> its mount in the game, and the same by the name of its Squad Ballistics entry
+        self.sc_mounts = {w["name"]: (mounts[w["name"]], w) for w in self.sc if w["name"] in mounts}
+        renamed = self.gen["RENAMED"]
+        self.sb_mounts = {renamed.get(w["ballistics"], w["ballistics"]): (mount, w) for mount, w in self.sc_mounts.values() if w.get("ballistics")}
 
     @staticmethod
     def read_curve(asset):
@@ -260,6 +266,26 @@ def shell_blueprint(data, cur, shell_name):
 def short(path):
     """The name at the end of a path."""
     return path.rsplit("/", 1)[-1] if path else "-"
+
+
+def mount_limits(mount):
+    """(game cell, source text) of the elevation limits a mount of mount_limits.json gives: its pitch range plus what the sight adds.
+
+    The file names the Blueprint, widget, bone or component each number was read from.
+    """
+    pitch, reading = mount["pitch"], mount["reading"]
+    return (f"{num(reading[0])}..{num(reading[1])}",
+            f"mount pitch {num(pitch[0])}..{num(pitch[1])} ({short(mount['mount'])}) + {num(mount['sight_offset'])} the sight adds: tools/game_audit/data/mount_limits.json")
+
+
+def mount_stop(mount, weapon):
+    """Source text of a minimum distance: the barrel elevation the mount of a SquadCalc weapon stops at on the near side.
+
+    A weapon fired on the high arc is stopped at the top of its range, one fired on the low arc at the bottom; the
+    barrel is the weapon's scale offset above what the gunner reads.
+    """
+    stop = mount["reading"][1 if weapon.get("angleType") == "high" else 0] + (weapon.get("angleOffset") or 0)
+    return f"range on level ground at the mount's stop, barrel at {num(stop)} degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)"
 
 
 def flight_rows(data, rows, app, weapon, shell, used, game_eff, found, source, snap):
@@ -362,14 +388,18 @@ def sb_rows(data, rows):
                          "the top is where the measured lay stops (fitted, 0.02 above the mount limit plus the socket)", "UNVERIFIED")
             else:
                 rows.add("SB", name, "-", "limits", f"{num(limits[0])}..{num(limits[1])}", f"{num(game_limits[0])}..{num(game_limits[1])}", "game_weapons.json elevation", "VERIFIED", False)
-        elif (name, "limits") in ORIGIN:
-            rows.add("SB", name, "-", "limits", f"{num(limits[0])}..{num(limits[1])}", "-", ORIGIN[(name, "limits")][1], ORIGIN[(name, "limits")][0])
+        elif name in data.sb_mounts:
+            mount = data.sb_mounts[name][0]
+            game, text = mount_limits(mount)
+            rows.add("SB", name, "-", "limits", f"{num(limits[0])}..{num(limits[1])}", game, text, "INFERRED",
+                     all(abs(a - b) <= 5.1e-3 for a, b in zip(limits, mount["reading"])))
         else:
             rows.add("SB", name, "-", "limits", f"{num(limits[0])}..{num(limits[1])}", "-", ELEVATION_AIMED_LIMITS[1], ELEVATION_AIMED_LIMITS[0])
         md = e.get("min_distance", 0.0)
-        if md:
-            label, text = ORIGIN.get((name, "min_distance"), UPSTREAM)
-            rows.add("SB", name, "-", "min_distance", num(md), "-", text, label)
+        if md and name in data.sb_mounts:
+            rows.add("SB", name, "-", "min_distance", num(md), "-", mount_stop(*data.sb_mounts[name]), "INFERRED")
+        elif md:
+            rows.add("SB", name, "-", "min_distance", num(md), "-", UPSTREAM[1], UPSTREAM[0])
         else:
             rows.add("SB", name, "-", "min_distance", "0", "-", "none", "n/a")
         if e.get("angle_offset"):
@@ -516,15 +546,21 @@ def sc_rows(data, rows):
                      origin["label"] if origin else "UNVERIFIED", same or (name == "AGS-17" and limits == [-12.15, 85.87]))
         elif kind == "mod":
             rows.add("SC", name, "-", "limits", f"{num(w['minElevation'][0])}..{num(w['minElevation'][1])}", "-", "Workshop mod", "ASSUMED")
+        elif name in data.sc_mounts:
+            mount = data.sc_mounts[name][0]
+            game, text = mount_limits(mount)
+            rows.add("SC", name, "-", "limits", f"{num(w['minElevation'][0])}..{num(w['minElevation'][1])}", game, text, "INFERRED",
+                     all(abs(a - b) <= 5.1e-3 for a, b in zip(w["minElevation"], mount["reading"])))
         else:
-            label = "ASSUMED"
             rows.add("SC", name, "-", "limits", f"{num(w['minElevation'][0])}..{num(w['minElevation'][1])}", "-",
-                     "upstream table (Mk19, BTR4-AGS)" if kind == "hand" else "unbounded: no mount data for this SquadCalc-only weapon", label)
+                     "upstream table (Mk19)" if kind == "hand" else "unbounded: no mount data for this SquadCalc-only weapon", "ASSUMED")
         md = w["shells"][0].get("minDistance", 0)
-        if md:
-            label, text = ORIGIN.get((cur, "min_distance"), UPSTREAM) if cur else UPSTREAM
+        if md and name in data.sc_mounts:
+            rows.add("SC", name, "-", "min_distance", num(md), "-", mount_stop(*data.sc_mounts[name]), "INFERRED")
+        elif md:
+            label, text = UPSTREAM
             if name == "AGS-17":
-                label, text = "INFERRED", "range of the top of the hold (85.87 degrees) from the muzzle, computed by gen_squadcalc_weapons.py lob_min_distance from the fitted hold model"
+                label, text = "INFERRED", f"range of the top of the hold ({num(w['holdElevation'][1])} degrees) from the muzzle, computed by gen_squadcalc_weapons.py lob_min_distance from the fitted hold model"
             rows.add("SC", name, "-", "min_distance", num(md), "-", text, label if kind != "mod" else "ASSUMED")
         else:
             rows.add("SC", name, "-", "min_distance", "0", "-", "none", "n/a")
@@ -723,8 +759,10 @@ def index_table(data, classes, lang):
         origin = t["game"]
         if e.get("hold_rate"):
             origin += "; hold model fitted (67 measurements)"
-        if (name, "launch") in ORIGIN or (name, "limits") in ORIGIN:
-            origin += "; launch / limits hand-read"
+        if (name, "launch") in ORIGIN:
+            origin += "; launch hand-read"
+        if name in data.sb_mounts and data.snap[name]["elevation_limits"] is None:
+            origin += "; limits from the mount's pitch (tools/game_audit)"
         lines.append(f"| SB | {name} | {classes.get((wpath, ppath), '-')} | {origin} |")
     for w in data.sc:
         name = w["name"]
@@ -743,9 +781,11 @@ def index_table(data, classes, lang):
         else:
             origin = t["hand"]
             if name == "AGS-17":
-                origin += "; speed and top fitted (67 measurements)"
-            elif name in ("Mk19", "BTR4-AGS"):
+                origin += "; hold model fitted (67 measurements)"
+            elif name == "Mk19":
                 origin += "; height, angle offset, limits, min distance from upstream"
+            elif name == "BTR4-AGS":
+                origin += "; height and angle offset from upstream, limits from the mount's pitch (tools/game_audit)"
         lines.append(f"| SC | {name} | {', '.join(dict.fromkeys(ids)) or '-'} | {origin} |")
     return "\n".join(lines)
 

@@ -1,0 +1,1886 @@
+{
+ "Anvil_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Anvil_Invasion_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Anvil_RAAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 17000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 17000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Anvil_RAAS_v2": {
+  "Team1ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "BlackCoast_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "BlackCoast_AAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 17000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 17000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "BlackCoast_Invasion_v1": {
+  "Team1EForwardProtectionZone": {
+   "sphere_cm": 4000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 4000.0,
+   "lock_cm": 15000.0
+  },
+  "Team1WForwardProtectionZone": {
+   "sphere_cm": 5500.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 5500.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "BlackCoast_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 18000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 18000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 5000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 5000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "BlackCoast_RAAS_v2": {
+  "Team1ProtectionZone_2": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_3": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "BlackCoast_Seed_v1": {
+  "Team2ProtectionZone": {
+   "sphere_cm": 8000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 8000.0,
+   "lock_cm": 9000.0
+  }
+ },
+ "Chora_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Chora_AAS_v2": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 12000.0
+  }
+ },
+ "Chora_AAS_v3": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Chora_Insurgency_v1": {
+  "Team1ProtectionZone1": {
+   "sphere_cm": 7000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 7000.0,
+   "lock_cm": 15000.0
+  },
+  "Team1ProtectionZone2": {
+   "sphere_cm": 3700.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 3700.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone1": {
+   "sphere_cm": 6048.2397,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 6048.2,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone2": {
+   "sphere_cm": 4000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 4000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Chora_Invasion_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Chora_Invasion_v2": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Chora_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Chora_TC_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Fallujah_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 13000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 16000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 16000.0,
+   "lock_cm": 5000.0
+  }
+ },
+ "Fallujah_Insurgency_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Fallujah_Invasion_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Fallujah_Invasion_v2": {
+  "Team1ProtectionZone1": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 13000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 16000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 16000.0,
+   "lock_cm": 5000.0
+  }
+ },
+ "Fallujah_Invasion_v3_CL": {
+  "Team1ProtectionZone1": {
+   "sphere_cm": 16000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 16000.0,
+   "lock_cm": 13000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 16000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 16000.0,
+   "lock_cm": 5000.0
+  }
+ },
+ "Fallujah_RAAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Fallujah_RAAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Fallujah_TC_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 12000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 12000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "FoolsRoad_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 10000.0,
+   "scale": [1.8297, 1.8297, 1.8297],
+   "radius_cm": 18297.3,
+   "lock_cm": 15000.0
+  }
+ },
+ "FoolsRoad_AAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "FoolsRoad_Destruction_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "FoolsRoad_Invasion_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 8000.0,
+   "scale": [1.8297, 1.8297, 1.8297],
+   "radius_cm": 14637.9,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "FoolsRoad_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 8000.0,
+   "scale": [1.8297, 1.8297, 1.8297],
+   "radius_cm": 14637.8,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "FoolsRoad_TC_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "GooseBay_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [31149.5693, 31149.5693, -1.5759],
+   "radius_cm": 23637.9,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "GooseBay_Invasion_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "GooseBay_Invasion_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "GooseBay_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [31149.5693, 31149.5693, -1.5759],
+   "radius_cm": 23637.9,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "GooseBay_RAAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [31149.5693, 31149.5693, -1.5759],
+   "radius_cm": 23637.9,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.4793, 1.4793, 1.4793],
+   "radius_cm": 36982.4,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_Destruction_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [22.004, 22.004, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4793, 1.4793, 1.4793],
+   "radius_cm": 14793.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_Insurgency_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.4793, 1.4793, 1.4793],
+   "radius_cm": 22189.4,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_Invasion_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4793, 1.4793, 1.4793],
+   "radius_cm": 14793.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_Invasion_v2": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_Invasion_v3": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 25000.0,
+   "scale": [1.4793, 1.4793, 1.4793],
+   "radius_cm": 36982.4,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_Invasion_v4_CL": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_RAAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.4793, 1.4793, 1.4793],
+   "radius_cm": 36982.4,
+   "lock_cm": 15000.0
+  }
+ },
+ "Gorodok_TC_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Harju_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Harju_AAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 10000.0
+  }
+ },
+ "Harju_AAS_v3": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 28846.621,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 28846.6,
+   "lock_cm": 10000.0
+  }
+ },
+ "Harju_Invasion_v1": {
+  "Team2ProtectionZone1": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone2": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Harju_Invasion_v2": {
+  "Team1MainProtectionZone1": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Harju_Invasion_v3": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Harju_Invasion_v4_CL": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 29676.246,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 29676.2,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 24786.133,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 24786.1,
+   "lock_cm": 1.0
+  }
+ },
+ "Harju_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Harju_RAAS_v2": {
+  "Team1MainProtectionZone1": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Harju_RAAS_v3_CL": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Harju_Seed_v1": {
+  "Team2ProtectionZone_3": {
+   "sphere_cm": 10000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 10000.0,
+   "lock_cm": 10000.0
+  }
+ },
+ "Harju_TC_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 13038.799,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 13038.8,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 18558.18,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 18558.2,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kamdesh_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 17000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 17000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kamdesh_Insurgency_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kamdesh_Invasion_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kamdesh_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 17000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 17000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kamdesh_TC_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kohat_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team1ProtectionZone2": {
+   "sphere_cm": 2500.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 2500.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone2": {
+   "sphere_cm": 5000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 5000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kohat_Insurgency_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone2": {
+   "sphere_cm": 150.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 150.0,
+   "lock_cm": 30000.0
+  }
+ },
+ "Kohat_Invasion_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 21341.045,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 21341.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 25000.0
+  },
+  "Team2ProtectionZone2": {
+   "sphere_cm": 5005.1353,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 5005.1,
+   "lock_cm": 25000.0
+  }
+ },
+ "Kohat_Invasion_v2": {
+  "Team1ProtectionZone1": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone1_0": {
+   "sphere_cm": 22000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 22000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kohat_RAAS_v1": {
+  "Team1ProtectionZone1": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team1ProtectionZone2_0": {
+   "sphere_cm": 2500.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 2500.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone1": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone2_1": {
+   "sphere_cm": 5000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 5000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kohat_RAAS_v2": {
+  "Team1ProtectionZone1": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 10000.0
+  },
+  "Team2ProtectionZone1": {
+   "sphere_cm": 21000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 21000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Kohat_TC_v1": {
+  "Team1ProtectionZone1": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 40000.0
+  },
+  "Team1ProtectionZone2": {
+   "sphere_cm": 1924.5537,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 1924.6,
+   "lock_cm": 30000.0
+  },
+  "Team2ProtectionZone2": {
+   "sphere_cm": 1620.0289,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 1620.0,
+   "lock_cm": 30000.0
+  }
+ },
+ "Lashkar_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Lashkar_AAS_v2": {
+  "Team1ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Lashkar_Insurgency_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone2": {
+   "sphere_cm": null,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": null,
+   "lock_cm": 12000.0
+  }
+ },
+ "Lashkar_Invasion_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone2": {
+   "sphere_cm": null,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": null,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone3": {
+   "sphere_cm": null,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": null,
+   "lock_cm": 15000.0
+  }
+ },
+ "Lashkar_RAAS_v1": {
+  "Team1ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Lashkar_TC_v1": {
+  "Team1ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Lashkar_TC_v2": {
+  "Team1ProtectionZone_1": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Logar_Insurgency_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 10000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 10000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 10000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 10000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Manicouagan_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Manicouagan_AAS_v2": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Manicouagan_AAS_v3": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Manicouagan_Invasion_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Manicouagan_Invasion_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 150000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 150000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Manicouagan_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Manicouagan_RAAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Manicouagan_Seed_v1": {
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 5000.0
+  }
+ },
+ "Manicouagan_Seed_v2_CL": {
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 5000.0
+  }
+ },
+ "Mestia_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4375, 1.4375, 1.4375],
+   "radius_cm": 14375.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4375, 1.4375, 1.4375],
+   "radius_cm": 14375.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mestia_AAS_v2": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4375, 1.4375, 1.4375],
+   "radius_cm": 14375.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4375, 1.4375, 1.4375],
+   "radius_cm": 14375.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mestia_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4375, 1.4375, 1.4375],
+   "radius_cm": 14375.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4375, 1.4375, 1.4375],
+   "radius_cm": 14375.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mestia_TC_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4375, 1.4375, 1.4375],
+   "radius_cm": 14375.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 10000.0,
+   "scale": [1.4375, 1.4375, 1.4375],
+   "radius_cm": 14375.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mutaha_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mutaha_AAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mutaha_Invasion_v1": {
+  "Team1ProtectionZone_3": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_2": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mutaha_RAAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mutaha_RAAS_v2": {
+  "Team1ProtectionZone_1": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mutaha_Seed_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Mutaha_TC_v1": {
+  "Team1ProtectionZone_1": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Sanxian_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Sanxian_AAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Sanxian_AAS_v3": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Sanxian_Invasion_v1": {
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Sanxian_Invasion_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Sanxian_Invasion_v3": {
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Sanxian_RAAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Sanxian_RAAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 22000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 22000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Sanxian_RAAS_v3_CL": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 10000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 10000.0,
+   "lock_cm": 5000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 15000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 15000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Skorpo_Invasion_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [0.9646, 0.9646, 0.9646],
+   "radius_cm": 19292.3,
+   "lock_cm": 20000.0
+  },
+  "Team2ProtectionZone2_1": {
+   "sphere_cm": 25000.0,
+   "scale": [2.4737, 2.4737, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 20000.0
+  }
+ },
+ "Skorpo_Invasion_v2": {
+  "Team1ProtectionZone1": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 25000.0
+  },
+  "Team1ProtectionZone2": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 25000.0
+  },
+  "Team1ProtectionZone3": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 25000.0
+  },
+  "Team1ProtectionZone4": {
+   "sphere_cm": 25000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 25000.0
+  },
+  "Team1ProtectionZone5": {
+   "sphere_cm": 5000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 5000.0,
+   "lock_cm": 25000.0
+  },
+  "Team2ProtectionZone1_0": {
+   "sphere_cm": 20000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 20000.0,
+   "lock_cm": 20000.0
+  }
+ },
+ "Skorpo_Invasion_v3": {
+  "Team2ProtectionZone2_1": {
+   "sphere_cm": 25000.0,
+   "scale": [2.4737, 2.4737, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 20000.0
+  }
+ },
+ "Skorpo_RAAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 25000.0,
+   "scale": [2.4737, 2.4737, 1.0],
+   "radius_cm": 25000.0,
+   "lock_cm": 20000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 20000.0,
+   "scale": [0.9646, 0.9646, 0.9646],
+   "radius_cm": 19292.3,
+   "lock_cm": 20000.0
+  },
+  "Team2ProtectionZone2": {
+   "sphere_cm": 20000.0,
+   "scale": [0.9646, 0.9646, 0.9646],
+   "radius_cm": 19292.3,
+   "lock_cm": 20000.0
+  }
+ },
+ "Sumari_AAS_v1": {
+  "Team2ProtectionZone": {
+   "sphere_cm": 7000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 7000.0,
+   "lock_cm": 10000.0
+  }
+ },
+ "Sumari_AAS_v2": {
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 7000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 7000.0,
+   "lock_cm": 10000.0
+  }
+ },
+ "Sumari_AAS_v3": {
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 7000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 7000.0,
+   "lock_cm": 10000.0
+  }
+ },
+ "Tallil_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 60000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 60000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 60000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 60000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Tallil_Invasion_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 75000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 75000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 75000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 75000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Tallil_RAAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 75000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 75000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 75000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 75000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Tallil_RAAS_v2": {
+  "Team1ProtectionZone_1": {
+   "sphere_cm": 60000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 60000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 60000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 60000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Tallil_TC_v1": {
+  "Team1ProtectionZone_1": {
+   "sphere_cm": 75000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 75000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_0": {
+   "sphere_cm": 75000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 75000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_AAS_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_AAS_v1_WP": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_AAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_Destruction_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.25, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_Invasion_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_Invasion_v1_WP": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_Invasion_v2": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 30000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 30000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_RAAS_v1": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_RAAS_v1_WP": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_RAAS_v2": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_TC_v1": {
+  "Team1ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  }
+ },
+ "Yehorivka_TC_v2": {
+  "Team1ProtectionZone_0": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  },
+  "Team2ProtectionZone_1": {
+   "sphere_cm": 35000.0,
+   "scale": [1.0, 1.0, 1.0],
+   "radius_cm": 35000.0,
+   "lock_cm": 15000.0
+  }
+ }
+}
