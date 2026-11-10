@@ -1,8 +1,8 @@
 # Data provenance of the firing solution (Squad build 26005357)
 
 Every input of the firing solution of the two apps, per weapon, with the asset it comes from and a label. The apps are
-Squad Ballistics (SB, `weapons.json`, 167 weapons, version 1.7.1) and the Deadline SquadCalc (SC, `src/data/weapons.js`,
-145 weapons, version 45.39.0). The game data is the dedicated-server package only (`SquadGame/Content/Paks`; the client pak is not used).
+Squad Ballistics (SB, `weapons.json`, 167 weapons, version 1.7.2) and the Deadline SquadCalc (SC, `src/data/weapons.js`,
+145 weapons, version 45.40.0). The game data is the dedicated-server package only (`SquadGame/Content/Paks`; the client pak is not used).
 Russian version: `data-provenance.ru.md`. Nothing here was run on a game server. Every statement carries a label (the
 vocabulary of `docs/thesis-methods-and-results.md` section 0, plus ASSUMED):
 
@@ -28,9 +28,9 @@ shell and input with the value used, the game value, the source and the label, i
 | Spread | SC uses `WeaponConfig.MOA`. Where the weapon also names a `MOACurve` (grenade machine guns, heavy machine guns, Kord) the game spreads by the curve, and SC takes a value of it: the resting one (15 / 3 / 7 MOA) for the generated weapons, the sustained one (50) for the AGS-17 (inherited). SB does not use a spread | VERIFIED for `MOA`; INFERRED for the curve values (asset in the dump for the grenade curve, 15 at 0 and 50 at 0.75); UNVERIFIED for the HMG and Kord curves (assets not in this dump) |
 | Explosion (damage, inner and outer radius, falloff, height) | Equal to the Blueprints for every SC shell that has a game class. The fields no Blueprint sets are the native C++ defaults of `ASQProjectile`, which no file holds | VERIFIED where set; ASSUMED where native (the cell lists them) |
 | Bore, zoom of SB | Read from the vehicle and tripod Blueprints and skeletons for 134 weapons; the 26 handheld launchers have bore 0 and zoom 1 assumed | VERIFIED / ASSUMED |
-| Launch point, elevation limits | From the game for the vehicle mounts (`tools/game_weapons.py`); the tripod weapons (mortar, UB-32, Hell Cannon) from one-off skeleton reads; the AGS-17 emplacement uses 1 m although the files say 0.347 m (kept on purpose, SB release notes 1.6.0 #13) | VERIFIED / UNVERIFIED |
+| Launch point, elevation limits | From the game for the vehicle mounts (`tools/game_weapons.py`). The tripod weapons (mortar, UB-32, Hell Cannon): the launch point from one-off skeleton reads; the limits are the pitch range of the mount plus what the game's sight adds to it (mortar 0..43.8 + 45, Hell Cannon -30..50 + 40, UB-32 -25..35 + 0), read by `tools/game_audit/mounts.py` into `tools/game_audit/data/mount_limits.json`. The AGS-17 emplacement uses 1 m although the files say 0.347 m (kept on purpose, SB release notes 1.6.0 #13) | VERIFIED / INFERRED (limits from the mount's pitch) / UNVERIFIED (launch points read once) |
 | Hold rate and the top of the hold of the AGS-17 entries | Fitted to 67 in-game measurements (not in the repositories); the files give 9.00 deg/s | UNVERIFIED |
-| Weapons whose values come from the old upstream SquadCalc table | Mortar, UB-32, HellCannon, Tech.Mortar, Tech.UB-32, BM-21Grad, M1064M121, Mk19, BTR4-AGS (section 6) and the ten Workshop-mod weapons | the game confirms the velocity, gravity, spread and explosion of the first nine (VERIFIED); the rest of their fields: ASSUMED / UNVERIFIED |
+| Weapons whose values come from the old upstream SquadCalc table | Mortar, UB-32, HellCannon, Tech.Mortar, Tech.UB-32, BM-21Grad, M1064M121, Mk19, BTR4-AGS (section 6) and the ten Workshop-mod weapons | the game confirms the velocity, gravity, spread and explosion of the first nine (VERIFIED); their elevation limits and minimum distances follow the mounts of the game since the audit of 2026-11-10 (INFERRED, `docs/game-data-audit.md`), the Mk19's excepted; the rest of their fields: ASSUMED / UNVERIFIED |
 
 ## 2. What the apps read
 
@@ -47,7 +47,7 @@ shell and input with the value used, the game value, the source and the label, i
 | lifespan | `lifespan` (1.6.1) | `projectileLifespan` (default 100) | `InitialLifeSpan` of the projectile |
 | explosion | `warhead` (splash when the damaging radius is over 10 m) | `explosionDamage`, `explosionRadius`, `explosionDistanceFromImpact`, `damageFallOff` | `ExplosiveBaseDamage`, `...InnerRadius`, `...OuterRadius`, `...Falloff`, `...DistanceFromImpactNormal` and the secondary explosion |
 | sight | `bore`, `zoom` | none | barrel socket pitch against the camera; `BlueprintOnZoom` FOV divisor |
-| elevation limits, minimum distance | `elevation_limits`, `min_distance` | `minElevation`, `shells[].minDistance` | the mount's `PitchInterval` plus the socket pitch (limits); no game field for the minimum distance |
+| elevation limits, minimum distance | `elevation_limits`, `min_distance` | `minElevation`, `shells[].minDistance` | the mount's `PitchInterval` plus the socket pitch or what the sight widget adds (limits); no game field for the minimum distance: it is the range on level ground at the stop of the mount |
 | sight scale offset | `angle_offset` | `angleOffset` | none |
 | hold model | `hold_rate`, `hold_elevation` | `elevationRate`, `holdElevation` | none (fitted) |
 
@@ -71,11 +71,11 @@ app does not use (SB has no spread, SC no sight) and the inputs a weapon does no
 | explosion | 84 | 27 | - | - | 50 | 26 | 8 | 80 |
 | bore | 134 | - | - | 26 | - | - | - | - |
 | zoom | 134 | - | - | 26 | - | - | - | - |
-| elevation limits | 138 | - | - | 29 | 85 | - | - | 60 |
-| min distance | - | - | - | 3 | - | 1 | - | 14 |
+| elevation limits | 138 | 3 | - | 26 | 85 | 4 | - | 56 |
+| min distance | - | 5 | - | - | - | 6 | - | 11 |
 | angle offset | - | 1 | - | - | - | 1 | - | 3 |
 | hold model | - | - | 9 | - | - | - | 8 | - |
-| **total** | **1458** | **237** | **15** | **114** | **1087** | **236** | **34** | **326** |
+| **total** | **1458** | **245** | **15** | **108** | **1087** | **245** | **34** | **319** |
 <!-- /generated:counts -->
 
 The air-drag claim: the keys of the projectile movement components of the projectiles of all 797 weapon classes of `resolved.json` are
@@ -257,21 +257,23 @@ of `weapons.json`, SC names those of `weapons.js`; a long list is cut, the full 
 | explosion | ASSUMED | projectile primary explosion | 64 | SC AGS-17; SC BTR4-AGS; SC DF_2A28_Grom_BMD_1M_FRAG; SC DF_2A28_Grom_BMD_1M_HEAT; SC DF_2A28_Grom_BMP_1_BMD_1_FRAG; SC DF_2A28_Grom_BMP_1_BMD_1_HEAT; SC DF_2A28_Grom_BMP_1_technical_FRAG; SC DF_2A28_Grom_BMP_1_technical_HEAT; SC DF_AGS_17_emplacement_no_optic; SC DF_AGS_17_iron_sights_emplacement; SC DF_AGS_30_BMP_1TS; SC DF_AGS_30_BMP_2M; SC DF_AGS_30_BTR_4_AGS; SC DF_AK_40GL_MPT_76; ... (+50) |
 | bore | ASSUMED | handheld: the shot leaves along the barrel socket (native ASQWeapon::GetAimDirection and GetProjectileSpawnTransform read WeaponConfig.BarrelSocketName on the weapon mesh | 26 | SB AK-40GL (MPT-76); SB AT-4; SB C90-CR; SB Carl Gustav M2 · FFV441D HE; SB Carl Gustav M2 · FFV551 HEAT; SB Carl Gustav M2 · FFV751 Tandem; SB DZJ-08; SB M203 / M320 / GP-25 / HK79 / SL40; SB M3 MAAWS · HEAT / Smoke; SB M3 MAAWS · Tandem; SB M72A7 LAW / RPG-26; SB MGL / M32; SB MK153 SMAW; SB NLAW; ... (+12) |
 | zoom | ASSUMED | handheld: the shot leaves along the barrel socket (native ASQWeapon::GetAimDirection and GetProjectileSpawnTransform read WeaponConfig.BarrelSocketName on the weapon mesh | 26 | SB AK-40GL (MPT-76); SB AT-4; SB C90-CR; SB Carl Gustav M2 · FFV441D HE; SB Carl Gustav M2 · FFV551 HEAT; SB Carl Gustav M2 · FFV751 Tandem; SB DZJ-08; SB M203 / M320 / GP-25 / HK79 / SL40; SB M3 MAAWS · HEAT / Smoke; SB M3 MAAWS · Tandem; SB M72A7 LAW / RPG-26; SB MGL / M32; SB MK153 SMAW; SB NLAW; ... (+12) |
-| elevation limits | ASSUMED | -25..35 degrees inherited from the upstream SquadCalc table | 1 | SB UB-32 (S-5 rockets) |
-| elevation limits | ASSUMED | 10..90 degrees inherited from the upstream SquadCalc table; tripod limits not read by game_weapons.py | 1 | SB Hell Cannon |
-| elevation limits | ASSUMED | 45..88.875 degrees (1580 mil) inherited from the upstream SquadCalc table; game_weapons.json records the mount's PitchInterval 0..43.8, no committed tool derives these li | 1 | SB Mortar (M252 / 2B14 / L16 / Type 63) |
+| elevation limits | INFERRED | mount pitch -25..35 (BP_EmplacedUB32_Tripod) + 0 the sight adds: tools/game_audit/data/mount_limits.json | 1 | SB UB-32 (S-5 rockets) |
+| elevation limits | INFERRED | mount pitch -30..50 (BP_Emplaced_HellCannon_Base) + 40 the sight adds: tools/game_audit/data/mount_limits.json | 1 | SB Hell Cannon |
+| elevation limits | INFERRED | mount pitch -5..45 (BP_BTR4_Turret) + 0.1 the sight adds: tools/game_audit/data/mount_limits.json | 1 | SC BTR4-AGS |
+| elevation limits | INFERRED | mount pitch 0..43.8 (BP_GenericDeployableMortarVehicle) + 45 the sight adds: tools/game_audit/data/mount_limits.json | 1 | SB Mortar (M252 / 2B14 / L16 / Type 63) |
+| elevation limits | INFERRED | via SB entry: mount pitch -25..35 (BP_EmplacedUB32_Tripod) + 0 the sight adds: tools/game_audit/data/mount_limits.json | 1 | SC UB-32 |
+| elevation limits | INFERRED | via SB entry: mount pitch -30..50 (BP_Emplaced_HellCannon_Base) + 40 the sight adds: tools/game_audit/data/mount_limits.json | 1 | SC HellCannon |
+| elevation limits | INFERRED | via SB entry: mount pitch 0..43.8 (BP_GenericDeployableMortarVehicle) + 45 the sight adds: tools/game_audit/data/mount_limits.json | 1 | SC Mortar |
 | elevation limits | ASSUMED | Workshop mod | 10 | SC HIMARS; SC M109; SC M777; SC MO120RTF1; SC MTLB_FAB500; SC PZL07; SC T62.DUMP.TRUCK; SC TOS-1A; SC Ural-HellCannon; SC type_63 |
 | elevation limits | ASSUMED | no mount: handheld | 26 | SB AK-40GL (MPT-76); SB AT-4; SB C90-CR; SB Carl Gustav M2 · FFV441D HE; SB Carl Gustav M2 · FFV551 HEAT; SB Carl Gustav M2 · FFV751 Tandem; SB DZJ-08; SB M203 / M320 / GP-25 / HK79 / SL40; SB M3 MAAWS · HEAT / Smoke; SB M3 MAAWS · Tandem; SB M72A7 LAW / RPG-26; SB MGL / M32; SB MK153 SMAW; SB NLAW; ... (+12) |
 | elevation limits | ASSUMED | unbounded: no mount data for this SquadCalc-only weapon | 19 | SC DF_2A42_2A72_30mm_AP; SC DF_2A42_30mm_BMP_2_HE; SC DF_2A72_30mm_BMD_4M_HE; SC DF_2A72_30mm_BMP_3M_AP_HE; SC DF_CTAS40_40mm_AP; SC DF_CTAS40_40mm_GP; SC DF_DShK_M; SC DF_KPVT_14_5mm; SC DF_Kord_SPP_emplacement; SC DF_L21A1_RARDEN_30mm_AP; SC DF_L21A1_RARDEN_30mm_HE; SC DF_M242_Bushmaster_25mm_AP; SC DF_M242_Bushmaster_25mm_HE; SC DF_M2A1_50; ... (+5) |
-| elevation limits | ASSUMED | upstream table (Mk19, BTR4-AGS) | 2 | SC BTR4-AGS; SC Mk19 |
-| elevation limits | ASSUMED | via SB entry: -25..35 degrees inherited from the upstream SquadCalc table | 1 | SC UB-32 |
-| elevation limits | ASSUMED | via SB entry: 10..90 degrees inherited from the upstream SquadCalc table; tripod limits not read by game_weapons.py | 1 | SC HellCannon |
-| elevation limits | ASSUMED | via SB entry: 45..88.875 degrees (1580 mil) inherited from the upstream SquadCalc table; game_weapons.json records the mount's PitchIn | 1 | SC Mortar |
+| elevation limits | ASSUMED | upstream table (Mk19) | 1 | SC Mk19 |
 | elevation limits | ASSUMED | via SB entry: no mount: handheld | 26 | SC DF_AK_40GL_MPT_76; SC DF_AT_4; SC DF_C90_CR; SC DF_Carl_Gustav_M2_FFV441D_HE; SC DF_Carl_Gustav_M2_FFV551_HEAT; SC DF_Carl_Gustav_M2_FFV751_Tandem; SC DF_DZJ_08; SC DF_M203_M320_GP_25_HK79_SL40; SC DF_M3_MAAWS_HEAT_Smoke; SC DF_M3_MAAWS_Tandem; SC DF_M72A7_LAW_RPG_26; SC DF_MGL_M32; SC DF_MK153_SMAW; SC DF_NLAW; ... (+12) |
-| min distance | INFERRED | range of the top of the hold (85.87 degrees) from the muzzle, computed by gen_squadcalc_weapons.py lob_min_distance from the fitted hold model | 1 | SC AGS-17 |
-| min distance | ASSUMED | 340 m inherited from the upstream SquadCalc table | 2 | SB M1064 M121 (120mm); SC M1064M121 |
-| min distance | ASSUMED | 51 m inherited from the upstream table; this model's range at the barrel's top (83.8 + 5 = 88.8 degrees) is 51.8 m | 2 | SB Technical Mortar; SC Tech.Mortar |
-| min distance | ASSUMED | 51 m inherited from the upstream table; this model's range at the top elevation 88.875 degrees is 48.5 m | 2 | SB Mortar (M252 / 2B14 / L16 / Type 63); SC Mortar |
+| min distance | INFERRED | range of the top of the hold (85.85 degrees) from the muzzle, computed by gen_squadcalc_weapons.py lob_min_distance from the fitted hold model | 1 | SC AGS-17 |
+| min distance | INFERRED | range on level ground at the mount's stop, barrel at 0 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py) | 2 | SB Technical UB-32; SC Tech.UB-32 |
+| min distance | INFERRED | range on level ground at the mount's stop, barrel at 14.2 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py) | 2 | SB BM-21 Grad; SC BM-21Grad |
+| min distance | INFERRED | range on level ground at the mount's stop, barrel at 85 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py) | 2 | SB M1064 M121 (120mm); SC M1064M121 |
+| min distance | INFERRED | range on level ground at the mount's stop, barrel at 88.8 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py) | 4 | SB Mortar (M252 / 2B14 / L16 / Type 63); SB Technical Mortar; SC Mortar; SC Tech.Mortar |
 | min distance | ASSUMED | inherited from the upstream SquadCalc table (sh4rkman/SquadCalc); not decided by the server files | 11 | SC DF_AGS_17_BTR_D; SC DF_AGS_17_M1151; SC DF_AGS_17_Safir; SC DF_AGS_17_Technical; SC DF_AGS_17_Tigr; SC DF_AGS_17_emplacement_no_optic; SC DF_AGS_17_iron_sights_emplacement; SC M777; SC MTLB_FAB500; SC Mk19; SC type_63 |
 | angle offset | INFERRED | 5 degrees is the upstream value; the HUD table of the game (readout in degrees against range) puts the barrel 4.8 +- 0.3 degrees above the readout (SB release notes 1.6.0 | 2 | SB Technical Mortar; SC Tech.Mortar |
 | angle offset | ASSUMED | Workshop mod | 1 | SC M109 |
@@ -288,15 +290,15 @@ of `weapons.json`, SC names those of `weapons.js`; a long list is cut, the full 
 <!-- generated:blame -->
 | Weapon | Upstream-authored lines (sh4rkman) | Fork-authored lines |
 |---|---|---|
-| Mortar | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, minDistance, minElevation, moa, velocity | muzzle |
+| Mortar | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, moa, velocity | minDistance, minElevation, muzzle |
 | UB-32 | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, minDistance, minElevation, moa, projectileLifespan, velocity | maxSpeed, muzzle |
 | HellCannon | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, minDistance, minElevation, moa, velocity | muzzle |
-| Tech.Mortar | angleOffset, damageFallOff, explosionDamage, explosionRadius, gravityScale, minDistance, moa, velocity | explosionDistanceFromImpact, minElevation, muzzle |
-| Tech.UB-32 | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, minDistance, moa, projectileLifespan, velocity | maxSpeed, minElevation, muzzle |
-| BM-21Grad | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, minDistance, moa, velocity | minElevation, muzzle, projectileLifespan |
-| M1064M121 | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, minDistance, moa, velocity | minElevation, muzzle |
+| Tech.Mortar | angleOffset, damageFallOff, explosionDamage, explosionRadius, gravityScale, moa, velocity | explosionDistanceFromImpact, minDistance, minElevation, muzzle |
+| Tech.UB-32 | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, moa, projectileLifespan, velocity | maxSpeed, minDistance, minElevation, muzzle |
+| BM-21Grad | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, moa, velocity | minDistance, minElevation, muzzle, projectileLifespan |
+| M1064M121 | damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, moa, velocity | minDistance, minElevation, muzzle |
 | Mk19 | angleOffset, damageFallOff, explosionDamage, explosionDistanceFromImpact, explosionRadius, gravityScale, heightOffset, minDistance, minElevation, moa, projectileLifespan, velocity | - |
-| BTR4-AGS | angleOffset, damageFallOff, explosionDamage, explosionRadius, gravityScale, heightOffset, minDistance, minElevation, moa, projectileLifespan, velocity | explosionDistanceFromImpact |
+| BTR4-AGS | angleOffset, damageFallOff, explosionDamage, explosionRadius, gravityScale, heightOffset, minDistance, moa, projectileLifespan, velocity | explosionDistanceFromImpact, minElevation |
 | AGS-17 | - | elevationRate, gravityScale, heightOffset, holdElevation, minDistance, minElevation, projectileLifespan, velocity |
 <!-- /generated:blame -->
 
@@ -306,16 +308,20 @@ What that means per weapon:
   `UB-32 (S-5 rockets)`, `Hell Cannon`, `Technical Mortar`, `Technical UB-32`, `BM-21 Grad`, `M1064 M121 (120mm)`): velocity,
   gravity, spread, explosion and lifespan were typed by upstream or taken from the SDK and are confirmed equal by
   `gamecheck.py` (VERIFIED, origin inherited). The launch point (`muzzle`), the elevation limits of the vehicle mounts, the
-  UB-32 / Tech.UB-32 cap and rotation were set by the fork from the game files. The minimum distances (51, 51 and 340 m), the
-  elevation limits of the mortar (45..88.875 degrees), Hell Cannon and UB-32 are upstream figures that no committed tool decides (ASSUMED);
-  the technical mortar's 5 degree scale offset is upstream too, supported by the game's HUD table (INFERRED).
+  UB-32 / Tech.UB-32 cap and rotation were set by the fork from the game files. The elevation limits of the mortar (45..88.8 degrees;
+  upstream had 88.875), Hell Cannon and UB-32 are the pitch range of the mount plus what the sight adds, and the minimum distances
+  (51.8, 51.8, 358, 985.1 and 147.1 m; upstream had 51, 51 and 340 m and none for the BM-21 and the technical UB-32) are the range on
+  level ground at the stop of the mount: both read and checked by `tools/game_audit` (INFERRED, `docs/game-data-audit.md`);
+  the technical mortar's 5 degree scale offset is upstream, supported by the game's HUD table (INFERRED).
 * **Mk19, BTR4-AGS**: velocity, gravity, spread, explosion, lifespan agree with the game (`MK19`, `AGS-30 / BTR-4 AGS`
-  in `gamecheck.py`); the round launch heights 4 m and 3.4 m, the scale offsets 0.984 and 0.7346 degrees, the limits and the
-  10 m minimum distance are upstream figures that no file decides (ASSUMED). SB has better entries for the same guns
+  in `gamecheck.py`); the round launch heights 4 m and 3.4 m, the scale offsets 0.984 and 0.7346 degrees, the Mk19's limits and
+  10 m minimum distance are upstream figures that no file decides (ASSUMED); the limits of the BTR4-AGS (-4.9..45.1 degrees) are
+  its turret's pitch range plus the 0.1 degree of the sight camera (INFERRED, `tools/game_audit`). SB has better entries for the same guns
   (per vehicle, from the files); these two stay for users of the older selection.
 * **AGS-17** (SC `AGS-17`, SB `AGS-17 · emplacement · optic (RMB x2.5)` and the five other AGS-17 entries): velocity 185 m/s
-  and gravity x1.8 are from the files (VERIFIED, agree with the 67 measurements to 0.7 % in v^2/g); the hold rate 9.08 deg/s,
-  the hold range and the top 85.87 degrees are **fitted** to those measurements (UNVERIFIED); the minimum distance (280 m) is
+  and gravity x1.8 are from the files (VERIFIED, agree with the 67 measurements to 0.7 % in v^2/g); the hold rate 9.08 deg/s
+  and the hold range are **fitted** to those measurements (UNVERIFIED), the top of the hold is the mount's limit, 85.85 degrees
+  (a fitted 85.87 until SB 1.7.1 and SC 45.37.0); the minimum distance (280 m) is
   computed from that fit; the 1 m launch height was kept with the fit (the files say 0.347 m).
 * **QLZ87**: the camera offset measured in the normal view, 0.23 m up and 0.34 m right of the pivot (worth -8.5 / -5.6 /
   -4.2 m of range at 200 / 300 / 400 m), is **measured** and not applied by either app (`docs/sight-data.md` of SB). The
@@ -333,7 +339,7 @@ What that means per weapon:
 
 Found by comparing every weapon of both apps with the game classes (`provenance.py`, run on `resolved.json` of build
 26005357; `gamecheck.py` and `compare.py` as before). The check lists a difference when an app's value is not the
-game's; with Squad Ballistics 1.7.1 and SquadCalc 45.39.0 there are **0 unexplained differences** in 3 507 labelled rows.
+game's; with Squad Ballistics 1.7.2 and SquadCalc 45.40.0 there are **0 unexplained differences** in 3 511 labelled rows.
 
 | Weapon | Input | Game | App before | Change |
 |---|---|---|---|---|
@@ -416,9 +422,9 @@ Every weapon of both apps with the classes of section 4 and where its values com
 | SB | MK19 · RHIB open turret · no sights | C11 | from the game files |
 | SB | MK19 · emplacement / C16 / L134A1 | C12 | from the game files |
 | SB | MK19 · emplacement / C16 / L134A1 · no sights | C12 | from the game files |
-| SB | AGS-17 · emplacement · optic (RMB ×2.5) | C13 | from the game files; hold model fitted (67 measurements); launch / limits hand-read |
-| SB | AGS-17 · emplacement · no optic | C13 | from the game files; hold model fitted (67 measurements); launch / limits hand-read |
-| SB | AGS-17 · iron sights emplacement | C14 | from the game files; hold model fitted (67 measurements); launch / limits hand-read |
+| SB | AGS-17 · emplacement · optic (RMB ×2.5) | C13 | from the game files; hold model fitted (67 measurements); launch hand-read |
+| SB | AGS-17 · emplacement · no optic | C13 | from the game files; hold model fitted (67 measurements); launch hand-read |
+| SB | AGS-17 · iron sights emplacement | C14 | from the game files; hold model fitted (67 measurements); launch hand-read |
 | SB | AGS-17 · Technical | C15 | from the game files; hold model fitted (67 measurements) |
 | SB | AGS-17 · Tigr | C16 | from the game files; hold model fitted (67 measurements) |
 | SB | AGS-17 · Safir | C17 | from the game files; hold model fitted (67 measurements) |
@@ -551,11 +557,11 @@ Every weapon of both apps with the classes of section 4 and where its values com
 | SB | ZPL-98A 105mm (ZTD-05) · AP · gunner sight ×7 | C87 | from the game files |
 | SB | ZPL-98A 105mm (ZTD-05) · HEAT / HE | C88 | from the game files |
 | SB | ZPL-98A 105mm (ZTD-05) · HEAT / HE · gunner sight ×7 | C88 | from the game files |
-| SB | Mortar (M252 / 2B14 / L16 / Type 63) | C89 | from the game files; hold model fitted (67 measurements); launch / limits hand-read |
+| SB | Mortar (M252 / 2B14 / L16 / Type 63) | C89 | from the game files; hold model fitted (67 measurements); launch hand-read; limits from the mount's pitch (tools/game_audit) |
 | SB | Technical Mortar | C90 | from the game files |
 | SB | M1064 M121 (120mm) | C91 | from the game files |
-| SB | Hell Cannon | C92 | from the game files; launch / limits hand-read |
-| SB | UB-32 (S-5 rockets) | C93 | from the game files; launch / limits hand-read |
+| SB | Hell Cannon | C92 | from the game files; launch hand-read; limits from the mount's pitch (tools/game_audit) |
+| SB | UB-32 (S-5 rockets) | C93 | from the game files; launch hand-read; limits from the mount's pitch (tools/game_audit) |
 | SB | Technical UB-32 | C94 | from the game files |
 | SB | BM-21 Grad | C95 | from the game files |
 | SC | Mortar | C89 | hand-kept in SC weapons.js |
@@ -566,7 +572,7 @@ Every weapon of both apps with the classes of section 4 and where its values com
 | SC | BM-21Grad | C95 | hand-kept in SC weapons.js |
 | SC | M1064M121 | C91, C96 | hand-kept in SC weapons.js |
 | SC | Mk19 | C06 | hand-kept in SC weapons.js; height, angle offset, limits, min distance from upstream |
-| SC | BTR4-AGS | C22 | hand-kept in SC weapons.js; height, angle offset, limits, min distance from upstream |
+| SC | BTR4-AGS | C22 | hand-kept in SC weapons.js; height and angle offset from upstream, limits from the mount's pitch (tools/game_audit) |
 | SC | MO120RTF1 | - | Workshop mod, not in the server files |
 | SC | type_63 | - | Workshop mod, not in the server files |
 | SC | PZL07 | - | Workshop mod, not in the server files |
@@ -577,7 +583,7 @@ Every weapon of both apps with the classes of section 4 and where its values com
 | SC | TOS-1A | - | Workshop mod, not in the server files |
 | SC | Ural-HellCannon | - | Workshop mod, not in the server files |
 | SC | MTLB_FAB500 | - | Workshop mod, not in the server files |
-| SC | AGS-17 | C13 | hand-kept in SC weapons.js; speed and top fitted (67 measurements) |
+| SC | AGS-17 | C13 | hand-kept in SC weapons.js; hold model fitted (67 measurements) |
 | SC | DF_M203_M320_GP_25_HK79_SL40 | C01 | generated from SB weapons.json by gen_squadcalc_weapons.py |
 | SC | DF_QLG10 | C04 | generated from SB weapons.json by gen_squadcalc_weapons.py |
 | SC | DF_Rifle_grenade | C05, C97 | generated from SB weapons.json by gen_squadcalc_weapons.py |
@@ -712,7 +718,7 @@ Game data (build 26005357, existing dumps; the extractor is not run): `~/data/sq
 ```sh
 # model and differences as before
 python3 tools/game_ballistics/gamecheck.py resolved.json <SB>/weapons.json squadcalc_weapons.json ballistics.json diff.md
-python3 tools/direct_fire/compare.py <SB checkout> <SC checkout>       # 167 weapons, 31 194 cases, 0 mismatches
+python3 tools/direct_fire/compare.py <SB checkout> <SC checkout>       # 167 weapons, 32 652 cases, 0 mismatches
 python3 tools/direct_fire/gen_squadcalc_weapons.py --verify resolved.json
 
 # this document: rewrite the generated blocks and the TSV, or check them

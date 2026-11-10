@@ -1767,9 +1767,9 @@ SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	max_speed	none	none	projectile MaxSpee
 SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	drag	none	none (no drag field)	no projectile movement component of resolved.json has a drag field; SB ballistics.py docstring (native code, #4)	INFERRED	yes
 SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	launch	0.0245/1.569/0.002	-	one-off read of the weapon's skeletons (Squad build 26005357), recorded in the comment of SC weapons.js; tools/game_weapons.py does not read tripods and deployables	UNVERIFIED	yes
 SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	lifespan	none	none	projectile InitialLifeSpan (game_weapons.json lifespan)	VERIFIED	yes
-SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	limits	45..88.875	-	45..88.875 degrees (1580 mil) inherited from the upstream SquadCalc table; game_weapons.json records the mount's PitchInterval 0..43.8, no committed tool derives these limits from it	ASSUMED	yes
-SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	min_distance	51	-	51 m inherited from the upstream table; this model's range at the top elevation 88.875 degrees is 48.5 m	ASSUMED	yes
-SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	hold	9 deg/s, 45..88.875	9.00 deg/s	9 deg/s read by hand from the game's input settings (keyboard pitch x300/s x turret input x0.03, SB weapons.json note); no committed tool reads it; Calibrate refits it in the app	UNVERIFIED	yes
+SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	limits	45..88.8	45..88.8	mount pitch 0..43.8 (BP_GenericDeployableMortarVehicle) + 45 the sight adds: tools/game_audit/data/mount_limits.json	INFERRED	yes
+SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	min_distance	51.8	-	range on level ground at the mount's stop, barrel at 88.8 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
+SB	Mortar (M252 / 2B14 / L16 / Type 63)	-	hold	9 deg/s, 45..88.8	9.00 deg/s	9 deg/s read by hand from the game's input settings (keyboard pitch x300/s x turret input x0.03, SB weapons.json note); no committed tool reads it; Calibrate refits it in the app	UNVERIFIED	yes
 SB	Technical Mortar	-	velocity	110	110	/Game/Vehicles/Technical2Seater/Weapons/BP_Technical_M1937mortar  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SB	Technical Mortar	-	gravity	1	1	projectile ProjectileGravityScale	VERIFIED	yes
 SB	Technical Mortar	-	motor	none	none	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1778,7 +1778,7 @@ SB	Technical Mortar	-	drag	none	none (no drag field)	no projectile movement comp
 SB	Technical Mortar	-	launch	1.1789/1.6137/0.0388	1.1789/1.6137/0.0388	tools/game_weapons.py launch: BP_Technical2Seater_White_Mortar 1.1789: socket_turret_rear_mortar of SK_Technical_2Seater -> GunMountComponent of BP_Technical_MortarTurret = pivot 108.76 cm a	VERIFIED	yes
 SB	Technical Mortar	-	lifespan	none	none	projectile InitialLifeSpan (game_weapons.json lifespan)	VERIFIED	yes
 SB	Technical Mortar	-	limits	40..83.8	40..83.8	game_weapons.json elevation: the readout of UMG_MortarHUD_Technical: the mount's world pitch + 40 (AngleRotationDisplay), table 40..83.8 degrees = SQTurretMovement.RotationConstra	VERIFIED	yes
-SB	Technical Mortar	-	min_distance	51	-	51 m inherited from the upstream table; this model's range at the barrel's top (83.8 + 5 = 88.8 degrees) is 51.8 m	ASSUMED	yes
+SB	Technical Mortar	-	min_distance	51.8	-	range on level ground at the mount's stop, barrel at 88.8 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
 SB	Technical Mortar	-	angle_offset	5	-	5 degrees is the upstream value; the HUD table of the game (readout in degrees against range) puts the barrel 4.8 +- 0.3 degrees above the readout (SB release notes 1.6.0), which supports it	INFERRED	yes
 SB	M1064 M121 (120mm)	-	velocity	142	142	/Game/Vehicles/M1064A3/Weapons/BP_M1064A3_M121mortar  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SB	M1064 M121 (120mm)	-	gravity	1	1	projectile ProjectileGravityScale	VERIFIED	yes
@@ -1788,7 +1788,7 @@ SB	M1064 M121 (120mm)	-	drag	none	none (no drag field)	no projectile movement co
 SB	M1064 M121 (120mm)	-	launch	0.8174/3.4618/0.0035	0.8174/3.4618/0.0035	tools/game_weapons.py launch: BP_M1064A3_M121 0.8174: 1064_turretSocket of SK_M1064A3_Hull -> GunMountComponent of BP_M1064A3_MortarTurret = pivot 76.77 cm above the mesh origin; ground -4.9	VERIFIED	yes
 SB	M1064 M121 (120mm)	-	lifespan	none	none	projectile InitialLifeSpan (game_weapons.json lifespan)	VERIFIED	yes
 SB	M1064 M121 (120mm)	-	limits	50..85	50..85	game_weapons.json elevation: SQTurretMovement curves FC_M1064A3_YawToMinPitch / FC_M1064A3_YawToMaxPitch: 0.0..35.0 (yaw 0: 0.0..35.0) + barrel socket pitch	VERIFIED	yes
-SB	M1064 M121 (120mm)	-	min_distance	340	-	340 m inherited from the upstream SquadCalc table	ASSUMED	yes
+SB	M1064 M121 (120mm)	-	min_distance	358	-	range on level ground at the mount's stop, barrel at 85 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
 SB	Hell Cannon	-	velocity	95	95	/Game/Vehicles/Emplaced_HellCannon/BP_Emplaced_HellCannon  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SB	Hell Cannon	-	gravity	1	1	projectile ProjectileGravityScale	VERIFIED	yes
 SB	Hell Cannon	-	motor	none	none	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1796,7 +1796,7 @@ SB	Hell Cannon	-	max_speed	none	none	projectile MaxSpeed	VERIFIED	yes
 SB	Hell Cannon	-	drag	none	none (no drag field)	no projectile movement component of resolved.json has a drag field; SB ballistics.py docstring (native code, #4)	INFERRED	yes
 SB	Hell Cannon	-	launch	0.155/2.373/0.002	-	one-off read of the weapon's skeletons (Squad build 26005357), recorded in the comment of SC weapons.js; tools/game_weapons.py does not read tripods and deployables	UNVERIFIED	yes
 SB	Hell Cannon	-	lifespan	none	none	projectile InitialLifeSpan (game_weapons.json lifespan)	VERIFIED	yes
-SB	Hell Cannon	-	limits	10..90	-	10..90 degrees inherited from the upstream SquadCalc table; tripod limits not read by game_weapons.py	ASSUMED	yes
+SB	Hell Cannon	-	limits	10..90	10..90	mount pitch -30..50 (BP_Emplaced_HellCannon_Base) + 40 the sight adds: tools/game_audit/data/mount_limits.json	INFERRED	yes
 SB	UB-32 (S-5 rockets)	-	velocity	300	300	/Game/Vehicles/Emplaced_UB32_RocketArtillery/BP_EmplacedUB32  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SB	UB-32 (S-5 rockets)	-	gravity	2	2	projectile ProjectileGravityScale	VERIFIED	yes
 SB	UB-32 (S-5 rockets)	-	motor	-50 m/s2 for 2 s	-50 m/s2 for 2 s	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1805,7 +1805,7 @@ SB	UB-32 (S-5 rockets)	-	follows	no	no	projectile bRotationFollowsVelocity	VERIF
 SB	UB-32 (S-5 rockets)	-	drag	none	none (no drag field)	no projectile movement component of resolved.json has a drag field; SB ballistics.py docstring (native code, #4)	INFERRED	yes
 SB	UB-32 (S-5 rockets)	-	launch	1.3075/1.43/0.251	-	one-off read of the weapon's skeletons (Squad build 26005357), recorded in the comment of SC weapons.js; tools/game_weapons.py does not read tripods and deployables	UNVERIFIED	yes
 SB	UB-32 (S-5 rockets)	-	lifespan	20	20	projectile InitialLifeSpan (game_weapons.json lifespan)	VERIFIED	yes
-SB	UB-32 (S-5 rockets)	-	limits	-25..35	-	-25..35 degrees inherited from the upstream SquadCalc table	ASSUMED	yes
+SB	UB-32 (S-5 rockets)	-	limits	-25..35	-25..35	mount pitch -25..35 (BP_EmplacedUB32_Tripod) + 0 the sight adds: tools/game_audit/data/mount_limits.json	INFERRED	yes
 SB	Technical UB-32	-	velocity	300	300	/Game/Vehicles/Technical/Weapons/BP_UB32  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SB	Technical UB-32	-	gravity	2	2	projectile ProjectileGravityScale	VERIFIED	yes
 SB	Technical UB-32	-	motor	-50 m/s2 for 2 s	-50 m/s2 for 2 s	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1815,6 +1815,7 @@ SB	Technical UB-32	-	drag	none	none (no drag field)	no projectile movement compo
 SB	Technical UB-32	-	launch	2.2659/1.4303/0.2513	2.2659/1.4303/0.2513	tools/game_weapons.py launch: BP_Technical2Seater_White_UB32 2.2659: socket_turret of SK_Technical_2Seater -> GunMountComponent of BP_Technical_Turret_UB32 = pivot 217.46 cm above the mesh o	VERIFIED	yes
 SB	Technical UB-32	-	lifespan	20	20	projectile InitialLifeSpan (game_weapons.json lifespan)	VERIFIED	yes
 SB	Technical UB-32	-	limits	0..50	0..50	game_weapons.json elevation: SQTurretMovement.RotationConstraints.PitchInterval 0.0..50.0 + barrel socket pitch	VERIFIED	yes
+SB	Technical UB-32	-	min_distance	147.1	-	range on level ground at the mount's stop, barrel at 0 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
 SB	BM-21 Grad	-	velocity	200	200	/Game/Vehicles/Ural375_BM21Grad/Weapons/BP_BM21Grad_Weapon_MEI  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SB	BM-21 Grad	-	gravity	2	2	projectile ProjectileGravityScale	VERIFIED	yes
 SB	BM-21 Grad	-	motor	none	none	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1823,6 +1824,7 @@ SB	BM-21 Grad	-	drag	none	none (no drag field)	no projectile movement component 
 SB	BM-21 Grad	-	launch	1.7694/2.7346/0.6366	1.7694/2.7346/0.6366	tools/game_weapons.py launch: BP_BM21Grad_MEI 1.7694: bone_turret of SK_Ural375_BM21Grad -> GunMountComponent of BP_BM21Grad_Turret_INS = pivot 179.62 cm above the mesh origin; ground 2.69 c	VERIFIED	yes
 SB	BM-21 Grad	-	lifespan	20	20	projectile InitialLifeSpan (game_weapons.json lifespan)	VERIFIED	yes
 SB	BM-21 Grad	-	limits	14.2..55	14.2..55	game_weapons.json elevation: PitchMovement.RotationConstraints.PitchInterval 0.0..40.8 + barrel socket pitch	VERIFIED	yes
+SB	BM-21 Grad	-	min_distance	985.1	-	range on level ground at the mount's stop, barrel at 14.2 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
 SC	Mortar	shell default	velocity	110	110	/Game/Vehicles/BP_GenericMortarWeapon  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SC	Mortar	shell default	gravity	1	1	projectile ProjectileGravityScale	VERIFIED	yes
 SC	Mortar	shell default	motor	none	none	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1832,8 +1834,8 @@ SC	Mortar	shell default	lifespan	100	none	the game sets none; SC default 100 s	A
 SC	Mortar	shell default	launch	0.0245/1.569/0.002	-	one-off read of the weapon's skeletons (Squad build 26005357), recorded in the comment of SC weapons.js; tools/game_weapons.py does not read tripods and deployables	UNVERIFIED	yes
 SC	Mortar	shell default	spread	50	50	WeaponConfig.MOA	VERIFIED	yes
 SC	Mortar	shell default	explosion	350, 0-40, 1, x7	350, 0-40, 1, x7	projectile primary explosion	VERIFIED	yes
-SC	Mortar	-	limits	45..88.875	45..88.875	via SB entry Mortar (M252 / 2B14 / L16 / Type 63): 45..88.875 degrees (1580 mil) inherited from the upstream SquadCalc table; game_weapons.json records the mount's PitchIn	ASSUMED	yes
-SC	Mortar	-	min_distance	51	-	51 m inherited from the upstream table; this model's range at the top elevation 88.875 degrees is 48.5 m	ASSUMED	yes
+SC	Mortar	-	limits	45..88.8	45..88.8	via SB entry Mortar (M252 / 2B14 / L16 / Type 63): mount pitch 0..43.8 (BP_GenericDeployableMortarVehicle) + 45 the sight adds: tools/game_audit/data/mount_limits.json	INFERRED	yes
+SC	Mortar	-	min_distance	51.8	-	range on level ground at the mount's stop, barrel at 88.8 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
 SC	UB-32	shell default	velocity	300	300	/Game/Vehicles/Emplaced_UB32_RocketArtillery/BP_EmplacedUB32  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SC	UB-32	shell default	gravity	2	2	projectile ProjectileGravityScale	VERIFIED	yes
 SC	UB-32	shell default	motor	-50 m/s2 for 2 s	-50 m/s2 for 2 s	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1844,7 +1846,7 @@ SC	UB-32	shell default	lifespan	20	20	projectile InitialLifeSpan	VERIFIED	yes
 SC	UB-32	shell default	launch	1.3075/1.43/0.251	-	one-off read of the weapon's skeletons (Squad build 26005357), recorded in the comment of SC weapons.js; tools/game_weapons.py does not read tripods and deployables	UNVERIFIED	yes
 SC	UB-32	shell default	spread	300	300	WeaponConfig.MOA	VERIFIED	yes
 SC	UB-32	shell default	explosion	115, 5-18, 0.2, x1	115, 5-18, 0.2, x1 [native: BaseDamage, DamageDistanceFromImpactNormal, DamageFalloff, DamageInnerRadius]	projectile primary explosion	ASSUMED	yes
-SC	UB-32	-	limits	-25..35	-25..35	via SB entry UB-32 (S-5 rockets): -25..35 degrees inherited from the upstream SquadCalc table	ASSUMED	yes
+SC	UB-32	-	limits	-25..35	-25..35	via SB entry UB-32 (S-5 rockets): mount pitch -25..35 (BP_EmplacedUB32_Tripod) + 0 the sight adds: tools/game_audit/data/mount_limits.json	INFERRED	yes
 SC	HellCannon	shell default	velocity	95	95	/Game/Vehicles/Emplaced_HellCannon/BP_Emplaced_HellCannon  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SC	HellCannon	shell default	gravity	1	1	projectile ProjectileGravityScale	VERIFIED	yes
 SC	HellCannon	shell default	motor	none	none	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1854,7 +1856,7 @@ SC	HellCannon	shell default	lifespan	100	none	the game sets none; SC default 100
 SC	HellCannon	shell default	launch	0.155/2.373/0.002	-	one-off read of the weapon's skeletons (Squad build 26005357), recorded in the comment of SC weapons.js; tools/game_weapons.py does not read tripods and deployables	UNVERIFIED	yes
 SC	HellCannon	shell default	spread	100	100	WeaponConfig.MOA	VERIFIED	yes
 SC	HellCannon	shell default	explosion	125, 1-50, 2, x1	125, 1-50, 2, x1	projectile primary explosion	VERIFIED	yes
-SC	HellCannon	-	limits	10..90	10..90	via SB entry Hell Cannon: 10..90 degrees inherited from the upstream SquadCalc table; tripod limits not read by game_weapons.py	ASSUMED	yes
+SC	HellCannon	-	limits	10..90	10..90	via SB entry Hell Cannon: mount pitch -30..50 (BP_Emplaced_HellCannon_Base) + 40 the sight adds: tools/game_audit/data/mount_limits.json	INFERRED	yes
 SC	Tech.Mortar	shell default	velocity	110	110	/Game/Vehicles/Technical2Seater/Weapons/BP_Technical_M1937mortar  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SC	Tech.Mortar	shell default	gravity	1	1	projectile ProjectileGravityScale	VERIFIED	yes
 SC	Tech.Mortar	shell default	motor	none	none	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1865,7 +1867,7 @@ SC	Tech.Mortar	shell default	launch	1.1789/1.6137/0.0388	1.1789/1.6137/0.0388	vi
 SC	Tech.Mortar	shell default	spread	50	50	WeaponConfig.MOA	VERIFIED	yes
 SC	Tech.Mortar	shell default	explosion	350, 0-40, 1, x7	350, 0-40, 1, x7	projectile primary explosion	VERIFIED	yes
 SC	Tech.Mortar	-	limits	40..83.8	40..83.8	via SB entry Technical Mortar: game_weapons.json elevation: the readout of UMG_MortarHUD_Technical: the mount's world pitch + 40 (AngleRotationDisplay)	VERIFIED	yes
-SC	Tech.Mortar	-	min_distance	51	-	51 m inherited from the upstream table; this model's range at the barrel's top (83.8 + 5 = 88.8 degrees) is 51.8 m	ASSUMED	yes
+SC	Tech.Mortar	-	min_distance	51.8	-	range on level ground at the mount's stop, barrel at 88.8 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
 SC	Tech.Mortar	-	angle_offset	5	-	5 degrees is the upstream value; the HUD table of the game (readout in degrees against range) puts the barrel 4.8 +- 0.3 degrees above the readout (SB release notes 1.6.0), which supports it	INFERRED	yes
 SC	Tech.UB-32	shell default	velocity	300	300	/Game/Vehicles/Technical/Weapons/BP_UB32  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SC	Tech.UB-32	shell default	gravity	2	2	projectile ProjectileGravityScale	VERIFIED	yes
@@ -1878,6 +1880,7 @@ SC	Tech.UB-32	shell default	launch	2.2659/1.4303/0.2513	2.2659/1.4303/0.2513	via
 SC	Tech.UB-32	shell default	spread	300	300	WeaponConfig.MOA	VERIFIED	yes
 SC	Tech.UB-32	shell default	explosion	115, 5-18, 0.2, x1	115, 5-18, 0.2, x1 [native: BaseDamage, DamageDistanceFromImpactNormal, DamageFalloff, DamageInnerRadius]	projectile primary explosion	ASSUMED	yes
 SC	Tech.UB-32	-	limits	0..50	0..50	via SB entry Technical UB-32: game_weapons.json elevation: SQTurretMovement.RotationConstraints.PitchInterval 0.0..50.0 + barrel socket pitch	VERIFIED	yes
+SC	Tech.UB-32	-	min_distance	147.1	-	range on level ground at the mount's stop, barrel at 0 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
 SC	BM-21Grad	shell default	velocity	200	200	/Game/Vehicles/Ural375_BM21Grad/Weapons/BP_BM21Grad_Weapon_MEI  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SC	BM-21Grad	shell default	gravity	2	2	projectile ProjectileGravityScale	VERIFIED	yes
 SC	BM-21Grad	shell default	motor	none	none	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1888,6 +1891,7 @@ SC	BM-21Grad	shell default	launch	1.7694/2.7346/0.6366	1.7694/2.7346/0.6366	via 
 SC	BM-21Grad	shell default	spread	200	200	WeaponConfig.MOA	VERIFIED	yes
 SC	BM-21Grad	shell default	explosion	140, 1-35, 2, x1	140, 1-35, 2, x1	projectile secondary explosion	VERIFIED	yes
 SC	BM-21Grad	-	limits	14.2..55	14.2..55	via SB entry BM-21 Grad: game_weapons.json elevation: PitchMovement.RotationConstraints.PitchInterval 0.0..40.8 + barrel socket pitch	VERIFIED	yes
+SC	BM-21Grad	-	min_distance	985.1	-	range on level ground at the mount's stop, barrel at 14.2 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
 SC	M1064M121	shell impact	velocity	142	142	/Game/Vehicles/M1064A3/Weapons/BP_M1064A3_M121mortar  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SC	M1064M121	shell impact	gravity	1	1	projectile ProjectileGravityScale	VERIFIED	yes
 SC	M1064M121	shell impact	motor	none	none	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1906,7 +1910,7 @@ SC	M1064M121	shell nearSurface	lifespan	100	none	the game sets none; SC default 
 SC	M1064M121	shell nearSurface	spread	50	50	WeaponConfig.MOA	VERIFIED	yes
 SC	M1064M121	shell nearSurface	explosion	100, 10-60, 10, x1.3	100, 10-60, 10, x1.3	projectile secondary explosion	VERIFIED	yes
 SC	M1064M121	-	limits	50..85	50..85	via SB entry M1064 M121 (120mm): game_weapons.json elevation: SQTurretMovement curves FC_M1064A3_YawToMinPitch / FC_M1064A3_YawToMaxPitch: 0.0..35.0 (yaw	VERIFIED	yes
-SC	M1064M121	-	min_distance	340	-	340 m inherited from the upstream SquadCalc table	ASSUMED	yes
+SC	M1064M121	-	min_distance	358	-	range on level ground at the mount's stop, barrel at 85 degrees: tools/game_audit (mount_limits.json, calculator.mjs, check_calculator.py)	INFERRED	yes
 SC	Mk19	shell default	velocity	230	230	/Game/Vehicles/M1117/Weapons/BP_M1117_MK19  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SC	Mk19	shell default	gravity	1	1	projectile ProjectileGravityScale	VERIFIED	yes
 SC	Mk19	shell default	motor	none	none	projectile ConstantAcceleration, ConstantAccelerationTimeout, bIgnoreGravityDuringConstantAcceleration	VERIFIED	yes
@@ -1916,7 +1920,7 @@ SC	Mk19	shell default	lifespan	20	20	projectile InitialLifeSpan	VERIFIED	yes
 SC	Mk19	shell default	launch	heightOffset 4	-	round figure kept from the upstream table / the mod's table	ASSUMED	yes
 SC	Mk19	shell default	spread	50	50	WeaponConfig.MOA	VERIFIED	yes
 SC	Mk19	shell default	explosion	115, 1-15, 0.08, x1	115, 1-15, 0.08, x1 [native: BaseDamage, DamageFalloff, DamageOuterRadius]	projectile primary explosion	ASSUMED	yes
-SC	Mk19	-	limits	-45..85.3	-	upstream table (Mk19, BTR4-AGS)	ASSUMED	yes
+SC	Mk19	-	limits	-45..85.3	-	upstream table (Mk19)	ASSUMED	yes
 SC	Mk19	-	min_distance	10	-	inherited from the upstream SquadCalc table (sh4rkman/SquadCalc); not decided by the server files	ASSUMED	yes
 SC	Mk19	-	angle_offset	0.984	-	inherited from the upstream SquadCalc table (sh4rkman/SquadCalc); not decided by the server files	ASSUMED	yes
 SC	BTR4-AGS	shell default	velocity	190	190	/Game/Vehicles/BTR4/Weapons/BP_BTR4_KBA117  WeaponConfig.MuzzleVelocity	VERIFIED	yes
@@ -1928,7 +1932,7 @@ SC	BTR4-AGS	shell default	lifespan	20	20	projectile InitialLifeSpan	VERIFIED	yes
 SC	BTR4-AGS	shell default	launch	heightOffset 3.4	-	round figure kept from the upstream table / the mod's table	ASSUMED	yes
 SC	BTR4-AGS	shell default	spread	15	15	WeaponConfig.MOA	VERIFIED	yes
 SC	BTR4-AGS	shell default	explosion	115, 1-15, 0.08, x1	115, 1-15, 0.08, x1 [native: BaseDamage, DamageFalloff, DamageOuterRadius]	projectile primary explosion	ASSUMED	yes
-SC	BTR4-AGS	-	limits	-45..135	-	upstream table (Mk19, BTR4-AGS)	ASSUMED	yes
+SC	BTR4-AGS	-	limits	-4.9..45.1	-4.9..45.1	mount pitch -5..45 (BP_BTR4_Turret) + 0.1 the sight adds: tools/game_audit/data/mount_limits.json	INFERRED	yes
 SC	BTR4-AGS	-	angle_offset	0.734597	-	inherited from the upstream SquadCalc table (sh4rkman/SquadCalc); not decided by the server files	ASSUMED	yes
 SC	MO120RTF1	shell MO-SHORT	velocity	110	-	Workshop mod: not in the dedicated-server package; table of the upstream SquadCalc	ASSUMED	yes
 SC	MO120RTF1	shell MO-SHORT	gravity	1	-	Workshop mod: not in the dedicated-server package; table of the upstream SquadCalc	ASSUMED	yes
@@ -2081,7 +2085,7 @@ SC	AGS-17	shell default	launch	heightOffset 1	-	round figure kept from the upstr
 SC	AGS-17	shell default	spread	50 (sustained value of the curve)	MOA 1.5 overridden by FC_MOACurve_GenericGMG.0 15..50	WeaponConfig.MOACurve /Game/Vehicles/FC_MOACurve_GenericGMG.0	INFERRED	yes
 SC	AGS-17	shell default	explosion	115, 1.5-18, 0.08, x1	115, 1.5-18, 0.08, x1 [native: BaseDamage, DamageFalloff]	projectile primary explosion	ASSUMED	yes
 SC	AGS-17	-	limits	-12.15..85.85	-12.15..85.85	via SB entry AGS-17 · emplacement · optic (RMB ×2.5): game_weapons.json elevation: SQTurretMovement.RotationConstraints.PitchInterval -13.0..85.0 + socket pitch	VERIFIED	yes
-SC	AGS-17	-	min_distance	280	-	range of the top of the hold (85.87 degrees) from the muzzle, computed by gen_squadcalc_weapons.py lob_min_distance from the fitted hold model	INFERRED	yes
+SC	AGS-17	-	min_distance	280	-	range of the top of the hold (85.85 degrees) from the muzzle, computed by gen_squadcalc_weapons.py lob_min_distance from the fitted hold model	INFERRED	yes
 SC	AGS-17	-	hold	9.08 deg/s, 47.81..85.85	9.00 deg/s	fitted to 67 in-game hold-time measurements of the owner (not in the repositories); the game files give 9.00 deg/s (keyboard pitch x15 x turret input x0.6) and fit them as well (RMS 5.5 m against 5.34 m)	UNVERIFIED	yes
 SC	DF_M203_M320_GP_25_HK79_SL40	shell default	velocity	76	76	/Game/Blueprints/Items/GrenadeLaunchers/M4M203_UGL/BP_M4M203_UGL_Parent  WeaponConfig.MuzzleVelocity	VERIFIED	yes
 SC	DF_M203_M320_GP_25_HK79_SL40	shell default	gravity	1	1	projectile ProjectileGravityScale	VERIFIED	yes
