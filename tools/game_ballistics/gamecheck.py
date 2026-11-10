@@ -27,7 +27,9 @@ import json
 import math
 import sys
 
-# Calculator weapon -> game weapon classes (first is the reference; the others must agree).
+# Calculator weapon -> game weapon classes (first is the reference; the others must agree). A name is Squad
+# Ballistics' current one (weapons.json) or that of a weapon only SquadCalc has. Where Squad Ballistics split an entry
+# by vehicle and renamed it (the tank guns once named "2A46 / ZPT98 / 2A20 / ..."), each vehicle has its own group.
 TARGETS = {
     "M203 / M320 / GP-25 / HK79 / SL40": ["Blueprints/Items/GrenadeLaunchers/M4M203_UGL/BP_M4M203_UGL_Parent", "Blueprints/Items/GrenadeLaunchers/M320/BP_M320_Parent", "Blueprints/Items/GrenadeLaunchers/AK74GP25_UGL/BP_AK74GP25_UGL_Parent", "Blueprints/Items/GrenadeLaunchers/G3A3HK79_UGL/BP_G3A3HK79_UGL_HE", "Blueprints/Items/GrenadeLaunchers/EF88SL40_UGL/BP_EF88_SL40_UGL_Parent"],
     "MGL / M32": ["Blueprints/Items/GrenadeLaunchers/MGL_GL/BP_MGL_Parent", "Blueprints/Items/GrenadeLaunchers/M32/BP_M32_Parent"],
@@ -61,10 +63,21 @@ TARGETS = {
     "2A28 Grom (BMP-1 / BMD-1) · FRAG": ["Vehicles/BMP-1/Weapons/BP_BMP1_2A28_Frag", "Vehicles/BMD-1M/Weapons/BP_BMD1M_2A28_Frag"],
     "2A70 100mm (BMP-3 / BMD-4 / ZBD04A) · FRAG": ["Vehicles/BMP-3M/Weapons/BP_BMP3M_2A70_HEFrag", "Vehicles/BMD-4M/Weapons/BP_BMD4M_2A70_HEFrag", "Vehicles/ZBD04A/Weapons/BP_ZBD04A_2A70_HEFrag"],
     "ZiS-3 · optic (RMB ×4)": ["Vehicles/Emplaced_ZiS3_Cannon/Weapons/BP_ZiS3_Weapon_HEAT", "Vehicles/Emplaced_ZiS3_Cannon/Weapons/BP_ZiS3_Weapon_Frag"],
-    "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": ["Vehicles/T72B3/Weapons/BP_2A46_AP", "Vehicles/T90A/Weapons/BP_2A46M_AP", "Vehicles/ZTZ99/Weapons/BP_ZPT-98_AP", "Vehicles/T62/Weapons/BP_2A20_AP", "Vehicles/Sprut-SDM1/Weapons/BP_2A45_AP", "Vehicles/T64_BM2/Weapons/BP_KBA3_AP"],
+    "Tank AP · T-72 (2A46)": ["Vehicles/T72B3/Weapons/BP_2A46_AP"],
+    "Tank AP · T-90A (2A46M)": ["Vehicles/T90A/Weapons/BP_2A46M_AP"],
+    "Tank AP · ZTZ-99 (ZPT-98)": ["Vehicles/ZTZ99/Weapons/BP_ZPT-98_AP"],
+    "Tank AP · T-62 (2A20)": ["Vehicles/T62/Weapons/BP_2A20_AP"],
+    "Tank AP · Sprut-SDM1 (2A45) · gunner sight ×4": ["Vehicles/Sprut-SDM1/Weapons/BP_2A45_AP"],
+    "Tank AP · T-64BM2 (KBA3)": ["Vehicles/T64_BM2/Weapons/BP_KBA3_AP"],
     "Tank AP · M256 / Rh120": ["Vehicles/M1A2/Weapons/BP_M256A1_AP", "Vehicles/Leopard2/Weapons/BP_L55_AP", "Vehicles/M60T/Weapons/BP_MG253_AP"],
     "Tank AP · L30A1 (Challenger 2) / M68A2": ["Vehicles/FV4034/Weapons/BP_L30A1_AP", "Vehicles/M1128_MGS/Weapons/BP_M68A2_AP"],
-    "Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2": ["Vehicles/T72B3/Weapons/BP_2A46_HEAT", "Vehicles/M1A2/Weapons/BP_M256A1_HEAT", "Vehicles/Leopard2/Weapons/BP_L55_HEAT", "Vehicles/T72B3/Weapons/BP_2A46_Frag", "Vehicles/ZTZ99/Weapons/BP_ZPT-98_HEAT", "Vehicles/T62/Weapons/BP_2A20_HEAT", "Vehicles/M1128_MGS/Weapons/BP_M68A2_HEAT", "Vehicles/M1128_MGS/Weapons/BP_M68A2_HESH", "Vehicles/M60T/Weapons/BP_MG253_Frag"],
+    "Tank HEAT/HE · T-72 (2A46)": ["Vehicles/T72B3/Weapons/BP_2A46_HEAT", "Vehicles/T72B3/Weapons/BP_2A46_Frag"],
+    "Tank HEAT/HE · M1A1 / M1A2 (M256)": ["Vehicles/M1A2/Weapons/BP_M256A1_HEAT"],
+    "Tank HEAT/HE · Leopard 2A6 (Rh120)": ["Vehicles/Leopard2/Weapons/BP_L55_HEAT"],
+    "Tank HEAT/HE · ZTZ-99 (ZPT-98)": ["Vehicles/ZTZ99/Weapons/BP_ZPT-98_HEAT"],
+    "Tank HEAT/HE · T-62 (2A20)": ["Vehicles/T62/Weapons/BP_2A20_HEAT"],
+    "Tank HEAT/HE · M1128 MGS (M68A2)": ["Vehicles/M1128_MGS/Weapons/BP_M68A2_HEAT", "Vehicles/M1128_MGS/Weapons/BP_M68A2_HESH"],
+    "Tank HEAT/HE · M60T (MG253)": ["Vehicles/M60T/Weapons/BP_MG253_Frag"],
     "Tank HESH · L30A1 (Challenger 2)": ["Vehicles/FV4034/Weapons/BP_L30A1_HESH", "Vehicles/FV4034/Weapons/BP_L30A1_Smoke"],
     "ZPL-98A 105mm (ZTD-05) · AP": ["Vehicles/ZTD05/Weapons/BP_ZTD05_ZPL-98A_AP"],
     "ZPL-98A 105mm (ZTD-05) · HEAT / HE": ["Vehicles/ZTD05/Weapons/BP_ZTD05_ZPL-98A_HEAT", "Vehicles/ZTD05/Weapons/BP_ZTD05_ZPL-98A_Frag"],
@@ -103,7 +116,7 @@ RENAMED = {
     "AGS-30 / BTR-4 AGS": "BTR-4 AGS",
     "M3 MAAWS · HEAT / Smoke": "Carl Gustav / M3 MAAWS · HEAT",
     "M3 MAAWS · Tandem": "Carl Gustav / M3 MAAWS · Tandem",
-    "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": "Tank AP · 2A46 / ZPT98 / 2A20 / M68A2",
+    "Tank AP · T-72 (2A46)": "Tank AP · 2A46 / ZPT98 / 2A20 / M68A2",
     "Tank AP · L30A1 (Challenger 2) / M68A2": "Tank AP · L30A1 (Challenger 2)",
     "2A42 30mm (BMP-2) · HE": "2A42 / 2A72 30mm · HE",
     "ZPT99 30mm (ZBL-08) · APFSDS": "ZPT99 30mm · AP",
