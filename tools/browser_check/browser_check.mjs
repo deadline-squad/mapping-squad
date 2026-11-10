@@ -65,7 +65,8 @@ async function group(label, body) {
  * @param {boolean} [precise] - wait for the precise heightmap (true) or for any heightmap result, also
  *   the 8-bit one or a failure (false)
  * @throws {Error} when the page does not load, or the heightmap or the map image does not, within 120 s each: the
- *   error names the spinner's count and the requests without an answer, and the context is closed
+ *   error says which of the three and why (Playwright's reason), with the spinner's count and the requests without
+ *   an answer, and the context is closed
  */
 async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }, prepare = async () => {}, precise = true) {
     const context = await browser.newContext(contextOptions);
@@ -92,14 +93,15 @@ async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }
         unanswered.delete(request);
         if (request.failure()?.errorText === NETWORK_CHANGED) networkChanges++;
     });
-    // A wait that ran out says what the page still waited for: the spinner's count and the requests without an answer
-    const stalled = (what) => async () => {
+    // A step of the opening that failed says what the page still waited for: the spinner's count and the requests
+    // without an answer
+    const stalled = (what) => async (error) => {
         const spinning = await page.evaluate(() => window.__App?.minimap?._spinning).catch(() => undefined);
         const requests = [...unanswered].map((request) => request.url());
-        throw new Error(`${what} after 120 s (spinner count ${spinning}, ${requests.length} request(s) without an answer${requests.length ? `: ${requests.slice(0, 5).join(", ")}` : ""})`);
+        throw new Error(`${what}: ${error.message.split("\n")[0]} (spinner count ${spinning}, ${requests.length} request(s) without an answer${requests.length ? `: ${requests.slice(0, 5).join(", ")}` : ""})`);
     };
     try {
-        await page.goto(base, { waitUntil: "load", timeout: 120000 });
+        await page.goto(base, { waitUntil: "load", timeout: 120000 }).catch(stalled("the page did not load"));
         await page.waitForFunction((precise) => {
             const heightmap = window.__App?.minimap?.heightmap;
             return precise ? heightmap?.precise : heightmap?.jsonPng.length || heightmap?.failed;

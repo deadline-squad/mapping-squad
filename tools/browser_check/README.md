@@ -28,10 +28,11 @@ hold-laid ones show a hold time), the map's spinner after layer changes (one sup
 layer replaced while it loaded, a map image that failed to load, a layer with no tile in view: the spinner
 stops and one map image is left) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). The checks run in groups, each on a
-page of its own: a page that does not open within 120 s, or a step that throws, is one FAIL under the
-group's name, with the spinner's count and the requests left without an answer, and the other groups still
-run. The last line gives the totals (`all N browser checks passed` or `F of N browser checks failed`). Exits
-with 1 on any failure.
+page of its own. A page that does not open (the page itself, its heightmap or its map image, each given
+120 s) is one FAIL under the group's name: it says which of the three failed and why, with the spinner's count
+and the requests left without an answer. A step that throws later is one FAIL with its message. The other
+groups still run. The last line gives the totals (`all N browser checks passed` or `F of N browser checks
+failed`). Exits with 1 on any failure.
 
 Chromium fails every request in flight with `net::ERR_NETWORK_CHANGED` when an interface of the host comes or
 goes, as when Docker starts or stops a container. The script counts those requests and names them above the
