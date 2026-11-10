@@ -47,7 +47,7 @@ totals: a FAIL that lists the error, or lost a request to it, says nothing about
 containers start all the time, run the check where the network does not change (a container has a network
 namespace of its own).
 
-## grid_check.mjs: the grid starts at the game's corner
+## grid_check.mjs: the grid, its keypad text and entry as the game's
 
 ```sh
 node grid_check.mjs <site URL>
@@ -55,7 +55,12 @@ node grid_check.mjs <site URL>
 
 Skorpo without a layer: the grid starts 9.5 m east of the map image (`SDK_data.minimap.game`); Chora with the layer
 `Chora_Skirmish_v1` (needs the layer API): 1007 m east and 1222 m south of it, the corner of the layer's own minimap; clearing
-the layer returns it to the map's corner. Exits with 1 on any failure.
+the layer returns it to the map's corner and the map's letters and numbers. On Skorpo, Chora Skirmish v1 and Al Basrah the
+check compares the page with the game's grid (Squad server build 26005357): the keypad text 1 m inside the corners and at
+the middle and the box under the cursor at zoom 4 (`C03-3-7` for the game's `C3 - 3 - 7`), no keypad outside the grid, the
+game's text typed with its spaces, without them and padded landing in the 33.3 m square it names, the letters and numbers
+with the last one at the middle of the strip left after the last whole keypad, along the grid's north and west edges, and no
+line or label outside the grid. Exits with 1 on any failure.
 
 ## layer_minimap_check.mjs: the own minimap of Seed and Skirmish layers
 
