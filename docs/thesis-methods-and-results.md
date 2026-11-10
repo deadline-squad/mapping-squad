@@ -11,6 +11,10 @@ branch; sections 1.5, 2.3, 9.3 and 12 to 15 are new or rewritten, the PENDING ta
 in the report is checked by `tools/release/check_report_refs.py` (section 13).
 Updated 2026-11-09: section 16 (the Detailed tactical map: method, accuracy against an independent render, GPU against CPU,
 performance, the faults found and fixed) is new; a row in section 15.
+Updated 2026-11-10: section 16 was reviewed as an examiner would: every claim of the v2 text has an interval or is marked UNVERIFIED or
+PENDING, five measurements on all 25 maps are new (16.3.6 to 16.3.10: roads, water, crowns, roof heights, contours), three faults of v2
+were found and fixed in the pipeline (16.6), and the symbols were revised on measured contrast (16.10); the revised tiles are measured
+against v2 on every map whose rebuild had finished (16.10), and the outline F1 has bootstrap intervals (16.3.3); a row in section 15.
 
 ## 0. How to read this report
 
@@ -46,7 +50,7 @@ community-made map data is a source of any figure.
 | `SBS` | `SB:docs/sight-scales.md` | audit of 2026-11-05 |
 | `V-README` | `AGL:tools/volumetric/README.md` | |
 | `H-README` | `AGL:tools/heightmaps/README.md` | |
-| `M-README` | `AGL:tools/maptiles/README.md` | build of 2026-11-09 |
+| `M-README` | `AGL:tools/maptiles/README.md` | build of 2026-11-09; the revision of 2026-11-10 (section 16.10) is in the pipeline, not yet in the served tiles |
 | `E-README` | `SC:engine/README.md` | |
 | `CS` | `AGL:tools/volumetric/docs/collision-semantics.md` | |
 | `SDMG` | `AGL:tools/volumetric/docs/structure-damage.md` | |
@@ -134,7 +138,8 @@ repositories, read here as UNVERIFIED).
 
 Source and method: the cooked Chaos heightfields of the landscape levels, placed with the landscape actor's transform
 (16-bit per tile, about 0.3 mm; grid 1-1.2 m), fused by maximum with the collision of the placed static meshes and, where
-it rises 0.5 m above the game terrain, with the SDK surface of SquadHeight 1.3.0 (1.6 cm). 16-bit PNG and lossless WebP
+it rises 0.5 m above the game terrain and a placement of the game explains it (section 2.4), with the SDK surface of SquadHeight
+1.3.0 (1.6 cm). 16-bit PNG and lossless WebP
 on SquadCalc's grid, 1 m (0.5 m on Chora and Kokan) (`H-README`, "Sources and fusion", "Grid size").
 
 ### 2.1 Interpolation rule
@@ -180,6 +185,26 @@ them to metres per map (`H-README`, "Minimap corners and the grid", `py/test_min
 | Skirmish and Seed layers with a minimap of their own (Chora, Mutaha, Tallil, Skorpo, Goose Bay, Manicouagan, Black Coast) | their grid starts up to 1.2 km from the map's (Chora Skirmish v1: 1007 m east, 1222 m south); a few regular layers differ by 0.5-1.5 m (Manicouagan RAAS v1/v2) | `CL` 45.30.0 | VERIFIED |
 | Fix | the grid starts at the game's corner of the loaded layer, else at `SDK_data.minimap.game`; the image, heightmap, volume and markers keep the image corners; tests `SC:tests/squadGrid.test.mjs` (game corners of all 25 maps within 1 m of the image except Skorpo) | `CL` 45.30.0 | VERIFIED |
 | Extent of the upstream map images, and image orientation where `Corner0` is not the north-west one (Fools Road, Gorodok, Jensen, Kokan, Lashkar, Logar, Mestia, Mutaha, Narva, Skorpo, Yehorivka list it swapped on some layers) | cannot be checked from the server package: the minimap textures keep metadata but no pixels; a cross-correlation with our heightmap resolves about 15 m, so it cannot tell a 10 m shift | `H-README` | UNVERIFIED (needs client pixels) |
+
+### 2.4 Objects that only the SDK's map has (2026-11-10)
+
+SquadHeight was traced in the Squad SDK, whose version of a map is not the installed build's, so its surface above the terrain is a
+height of the game only where the game has something there. A grid point keeps SquadHeight's surface when it lies under the collision
+box of a static mesh placement of the server, or under the box of a mesh placement that the client scene shows (client build 26234431:
+static, instanced, foliage and spline meshes, Blueprint components, water planes; spline meshes bent with their roll), 1 m around the
+box and between its bottom and top included, or when a client mesh wider and longer than 800 m (background mountains, the ocean and
+lake planes) passes within 1 m of it. Elsewhere the game's own surfaces stand: its terrain, its static collision, and the terrain or
+water of such a vast mesh under SquadHeight's surface (`H-README`, "Which of SquadHeight's objects are taken";
+`AGL:tools/heightmaps/py/evidence.py`, `build_heightmap.fuse`).
+
+| Finding | Value | Source | Label |
+|---|---|---|---|
+| Points where SquadHeight stands 0.5 m and more above the terrain, 25 maps | 28 515 530; a placement explains 27 949 202 (20 946 035 only one of the client: 18 713 366 the water and mountains of a mesh wider than 800 m, the rest foliage and Blueprint components; 25 566 only one of the server) | `H-README` | VERIFIED |
+| Points that no placement explains | 566 328; 554 201 of them lie on the server's own static collision at the same height and do not change (Gorodok 405 962, Narva 148 238) | `H-README` | VERIFIED |
+| Points lowered | 12 127 points, 11 480 m², on 6 maps: Al Basrah 11 226 (up to 22.48 m, median 6.17 m: the background city of the `_Vista` level along the map's edge and walls in open sand), Chora 792 on its 0.5 m grid (198 m², up to 8.44 m), Kokan 71 (17.8 m², up to 9.41 m), Skorpo 16 (a tree crown 30.7 m above the terrain that no tree of the game reaches), Anvil 17 (up to 0.72 m), Gorodok 5 (up to 1.84 m); the other 19 maps do not change | `H-README` | VERIFIED |
+| The client's landscape at those points | equal to the server's (largest difference 0.00 m) and nowhere within 0.5 m of SquadHeight's surface: none of it is terrain of the game | `H-README` | VERIFIED |
+| `build` of the six maps against the served heightmaps | differs exactly at the points above, by the measured lowering to 1 cm, and elsewhere only at 12 764 points of Gorodok, one 16-bit level (1.4 mm) lower, where the server's collision holds SquadHeight's surface to the millimetre | `H-README` | VERIFIED |
+| Served heightmaps | generated 2026-10-30 and 2026-10-31, with every object of SquadHeight, until the six maps are rebuilt and deployed (`heightmaps.sh deploy` keeps each map's volume layer) | `H-README` | PENDING |
 
 ## 3. Objects
 
@@ -685,7 +710,7 @@ image, as in `tools/heightmaps/heightmaps.sh`. Game data: the dedicated server, 
 | Parity SB / SC, 104 weapons | `AGL`: `python3 tools/direct_fire/compare.py <SB checkout> <SC checkout>` |
 | Weapon data against the paks | `AGL:tools/game_ballistics/README.md`: `extractor dumpall ...`, `collect.py`, `gamecheck.py` |
 | Data provenance of every input per weapon | `AGL`: `python3 tools/game_ballistics/provenance.py --resolved <resolved.json> --dump <dump> --sb <SB> --sc <SC> --check tools/volumetric/docs` (`DP` section 9); test: `tools/volumetric/tests/test_data_provenance.py` |
-| Heightmaps | `AGL`: `tools/heightmaps/heightmaps.sh setup / extract / build` |
+| Heightmaps | `AGL`: `tools/heightmaps/heightmaps.sh setup / extract / build` (`build` reads the client scenes of `tools/maprender` for section 2.4), `deploy`; tests: `python -m unittest discover -p 'test_*.py'` in `tools/heightmaps/py` |
 | Terrain audit against logs | `cat SquadGame*.log \| awk -f tools/heightmaps/log_points.awk \| sort -u > points.txt`; `py/audit_ground_truth.py <heightmaps> <map> points.txt --extract <root>` |
 | Interpolation, resolution, objects | `py/compare_interpolation.py`, `py/compare_resolution.py`, `py/compare_objects.py` |
 | One voxel map | `AGL`: `tools/volumetric/build_map.sh fallujah 0.5 0.25` (about 1 h for a dense map); all: `build_all.sh 0.5 0.25`; status: `python py/status_table.py` |
@@ -716,7 +741,7 @@ image, as in `tools/heightmaps/heightmaps.sh`. Game data: the dedicated server, 
 | **The grid origin depends on the layer** | fixed in SC 45.30.0 from the layers' own corners; the image orientation where `Corner0` is swapped and the extent of the upstream images cannot be checked without client pixels | section 2.3 |
 | **Native-rules deviation at the outer radius** | structure damage at the edge of the radius is 0 in the app and up to `Min` in the engine for ten projectiles; the impact-damage path and the secondary explosion are INFERRED | section 9.3; `NR` |
 | **Dynamic MOA rule not recovered** | the spread of grenade machine guns is a constant in the app, the game's grows with sustained fire (15 to 50 MOA over 0.75 s on the curve) | section 11; `NR` section 2 |
-| **No community data as source** | all figures come from the server package; the only external dataset in the terrain fusion is the SDK surface of SquadHeight 1.3.0, used where it lies 0.5 m above the game terrain (`H-README`); the client pak is not used, the encrypted pak index is not circumvented, so client-only content (minimap pixels, reticles) is out of reach | `H-README`; `CS` section 8 |
+| **No community data as source** | all figures come from the server package; the only external dataset in the terrain fusion is the SDK surface of SquadHeight 1.3.0, used where it lies 0.5 m above the game terrain and a placement of the server or of the client scene explains it (section 2.4, `H-README`); the client package (build 26234431, read without a key) gives the scenes of the Detailed and Standard HD layers (section 16) and, in the terrain fusion, only the test of section 2.4; the encrypted pak index is not circumvented, so client-only content (minimap pixels, reticles) is out of reach | `H-README`; `CS` section 8 |
 | **Small and non-random samples** | LOS pairs on three maps (Fallujah, Kohat, Logar), DDA segments on three (Jensen, Kokan, Fallujah), segments chosen near geometry; terrain ground truth from the Training server's logs, n unrecorded for three maps; three maps are not a sample of 25 | sections 2.2, 7, 8 |
 | **Paired comparisons** | the old-to-new figures use the same pairs or cases on purpose; a fresh draw gives other figures (listed beside them), so only differences within a pairing are meaningful | sections 7.1, 7.2, 8.1 |
 | **The reference tracer is software too** | it had a bug (section 6); it is independent of the voxel builder and agrees with the Rust BVH to 3.9e-13 m on 100 000 segments, but a bug common to both would not show | section 6 |
@@ -743,8 +768,11 @@ image, as in `tools/heightmaps/heightmaps.sh`. Game data: the dedicated server, 
 | Map count: 25 server-derived maps | the inventory of the server package; the scope sentence of section 0 | `H-README`; SC 45.29.0 |
 | Browser-check fixes | `targets_check` failure was a stale hover timer, not the data (`deadline-squad/deadline-squadcalc#28`, SC 45.33.0) | `CL` 45.33.0 |
 | Detailed tactical map v2 (section 16, 2026-11-09) | the build of 2026-11-09 replaces that of 2026-10-29; the evaluation found Manicouagan's land drawn as sea, the lakes missing, engine placeholder textures in Standard HD and three faults of the outline evaluator, all fixed before the figures were measured | section 16; `M-README` |
+| Review and revision of the Detailed map (section 16, 2026-11-10) | intervals and pooled statistics for the placement gate (188 windows); roads, water, crowns, roof heights and contours measured on all 25 maps; false water along streams, rivers drawn dry and two wrong class rules found in v2 and fixed in the pipeline (PENDING in the served tiles); symbols revised on colour differences computed for normal and colour-deficient vision; the size table of 16.4 corrected; the outline F1 of v1, v2, the revision and HD with block-bootstrap intervals; the revised tiles measured against v2 map by map | section 16.3.3, 16.3.6 to 16.3.10, 16.6, 16.10; `M-README` |
+| SquadHeight's objects only where the game has them (2026-11-10) | SquadHeight was traced on the SDK's version of each map: 12 127 points of 6 maps held objects that neither the server nor the client scene has (Al Basrah's background city up to 22.5 m); `build` takes the game's surfaces there, PENDING in the served heightmaps | section 2.4; `H-README` |
+| Spline roll in Standard HD, road sides and collision without a mesh in the Detailed tiles (2026-11-10) | Standard HD drew rolled spline meshes on their side (20 maps); road widths took the unrolled side axis (no tile changes); the old raster kept collision that the scene does not show (4 531 m² on 13 maps: Manicouagan's dam over the reservoir, Kamdesh's background mountains) | section 16.6 |
 
-## 16. Detailed tactical map (the "Detailed" layer, build of 2026-11-09)
+## 16. Detailed tactical map (the "Detailed" layer, build of 2026-11-09, reviewed 2026-11-10)
 
 The Detailed layer of SquadCalc is a topographic map of every map drawn from the game files: ground cover, relief, contours,
 water, roads, tracks, crop fields, buildings, walls, rocks, trees and roof heights, served as 256 px WebP tiles
@@ -783,9 +811,11 @@ sampling (ground, coverage, thin objects: `scene_objects.raster_block`); section
 turned and scaled with the instance and lit from the map's light; a crown up to 8 px across is taken from a cache of stamps at 7.5°
 and quarter-pixel steps (its edge moves by at most a quarter pixel).
 
-**Relief.** MDOW: four lights at 45° elevation from the azimuths 360°, 315°, 270° and 225°, each weighted by sin²(aspect − azimuth)
-(the weights sum to 2), then the spread multiplied by 2.5, a typical value of the ratio of the single light's spread to the four
-lights' (1.8 to 2.7 over 21 maps with 2 m gradients: Sanxian 1.83, Al Basrah 2.65, Kamdesh 2.70).
+**Relief.** MDOW after Mark (1992, USGS Open-File Report 92-422, doi:10.3133/ofr92422): four lights from the azimuths 360°, 315°, 270° and
+225°, each weighted by sin²(aspect − azimuth) (the weights sum to 2). Two things differ from the report and are choices of this layer, not
+of its source: the lights stand 45° above the horizon (the report's 30°), and the spread is multiplied by 2.5, a typical value of the ratio
+of the single light's spread to the four lights' (1.8 to 2.7 over 21 maps with 2 m gradients: Sanxian 1.83, Al Basrah 2.65, Kamdesh 2.70;
+on a map at either end the relief is up to a quarter weaker or stronger than one light gave).
 
 **Roof relief.** A roof or deck is shaded by the slope of its own top (ground plus height above ground), with the ground added back
 bilinearly as the heights were measured, and coloured by its height over the ground smoothed by a 6 m Gaussian. Shading the height
@@ -818,8 +848,12 @@ ground lies below the plane inside its rectangle; a dam or bank that rises above
 collision body for these planes, and the client scene's lake material is a dynamic instance named after its weather-layer level
 (`WL_<map>_Water`), which the object filter had taken for a hidden water surface.
 
-**Objects only the server has.** Blueprint buildings and collision-only props that the client scene lacks stay from the old
-0.25 m raster where no scene object lies within 2 m. Their staircase outline is smoothed: the cell's coverage is the bilinear
+**Objects only the server has.** What the scene raster does not draw but the server's static collision holds (the frames of
+unfinished tents, fences, signs and stands thinner than 0.3 m, which the raster drops as thin) stays from the old 0.25 m raster where
+no scene object lies within 2 m and the scene shows it: at least half of a run's metres hold, in them or beside them, an object of the
+scene 0.3 m and more above the ground, however thin (a cell of the scene raster before its thin objects are taken out, or an edge of a
+shown mesh: `scene_prep.shown_runs`). A run of which the scene shows nothing is collision without a mesh over it and is left out
+(16.6). The staircase outline of the runs kept is smoothed: the cell's coverage is the bilinear
 interpolation of the 0.25 m mask, stretched so the half level (the outline) stays in place; height and class come from the
 nearest old cell.
 
@@ -831,7 +865,8 @@ tile of the deep water's colour (the same bytes the drawing gives).
 #### 16.3.1 Placement against an independent render of the game's meshes
 
 The gate of every build compares the finest tiles with the Standard HD layer (`AGL:tools/maprender/README.md`), a camera render of the
-same client meshes that shares no code with the rasteriser: eight 76.8 m windows around the largest roofs, each wholly inside the map, both layers resampled to
+same client meshes that shares no code with the rasteriser (both read one extraction of the scene, so the gate checks the rasteriser and
+the tile frame, not the extraction): eight 76.8 m windows around the largest roofs, each wholly inside the map, both layers resampled to
 0.1 m, the sub-pixel peak of the cross-correlation of their edge images; pass when the median over at least four measured windows is
 under 0.1 m on both axes (`AGL:tools/maptiles/py/check_alignment.py`). A positive offset means the tiles lie east (x) or south (y) of HD.
 
@@ -865,7 +900,11 @@ under 0.1 m on both axes (`AGL:tools/maptiles/py/check_alignment.py`). A positiv
 
 All 25 maps pass: the largest median offset is 0.067 m, the largest deviation of one window from its map's median 0.187 m; 188 windows measured, 170 of them within 0.1 m.
 
-The height reference (the contoured ground against the served precise heightmap on open ground) agrees to 0.0009 m (the largest median difference over the 25 maps; open ground 0.50-1.00 of the samples).
+Uncertainty. Over the 188 measured windows of the 25 maps the offset is -0.005 m in x (95 % interval of the mean -0.011 to 0.002) and -0.012 m in y (-0.018 to -0.005), with standard deviations of 0.045 and 0.047 m: the tiles lie 12 mm north of HD on average, a bias the interval separates from zero and that is a tenth of a cell of the scene raster. The radial offset of a window has a median of 0.047 m (interval 0.043 to 0.053), a 95th percentile of 0.126 m and a root mean square of 0.066 m. The medians of the table rest on 6 to 8 windows each; their bootstrap intervals are at most 0.153 m wide (logar), and every map's interval lies inside ±0.1 m.
+
+The height reference (the contoured ground against the served precise heightmap on open ground) agrees to 0.0009 m (the largest median difference over the 25 maps; open ground 0.50-1.00 of the samples). Both are
+the server's landscape collision, so this is a check that the renderer reads the same ground as the calculator, not an accuracy of
+the ground; the lines drawn from it are measured in 16.3.10.
 The heightmap gate (the outlines of buildings against the heightmap's bumps) is reported but resolves decimetres, not centimetres:
 its windows are 1 m samples taken at the nearest node and scatter by up to several pixels (Kokan −5.24 to −0.04 px).
 
@@ -902,17 +941,34 @@ where its strongest ones lie. The texture's offset from the map frame is one per
 | goosebay_seed | 0.49 | 0.724 / 0.809 / 0.859 | 0.751 / 0.824 / 0.870 | 0.816 / 0.876 / 0.911 | measured |
 | mutaha_seed | 0.34 | 0.551 / 0.684 / 0.769 | 0.635 / 0.739 / 0.803 | 0.627 / 0.750 / 0.830 | measured |
 
-v2 is above v1 on five of the six layers and above HD on Tallil and Mutaha. The Black Coast layer's texture cannot be placed: its
-correlation peak is 2.5 standard deviations high (the pair builder's own registration correlation is 0.027), so its F1 is at an
-unmeasured shift and says nothing.
+v2's F1 at 1 px is above v1's on five of the six layers (by 0.015 to 0.084) and above HD's on Tallil and Mutaha. The Black Coast
+layer's texture cannot be placed: its correlation peak is 2.5 standard deviations high (the pair builder's own registration correlation
+is 0.027), so its F1 is at an unmeasured shift and says nothing.
 
-#### 16.3.4 Road width against Standard HD
+**Intervals.** The table above has none: its zone comes from the scene raster, which a build deletes once the tiles are drawn. The same
+evaluator was therefore run again on a zone taken from the old collision raster alone, which the prepared data keep (structures 3 m and
+taller in `obj_h2`, grown by 4 m; `outline_revised.py`, kept with the report's generators), scoring v1, v2, the revision and HD on one
+zone with a bootstrap over squares of 64 texture pixels (2 000 draws, seed 0, the same squares for every picture, so the differences
+are paired; the edges are chosen once on the whole zone, as the evaluator does). A shift marked * is not measured and its F1 says nothing.
+
+| Minimap pair | Zone px / squares | Shift (m) | F1 at 1 px (95 % interval): v1 | v2 | revised | Standard HD | v2 − v1 | revised − v2 |
+|---|---|---|---|---|---|---|---|---|
+| blackcoast_seed | 69873 / 81 | 0.00, 0.00 * | 0.388 (0.357 … 0.419) | 0.372 (0.344 … 0.402) | 0.372 (0.343 … 0.402) | 0.360 (0.316 … 0.399) | -0.016 (-0.035 … 0.003) | 0.000 (-0.008 … 0.007) |
+| goosebay_seed | 162617 / 132 | 0.00, 0.00 | 0.726 (0.704 … 0.747) | 0.754 (0.730 … 0.776) | 0.769 (0.746 … 0.791) | 0.819 (0.802 … 0.833) | 0.028 (0.017 … 0.038) | 0.015 (0.010 … 0.022) |
+| manicouagan_seed | 155618 / 172 | 0.00, 0.00 | 0.592 (0.562 … 0.619) | 0.611 (0.578 … 0.642) | 0.611 (0.579 … 0.639) | 0.685 (0.650 … 0.720) | 0.019 (0.001 … 0.037) | 0.000 (-0.003 … 0.003) |
+| mutaha_seed | 490125 / 279 | 0.00, 0.00 | 0.546 (0.533 … 0.557) | 0.632 (0.620 … 0.644) | 0.636 (0.625 … 0.648) | 0.622 (0.607 … 0.637) | 0.086 (0.074 … 0.097) | 0.004 (0.003 … 0.006) |
+| skorpo_skirmish | 75213 / 149 | 0.00, 0.00 | 0.833 (0.820 … 0.845) | 0.850 (0.836 … 0.863) | PENDING (rebuild running) | 0.854 (0.836 … 0.868) | 0.017 (0.007 … 0.027) | – |
+| tallil_seed | 221171 / 156 | 0.00, 0.00 | 0.836 (0.825 … 0.846) | 0.852 (0.843 … 0.860) | PENDING (rebuild running) | 0.825 (0.815 … 0.834) | 0.016 (0.005 … 0.027) | – |
+
+Over the 5 pairs whose shift is measured, v2's F1 at 1 px on the collision zone differs from its F1 on the scene's zone of 16.3.3 by at most 0.010 (the same tiles, the zone alone), and the two zones put v1, v2 and HD in the same order on 5 of 5. v2 is above v1 with an interval of the difference above zero on 5 of 5 (goosebay_seed, manicouagan_seed, mutaha_seed, skorpo_skirmish, tallil_seed). The revision is above v2 with an interval above zero on 2 of 3 pairs measured so far (goosebay_seed 0.015 (0.010 … 0.022); manicouagan_seed 0.000 (-0.003 … 0.003); mutaha_seed 0.004 (0.003 … 0.006)). HD is above v2 on 3 of 5; v2 is above HD on mutaha_seed, tallil_seed, as in 16.3.3. Black Coast's shift is not measured (*), so its row says nothing; the pairs of maps still being rebuilt are PENDING.
+
+#### 16.3.4 Road width against Standard HD (two maps, first measurement)
 
 Edges measured on straight, isolated stretches of the finest HD tiles (0.25 m/px; 50 % crossing from the ground's colour to the
 road's): Gorodok's 7 m dirt roads 0.826 of their laid width (n = 632) against the predicted 0.861, 0.23 m narrower, under one HD
 pixel; Goose Bay's 10 m dirt roads 0.871 (n = 90) where the landscape under them is not painted, the full width where it is (the
 road-coloured ground layer under the spline, drawn by the tiles' ground cover). The edge detector resolves about 3 px; UNVERIFIED
-beyond that.
+beyond that. Section 16.3.6 repeats the measurement on all 25 maps with intervals.
 
 #### 16.3.5 Water against Standard HD
 
@@ -920,6 +976,246 @@ The water mask of the renderer against HD's water (colour classes of the HD tile
 0.149 before the sea and lake fixes, 0.870 after (HD water covered 0.155 → 0.973); the reservoir window at the dam 0.061 → 0.929.
 Lakes added: Manicouagan 1 263 678 m², Gorodok 21 778 m², Kokan 16 943 m² (rice paddies), Mutaha 13 514 m², Sanxian 3 214 m²; no
 water removed on any map. The HD colour classifier is approximate (a few percent of "outside" is classifier noise); the figures (16.7) are the stronger evidence.
+This paragraph measured one map. Section 16.3.7 measures all 25 and finds two faults of v2 that this one map could not show.
+
+#### 16.3.6 Roads against Standard HD, all maps
+
+`AGL:tools/maptiles/py/measure_accuracy.py` (`maptiles.sh measure`). At up to 240 stations per map on straight stretches of the road
+splines (the road within 6 m of the station turns by less than 4°, no other spline within the half width plus 10 m), the colour profile
+across the road, averaged along 6 m of it, is taken from the finest tiles and from HD at 0.05 m. Centreline: the peak of the
+cross-correlation of the two profiles' edge strengths, turned into a world offset with the sign of 16.3.1. Width: in each picture the
+distance between the points where the profile is halfway from the ground's colour to the road's. Intervals are 95 % percentile bootstrap
+intervals of the median over the stations (2 000 draws, seed 0).
+
+| Map | Stations (centre / width measured) | Centre offset x, y: median (m) | 95 % interval x; y (m) | Width, tiles / HD: median (interval) | Width, tiles / laid |
+|---|---|---|---|---|---|
+| skorpo | 240 (169 / 191) | 0.015, 0.001 | 0.005 … 0.024; -0.010 … 0.010 | 0.80 (0.71 … 0.91) | 0.99 |
+| yehorivka | 240 (167 / 164) | 0.000, 0.001 | -0.000 … 0.001; 0.000 … 0.002 | 1.16 (1.12 … 1.25) | 1.00 |
+| tallil | 240 (182 / 227) | -0.000, 0.000 | -0.002 … 0.003; -0.006 … 0.004 | 1.05 (1.03 … 1.07) | 1.00 |
+| kohat | 240 (187 / 215) | 0.002, -0.002 | -0.001 … 0.012; -0.009 … 0.004 | 1.20 (1.13 … 1.24) | 1.00 |
+| sanxian | 240 (156 / 187) | 0.002, -0.004 | -0.007 … 0.025; -0.045 … 0.000 | 0.84 (0.81 … 0.88) | 1.00 |
+| blackcoast | 240 (171 / 224) | 0.000, -0.092 | -0.017 … 0.022; -0.201 … -0.029 | 1.32 (1.14 … 1.52) | 1.01 |
+| lashkar | 240 (56 / 226) | -0.006, -0.068 | -0.146 … 0.225; -0.483 … 0.031 | 2.12 (2.07 … 2.14) | 2.06 |
+| gorodok | 240 (216 / 229) | -0.002, 0.000 | -0.006 … -0.000; -0.003 … 0.002 | 1.06 (1.05 … 1.07) | 1.00 |
+| chora | 197 (182 / 181) | 0.001, 0.002 | -0.000 … 0.004; 0.000 … 0.004 | 1.04 (1.02 … 1.12) | 1.01 |
+| pacific | 66 (61 / 63) | 0.004, 0.000 | 0.000 … 0.008; -0.001 … 0.001 | 1.05 (1.04 … 1.06) | 1.03 |
+| harju | 240 (191 / 194) | 0.017, 0.009 | 0.000 … 0.048; -0.011 … 0.047 | 0.78 (0.75 … 0.80) | 1.00 |
+| manicouagan | 240 (148 / 221) | 0.003, -0.003 | -0.016 … 0.026; -0.019 … 0.021 | 0.76 (0.74 … 0.78) | 1.00 |
+| goosebay | 240 (141 / 221) | 0.017, 0.100 | -0.013 … 0.087; 0.024 … 0.319 | 0.86 (0.85 … 0.87) | 1.19 |
+| jensen | 212 (124 / 72) | 0.000, 0.029 | -0.008 … 0.007; 0.000 … 0.079 | 1.20 (1.14 … 1.34) | 1.10 |
+| albasrah | 240 (201 / 220) | -0.000, -0.000 | -0.004 … 0.001; -0.004 … 0.001 | 0.99 (0.94 … 1.04) | 0.99 |
+| kamdesh | 240 (57 / 226) | -0.010, 0.045 | -0.287 … 0.070; 0.001 … 0.157 | 0.48 (0.48 … 0.49) | 0.99 |
+| anvil | 240 (169 / 177) | 0.000, 0.000 | -0.002 … 0.002; -0.000 … 0.001 | 1.00 (0.99 … 1.01) | 1.01 |
+| fallujah | 240 (146 / 164) | -0.007, 0.006 | -0.022 … 0.000; -0.001 … 0.041 | 2.22 (2.03 … 2.38) | 1.00 |
+| narva | 240 (214 / 216) | 0.002, -0.001 | 0.000 … 0.005; -0.005 … 0.000 | 0.82 (0.76 … 0.85) | 1.00 |
+| mutaha | 240 (210 / 220) | 0.000, -0.000 | -0.000 … 0.002; -0.005 … 0.000 | 0.92 (0.86 … 0.99) | 0.99 |
+| kokan | 240 (103 / 220) | 0.001, 0.006 | -0.021 … 0.021; -0.013 … 0.050 | 1.26 (1.22 … 1.28) | 1.00 |
+| mestia | 215 (180 / 181) | -0.000, 0.000 | -0.002 … 0.001; -0.002 … 0.002 | 1.68 (1.13 … 1.93) | 1.60 |
+| foolsroad | 240 (170 / 222) | -0.043, -0.013 | -0.081 … -0.019; -0.045 … 0.000 | 0.89 (0.85 … 0.92) | 1.00 |
+| logar | 148 (64 / 141) | 0.002, -0.002 | -0.046 … 0.019; -0.148 … 0.016 | 1.41 (1.34 … 1.48) | 1.01 |
+| sumari | 71 (18 / 41) | 0.043, 0.041 | 0.005 … 0.157; 0.001 … 0.084 | 1.68 (1.52 … 2.12) | 1.19 |
+
+Over the 25 maps the median centreline offset is 0.000 m in x (interval over the maps 0.000 to 0.002) and 0.000 m in y (-0.001 to 0.002); the largest median of one map is 0.100 m (goosebay). The roads lie on HD's to within a pixel of the finest tiles on every map. The width ratio has a median of 1.05 over the maps but ranges from 0.48 to 2.22: where HD's road has no edge of its own (a road painted into the ground, a track under trees) the half-contrast points measure the texture, so the ratio is VERIFIED as agreement only on the maps whose interval is narrower than 0.1 (13 of 25).
+
+#### 16.3.7 Water against Standard HD, all maps
+
+Water against HD's on the whole map at a pixel of 0.4 to 1.7 m (zoom 4). HD's water colours are
+learned from the map itself: a colour bin is water when at least 200 of its pixels lie in the core of the tiles' water and at least half
+of all its pixels lie in the tiles' water. The measure is therefore of the outline; a lake that HD has in a colour the tiles' water never
+meets is not found (INFERRED limitation). The shoreline distance is from each shore pixel of HD's water to the nearest shore pixel of
+the tiles'.
+
+| Map | Pixel (m) | Water of v2 (ha) | IoU, v2 | IoU, revised | HD water in v2 / revised | Shore distance, median / 90th pct (m): v2 | revised |
+|---|---|---|---|---|---|---|---|
+| skorpo | 1.67 | – | – | – | – / – | – / – | – / – |
+| yehorivka | 1.55 | – | – | – | – / – | – / – | – / – |
+| tallil | 1.14 | – | – | – | – / – | – / – | – / – |
+| kohat | 1.13 | 14.6 | 0.610 | 0.615 | 0.906 / 0.978 | 1.1 / 5.6 | 1.1 / 6.1 |
+| sanxian | 1.12 | 983.5 | 0.994 | 0.982 | 0.997 / 1.000 | 1.1 / 4.6 | 2.2 / 15.6 |
+| blackcoast | 1.12 | 453.9 | 0.682 | 0.924 | 0.691 / 0.965 | 145.3 / 835.8 | 19.1 / 236.0 |
+| lashkar | 1.06 | 23.8 | 0.859 | 0.758 | 0.974 / 0.997 | 1.1 / 2.4 | 1.1 / 3.4 |
+| gorodok | 0.99 | 61.6 | 0.872 | 0.882 | 0.923 / 0.964 | 1.4 / 7.8 | 1.0 / 8.9 |
+| chora | 0.99 | 16.5 | 0.650 | 0.717 | 0.834 / 0.973 | 1.0 / 5.3 | 1.0 / 5.0 |
+| pacific | 0.98 | 1471.2 | 0.989 | 0.989 | 0.997 / 0.998 | 59.2 / 227.6 | 60.3 / 228.5 |
+| harju | 0.98 | 555.4 | 0.987 | 0.978 | 0.995 / 1.000 | 1.0 / 5.7 | 1.4 / 9.3 |
+| manicouagan | 0.98 | 141.7 | 0.936 | 0.916 | 0.969 / 0.999 | 1.0 / 9.3 | 2.8 / 21.8 |
+| goosebay | 0.98 | 251.4 | 0.960 | 0.939 | 0.976 / 1.000 | 1.4 / 7.0 | 6.3 / 24.4 |
+| albasrah | 0.98 | 168.3 | 0.915 | 0.881 | 0.974 / 0.994 | 1.0 / 27.3 | 1.4 / 28.9 |
+| kamdesh | 0.98 | 1.6 | 0.225 | 0.160 | 0.971 / 0.996 | 1.0 / 3.0 | 2.0 / 4.2 |
+| anvil | 0.75 | 1.2 | 0.098 | 0.786 | 0.099 / 0.982 | 63.1 / 415.8 | 2.1 / 6.9 |
+| fallujah | 0.73 | 35.4 | 0.773 | 0.768 | 0.944 / 0.978 | 2.2 / 16.2 | 3.0 / 18.9 |
+| narva | 0.68 | 71.6 | 0.963 | 0.928 | 0.997 / 0.999 | 0.7 / 3.4 | 1.4 / 5.0 |
+| mutaha | 0.67 | 15.4 | 0.932 | 0.862 | 0.982 / 1.000 | 0.7 / 1.4 | 0.7 / 2.4 |
+| kokan | 0.61 | 49.7 | 0.421 | 0.706 | 0.482 / 0.847 | 6.1 / 150.1 | 6.8 / 140.9 |
+| mestia | 0.59 | 1.3 | 0.037 | 0.134 | 0.991 / 0.998 | 5.5 / 7.6 | 1.2 / 1.7 |
+| foolsroad | 0.43 | 3.8 | 0.572 | 0.551 | 0.901 / 0.920 | 2.2 / 6.5 | 2.5 / 7.0 |
+| logar | 0.43 | 0.2 | 0.358 | 0.328 | 0.995 / 0.995 | 1.0 / 2.5 | 0.9 / 1.8 |
+| sumari | 0.64 | – | – | – | – / – | – / – | – / – |
+
+23 maps have water to compare; for v2's tiles, each against its own HD reference, the median IoU is 0.84 (range 0.03 to 0.99). The columns of the table score v2's tiles and the revision against one HD reference per map (learned from the union of the two). "Revised" is the water the renderer draws with the two fixes of 16.6, taken as a mask at zoom 4: it has no bridges, piers, boats or crowns over the water, which HD and the tiles have, so its IoU is not like for like with the tiles'. The share of HD's water that is covered is: it rises on 20 of 20 maps (median 0.974 → 0.996; lowest after the fixes 0.847, kokan). IoU rises by more than 0.02 on 5 maps, most on anvil 0.10 → 0.79, kokan 0.42 → 0.71, blackcoast 0.68 → 0.92, mestia 0.04 → 0.13, chora 0.65 → 0.72. It falls by more than 0.02 on lashkar 0.86 → 0.76, mutaha 0.93 → 0.86, kamdesh 0.22 → 0.16, narva 0.96 → 0.93, albasrah 0.91 → 0.88, logar 0.36 → 0.33, goosebay 0.96 → 0.94, foolsroad 0.57 → 0.55, manicouagan 0.94 → 0.92: maps with objects on open water, or with so little water that the learned reference is unstable. The like-for-like figures, tiles against tiles, are those of the rendered maps in 16.10.
+
+#### 16.3.8 Tree crowns
+
+At up to 300 trees per map with no other crown within the two radii plus 1 m (conifers, deciduous trees and palms of a crown radius of
+1.5 m and more), on the picture of the crown at 0.1 m (the colour distance from the ground around it). Against the scene's foliage
+instances: whether a crown is drawn there, and the mean offset of its centroid from the instance's pivot (a mesh is not symmetric about
+its pivot, but the yaws are, so a mean away from zero is a misplacement). Against HD: the cross-correlation peak of the two layers'
+pictures, split into the component across the light, which is the placement, and along it: HD darkens the ground south-east of a crown
+and the tiles cast no crown shadow, so the peak along that axis measures the shadow (median −0.7 m on Gorodok), not the crown.
+
+| Map | Lone trees / drawn | Centroid from the pivot, mean x; y (m) | 95 % interval x; y (m) | Against HD, across the light: median (interval), m | n |
+|---|---|---|---|---|---|
+| skorpo | 300 / 300 | 0.002; 0.005 | -0.018 … 0.022; -0.015 … 0.025 | -0.005 (-0.036 … 0.024) | 205 |
+| yehorivka | 300 / 300 | 0.006; -0.004 | -0.019 … 0.032; -0.028 … 0.020 | 0.007 (-0.006 … 0.031) | 298 |
+| tallil | 300 / 300 | 0.018; -0.025 | -0.016 … 0.050; -0.056 … 0.005 | 0.013 (0.003 … 0.024) | 277 |
+| kohat | 300 / 300 | -0.002; 0.025 | -0.031 … 0.022; 0.003 … 0.048 | -0.001 (-0.015 … 0.011) | 201 |
+| sanxian | 300 / 300 | -0.016; 0.063 | -0.060 … 0.030; 0.018 … 0.110 | -0.005 (-0.033 … 0.016) | 222 |
+| blackcoast | 300 / 300 | 0.008; 0.027 | -0.015 … 0.030; 0.007 … 0.049 | -0.016 (-0.051 … 0.014) | 162 |
+| lashkar | 300 / 300 | 0.004; -0.001 | -0.014 … 0.022; -0.022 … 0.019 | 0.010 (-0.011 … 0.031) | 225 |
+| gorodok | 300 / 300 | -0.022; 0.010 | -0.045 … 0.002; -0.013 … 0.031 | 0.021 (0.003 … 0.046) | 182 |
+| chora | 300 / 298 | 0.013; -0.003 | -0.006 … 0.032; -0.022 … 0.018 | 0.006 (-0.000 … 0.012) | 289 |
+| pacific | 167 / 167 | -0.021; -0.005 | -0.053 … 0.009; -0.040 … 0.029 | 0.019 (0.007 … 0.041) | 137 |
+| harju | 300 / 300 | -0.011; 0.002 | -0.038 … 0.015; -0.022 … 0.026 | -0.004 (-0.017 … 0.010) | 289 |
+| manicouagan | 300 / 300 | 0.008; -0.015 | -0.013 … 0.030; -0.037 … 0.009 | 0.013 (-0.017 … 0.055) | 153 |
+| goosebay | 300 / 300 | 0.015; -0.001 | -0.007 … 0.037; -0.024 … 0.023 | -0.009 (-0.044 … 0.038) | 224 |
+| albasrah | 235 / 235 | -0.004; 0.006 | -0.025 … 0.019; -0.015 … 0.030 | -0.003 (-0.020 … 0.013) | 226 |
+| kamdesh | 300 / 300 | -0.005; -0.007 | -0.024 … 0.014; -0.026 … 0.012 | -0.013 (-0.029 … 0.006) | 266 |
+| anvil | 300 / 300 | 0.012; 0.006 | -0.010 … 0.035; -0.018 … 0.029 | -0.016 (-0.043 … -0.003) | 235 |
+| fallujah | 300 / 300 | 0.001; 0.019 | -0.022 … 0.028; -0.010 … 0.044 | 0.009 (-0.009 … 0.026) | 190 |
+| narva | 300 / 300 | 0.009; -0.010 | -0.015 … 0.032; -0.034 … 0.014 | -0.005 (-0.011 … 0.002) | 274 |
+| mutaha | 300 / 300 | 0.007; 0.028 | -0.026 … 0.039; -0.006 … 0.062 | 0.005 (-0.012 … 0.020) | 269 |
+| kokan | 300 / 300 | 0.002; 0.004 | -0.021 … 0.025; -0.018 … 0.026 | -0.005 (-0.011 … -0.000) | 291 |
+| mestia | 300 / 300 | 0.006; -0.012 | -0.012 … 0.025; -0.028 … 0.006 | 0.016 (-0.005 … 0.043) | 198 |
+| foolsroad | 300 / 300 | 0.020; -0.001 | -0.000 … 0.043; -0.023 … 0.022 | 0.018 (-0.002 … 0.041) | 259 |
+| logar | 300 / 300 | 0.007; -0.003 | -0.015 … 0.029; -0.024 … 0.017 | 0.021 (-0.018 … 0.052) | 238 |
+| sumari | 101 / 101 | 0.002; -0.006 | -0.031 … 0.034; -0.038 … 0.027 | 0.011 (-0.037 … 0.054) | 64 |
+
+Every lone tree is drawn on 23 of 24 maps (the lowest share is 0.993). The mean offset of a crown's centroid from its instance is within 0.063 m on every map, and the offset against HD across the light has a median of 0.005 m over the maps (largest 0.021 m).
+
+#### 16.3.9 Roof heights against the served heightmap
+
+The roof labels are the 98th percentile of the client meshes' height over the ground in a building. The served heightmap is the
+server's collision of another game build, made by another rasteriser (`H-README`). For every label on a roof at least 3 m deep that
+lies on an object of the heightmap (a rise of 2 m and more over the bare ground) holding no other label, the same percentile of the
+heightmap's rise in that object:
+
+| Map | Labels / compared | Label − heightmap: median (interval), m | MAD (m) | Within 0.5 m | Within 1 m |
+|---|---|---|---|---|---|
+| skorpo | 292 / 270 | 0.24 (0.22 … 0.28) | 0.18 | 0.69 | 0.86 |
+| yehorivka | 436 / 397 | 0.20 (0.19 … 0.21) | 0.11 | 0.77 | 0.82 |
+| tallil | 381 / 340 | 0.05 (0.04 … 0.07) | 0.05 | 0.86 | 0.94 |
+| kohat | 153 / 133 | 0.07 (0.06 … 0.08) | 0.05 | 0.98 | 1.00 |
+| sanxian | 617 / 516 | 0.08 (0.07 … 0.09) | 0.06 | 0.87 | 0.95 |
+| blackcoast | 361 / 320 | 0.19 (0.17 … 0.21) | 0.12 | 0.82 | 0.91 |
+| lashkar | 492 / 476 | 0.03 (0.03 … 0.04) | 0.04 | 0.98 | 0.99 |
+| gorodok | 201 / 171 | 0.18 (0.15 … 0.20) | 0.09 | 0.75 | 0.82 |
+| chora | 112 / 90 | 0.11 (0.07 … 0.16) | 0.09 | 0.94 | 0.98 |
+| pacific | 13 / 13 | 0.11 (0.02 … 0.22) | 0.10 | 0.92 | 0.92 |
+| harju | 462 / 415 | 0.14 (0.12 … 0.16) | 0.10 | 0.84 | 0.91 |
+| manicouagan | 452 / 358 | 0.08 (0.07 … 0.09) | 0.07 | 0.92 | 0.96 |
+| goosebay | 486 / 443 | 0.12 (0.10 … 0.13) | 0.08 | 0.90 | 0.96 |
+| jensen | 62 / 39 | 0.08 (0.04 … 0.18) | 0.08 | 0.90 | 0.90 |
+| albasrah | 1248 / 1070 | 0.12 (0.10 … 0.15) | 0.15 | 0.64 | 0.78 |
+| kamdesh | 312 / 312 | 0.01 (0.00 … 0.01) | 0.03 | 1.00 | 1.00 |
+| anvil | 354 / 305 | 0.08 (0.07 … 0.09) | 0.06 | 0.91 | 0.98 |
+| fallujah | 831 / 729 | 0.08 (0.06 … 0.09) | 0.08 | 0.76 | 0.85 |
+| narva | 489 / 431 | 0.17 (0.15 … 0.20) | 0.12 | 0.76 | 0.88 |
+| mutaha | 679 / 568 | 0.05 (0.04 … 0.06) | 0.06 | 0.79 | 0.90 |
+| kokan | 219 / 183 | 0.07 (0.06 … 0.08) | 0.04 | 0.99 | 1.00 |
+| mestia | 32 / 23 | 0.15 (0.08 … 0.18) | 0.06 | 0.96 | 0.96 |
+| foolsroad | 45 / 42 | 0.21 (0.16 … 0.33) | 0.12 | 0.76 | 0.86 |
+| logar | 167 / 142 | 0.07 (0.06 … 0.08) | 0.05 | 0.92 | 0.99 |
+| sumari | 278 / 249 | 0.06 (0.05 … 0.07) | 0.05 | 0.96 | 1.00 |
+
+Over the maps the median difference is 0.08 m (interval over the maps 0.07 to 0.14; per map 0.01 to 0.24): the labels read 8 cm higher than the server's collision, with 90% of 8035 roofs within 1 m. The two builds and rasterisers agree on roof heights to well under the 1 m the labels are rounded to; the tail beyond 1 m is roofs whose collision is a simpler body than the mesh (INFERRED from the worst cases, not classified).
+
+#### 16.3.10 Contour lines against the heightmap
+
+The pixels of the contour lines are found by colour on plain ground (the contour colour blended over the ground's, the centre pixel of
+a line), in 48 windows of 512 px at three zooms of each map. The heightmap, interpolated as the renderer does (a cubic B-spline through
+the 1 m samples), gives the height under each pixel. The interval is the one of the ladder 1, 2, 5, 10, 20, 50, 100, 200 m whose
+multiples the heights lie closest to, against the error of a pixel placed at random (a quarter of the line spacing); the error of a
+pixel is its distance to the nearest true level line, |height − level| / slope.
+
+| Map | Zoom (m/px) | Interval by rule / fitted (m) | Distance to the level line: median (interval), m | in px | Within 1 px | Line pixels |
+|---|---|---|---|---|---|---|
+| skorpo | 4 (1.672) | 5 / 50 | 0.765 (0.733 … 0.800) | 0.46 | 0.663 | 3841 |
+| skorpo | 7 (0.209) | 2 / 10 | 0.087 (0.085 … 0.089) | 0.41 | 0.723 | 9858 |
+| skorpo | 8 (0.104) | 2 / 2 | 0.025 (0.025 … 0.025) | 0.24 | 0.995 | 16598 |
+| yehorivka | 4 (1.550) | 2 / 2 | 0.141 (0.139 … 0.144) | 0.09 | 1.000 | 18319 |
+| yehorivka | 7 (0.194) | 2 / 2 | 0.028 (0.027 … 0.029) | 0.14 | 0.999 | 4985 |
+| yehorivka | 8 (0.097) | 2 / 2 | 0.022 (0.021 … 0.022) | 0.22 | 0.993 | 8109 |
+| tallil | 4 (1.143) | 1 / 1 | 0.100 (0.100 … 0.101) | 0.09 | 1.000 | 89216 |
+| tallil | 6 (0.286) | 1 / 1 | 0.032 (0.031 … 0.032) | 0.11 | 0.999 | 25145 |
+| tallil | 8 (0.071) | 1 / 1 | 0.048 (0.047 … 0.049) | 0.67 | 0.749 | 8251 |
+| kohat | 4 (1.127) | 5 / 5 | 0.109 (0.105 … 0.112) | 0.10 | 0.990 | 3972 |
+| kohat | 6 (0.282) | 2 / 2 | 0.033 (0.033 … 0.034) | 0.12 | 0.996 | 11042 |
+| kohat | 8 (0.070) | 2 / 2 | 0.028 (0.028 … 0.029) | 0.40 | 0.880 | 11535 |
+| sanxian | 4 (1.123) | 1 / 1 | 0.107 (0.089 … 0.115) | 0.10 | 1.000 | 330 |
+| sanxian | 6 (0.281) | 1 / 1 | 0.036 (0.035 … 0.037) | 0.13 | 1.000 | 1247 |
+| sanxian | 8 (0.070) | 1 / 1 | 0.044 (0.042 … 0.046) | 0.62 | 0.763 | 3280 |
+| blackcoast | 4 (1.123) | 5 / 5 | 0.107 (0.103 … 0.114) | 0.10 | 0.999 | 900 |
+| blackcoast | 6 (0.281) | 2 / 2 | 0.036 (0.035 … 0.037) | 0.13 | 0.998 | 3529 |
+| blackcoast | 8 (0.070) | 2 / 2 | 0.038 (0.036 … 0.039) | 0.54 | 0.829 | 4634 |
+| lashkar | 4 (1.058) | 5 / 5 | 0.107 (0.094 … 0.111) | 0.10 | 0.951 | 1076 |
+| lashkar | 6 (0.265) | 2 / 2 | 0.030 (0.029 … 0.031) | 0.11 | 0.992 | 4332 |
+| lashkar | 8 (0.066) | 2 / 2 | 0.029 (0.027 … 0.030) | 0.44 | 0.851 | 2180 |
+| gorodok | 3 (1.984) | 5 / 5 | 0.162 (0.155 … 0.172) | 0.08 | 0.968 | 3781 |
+| gorodok | 6 (0.248) | 1 / 1 | 0.033 (0.032 … 0.033) | 0.13 | 0.999 | 12797 |
+| gorodok | 7 (0.124) | 1 / 1 | 0.026 (0.026 … 0.027) | 0.21 | 0.993 | 14925 |
+| chora | 3 (1.984) | 5 / 5 | 0.192 (0.190 … 0.194) | 0.10 | 1.000 | 17254 |
+| chora | 6 (0.248) | 2 / 2 | 0.038 (0.038 … 0.039) | 0.15 | 0.998 | 16662 |
+| chora | 7 (0.124) | 2 / 2 | 0.028 (0.027 … 0.028) | 0.22 | 0.999 | 35514 |
+| pacific | 3 (1.969) | 5 / – | – | – | – | 158 |
+| pacific | 6 (0.246) | 2 / 2 | 0.032 (0.030 … 0.034) | 0.13 | 1.000 | 765 |
+| pacific | 7 (0.123) | 2 / 2 | 0.026 (0.025 … 0.027) | 0.21 | 0.998 | 1549 |
+| harju | 3 (1.969) | 5 / – | – | – | – | 47 |
+| harju | 6 (0.246) | 2 / 2 | 0.035 (0.034 … 0.037) | 0.14 | 0.999 | 882 |
+| harju | 7 (0.123) | 2 / 2 | 0.026 (0.025 … 0.026) | 0.21 | 0.998 | 3289 |
+| manicouagan | 3 (1.968) | 5 / 5 | 0.205 (0.187 … 0.217) | 0.10 | 0.999 | 868 |
+| manicouagan | 6 (0.246) | 2 / 2 | 0.035 (0.034 … 0.036) | 0.14 | 1.000 | 3054 |
+| manicouagan | 7 (0.123) | 2 / 2 | 0.026 (0.026 … 0.027) | 0.21 | 0.996 | 7048 |
+| goosebay | 3 (1.968) | 5 / – | – | – | – | 178 |
+| goosebay | 6 (0.246) | 2 / 2 | 0.046 (0.043 … 0.048) | 0.19 | 1.000 | 422 |
+| goosebay | 7 (0.123) | 2 / 2 | 0.032 (0.031 … 0.033) | 0.26 | 0.999 | 2286 |
+| jensen | 3 (1.957) | 5 / 5 | 0.172 (0.171 … 0.174) | 0.09 | 1.000 | 56202 |
+| jensen | 6 (0.245) | 2 / 2 | 0.026 (0.026 … 0.026) | 0.11 | 1.000 | 23913 |
+| jensen | 7 (0.122) | 2 / 2 | 0.027 (0.027 … 0.028) | 0.22 | 0.997 | 21628 |
+| albasrah | 3 (1.953) | 2 / 2 | 0.143 (0.141 … 0.146) | 0.07 | 0.999 | 22321 |
+| albasrah | 6 (0.244) | 1 / 1 | 0.026 (0.025 … 0.026) | 0.11 | 0.999 | 18897 |
+| albasrah | 7 (0.122) | 1 / 1 | 0.025 (0.024 … 0.025) | 0.20 | 0.997 | 21637 |
+| kamdesh | 3 (1.969) | 5 / 5 | 0.164 (0.159 … 0.172) | 0.08 | 1.000 | 3308 |
+| kamdesh | 6 (0.246) | 2 / 2 | 0.029 (0.029 … 0.030) | 0.12 | 0.998 | 8114 |
+| kamdesh | 7 (0.123) | 2 / 2 | 0.026 (0.025 … 0.026) | 0.21 | 0.996 | 13589 |
+| anvil | 3 (1.494) | 2 / 2 | 0.120 (0.117 … 0.122) | 0.08 | 0.999 | 11534 |
+| anvil | 6 (0.187) | 2 / 2 | 0.021 (0.021 … 0.022) | 0.11 | 0.999 | 6493 |
+| anvil | 7 (0.093) | 2 / 2 | 0.020 (0.019 … 0.020) | 0.21 | 0.992 | 11949 |
+| fallujah | 3 (1.467) | 2 / 2 | 0.129 (0.127 … 0.131) | 0.09 | 0.999 | 27158 |
+| fallujah | 6 (0.183) | 1 / 1 | 0.019 (0.019 … 0.020) | 0.11 | 0.997 | 15933 |
+| fallujah | 7 (0.092) | 1 / 1 | 0.019 (0.018 … 0.019) | 0.20 | 0.990 | 19660 |
+| narva | 3 (1.367) | 2 / 2 | 0.141 (0.138 … 0.143) | 0.10 | 1.000 | 8007 |
+| narva | 6 (0.171) | 2 / 2 | 0.024 (0.024 … 0.025) | 0.14 | 0.997 | 3787 |
+| narva | 7 (0.085) | 2 / 2 | 0.020 (0.019 … 0.020) | 0.23 | 0.990 | 6880 |
+| mutaha | 3 (1.345) | 1 / 1 | 0.109 (0.107 … 0.111) | 0.08 | 1.000 | 22914 |
+| mutaha | 6 (0.168) | 1 / 1 | 0.019 (0.019 … 0.020) | 0.12 | 0.995 | 12896 |
+| mutaha | 7 (0.084) | 1 / 1 | 0.019 (0.018 … 0.019) | 0.22 | 0.957 | 13862 |
+| kokan | 3 (1.219) | 5 / 5 | 0.100 (0.098 … 0.102) | 0.08 | 1.000 | 10497 |
+| kokan | 5 (0.305) | 2 / 2 | 0.034 (0.034 … 0.035) | 0.11 | 1.000 | 21070 |
+| kokan | 7 (0.076) | 2 / 2 | 0.039 (0.038 … 0.040) | 0.51 | 0.852 | 9757 |
+| mestia | 3 (1.172) | 5 / 5 | 0.121 (0.117 … 0.128) | 0.10 | 1.000 | 2271 |
+| mestia | 5 (0.293) | 2 / 2 | 0.041 (0.040 … 0.042) | 0.14 | 0.996 | 7263 |
+| mestia | 7 (0.073) | 2 / 2 | 0.033 (0.032 … 0.034) | 0.45 | 0.860 | 15639 |
+| foolsroad | 2 (1.732) | 10 / – | – | – | – | 136 |
+| foolsroad | 5 (0.217) | 2 / 2 | 0.032 (0.031 … 0.033) | 0.15 | 0.998 | 8005 |
+| foolsroad | 6 (0.108) | 2 / 2 | 0.023 (0.023 … 0.024) | 0.21 | 0.995 | 23021 |
+| logar | 2 (1.720) | 10 / 10 | 0.149 (0.146 … 0.155) | 0.09 | 0.992 | 4654 |
+| logar | 5 (0.215) | 2 / 2 | 0.024 (0.024 … 0.024) | 0.11 | 0.996 | 23901 |
+| logar | 6 (0.107) | 2 / 2 | 0.023 (0.023 … 0.023) | 0.21 | 0.995 | 36460 |
+| sumari | 2 (1.270) | 5 / 5 | 0.104 (0.103 … 0.106) | 0.08 | 0.995 | 22313 |
+| sumari | 4 (0.317) | 2 / 2 | 0.033 (0.033 … 0.034) | 0.11 | 0.987 | 29436 |
+| sumari | 6 (0.079) | 2 / 2 | 0.053 (0.052 … 0.054) | 0.66 | 0.763 | 10597 |
+
+The fitted interval equals the rule's at 69 of 71 map-zooms measured; the others are skorpo z4 (5 / 50 m), skorpo z7 (2 / 10 m). The median distance of a drawn contour pixel to the true level line is 0.13 px over all map-zooms (largest 0.67 px), and 98.0% of the line pixels lie within one pixel.
 
 ### 16.4 Performance
 
@@ -928,32 +1224,32 @@ the previous map renders (6 workers, 9 GB), so the wall time of the 25 maps is a
 
 | Map | Tiles | MB (v1 → v2) | Covered 0.1 m cells | GPU raster (s) | scene_prep (s) | Render (s) |
 |---|---|---|---|---|---|---|
-| skorpo | 87 381 | 590.3 → 590.6 | 19 383 995 | 589 | 1183 | 2295 |
-| yehorivka | 87 381 | 704.9 → 705.0 | 12 571 775 | 411 | 631 | 4384 |
-| tallil | 87 381 | 431.3 → 431.3 | 35 313 930 | 801 | 767 | 3045 |
-| kohat | 87 381 | 673.5 → 673.5 | 6 844 452 | 357 | 669 | 3519 |
-| sanxian | 87 381 | 509.0 → 509.1 | 80 807 710 | 256 | 188 | 3299 |
-| blackcoast | 87 381 | 635.9 → 635.9 | 22 318 065 | 267 | 310 | 3223 |
-| lashkar | 87 381 | 991.4 → 991.4 | 18 311 907 | 381 | 562 | 4616 |
-| gorodok | 21 845 | 251.7 → 251.7 | 11 094 512 | 350 | 290 | 2143 |
-| chora | 21 845 | 155.2 → 155.2 | 9 009 368 | 265 | 516 | 943 |
-| pacific | 21 845 | 64.6 → 64.6 | 504 985 | 37 | 382 | 815 |
-| harju | 21 845 | 216.9 → 216.9 | 39 331 963 | 616 | 408 | 1556 |
-| manicouagan | 21 845 | 256.0 → 256.0 | 38 538 050 | 332 | 217 | 1547 |
-| goosebay | 21 845 | 207.6 → 207.6 | 70 135 121 | 793 | 542 | 1051 |
-| jensen | 21 845 | 109.3 → 109.3 | 4 948 333 | 52 | 339 | 638 |
-| albasrah | 21 845 | 190.9 → 190.9 | 67 360 494 | 718 | 274 | 1359 |
-| kamdesh | 21 845 | 219.4 → 219.4 | 28 910 627 | 467 | 397 | 1087 |
-| anvil | 21 845 | 203.8 → 203.8 | 18 022 333 | 348 | 308 | 1243 |
-| fallujah | 21 845 | 162.9 → 162.9 | 57 228 393 | 348 | 289 | 1144 |
-| narva | 21 845 | 127.5 → 127.5 | 26 591 018 | 291 | 214 | 1156 |
-| mutaha | 21 845 | 154.6 → 154.6 | 28 596 176 | 125 | 69 | 800 |
-| kokan | 21 845 | 153.1 → 153.1 | 5 699 344 | 82 | 175 | 759 |
-| mestia | 21 845 | 158.9 → 158.9 | 37 803 519 | 236 | 134 | 1249 |
-| foolsroad | 5 461 | 58.9 → 58.9 | 2 512 426 | 116 | 72 | 288 |
-| logar | 5 461 | 60.6 → 60.6 | 8 656 009 | 94 | 87 | 245 |
-| sumari | 5 461 | 40.5 → 40.6 | 7 658 743 | 65 | 71 | 212 |
-| **25 maps** | 955 725 | 7329 → 7329 |  | 8400 (2.3 h) | 9094 (2.5 h) | 42616 (11.8 h) |
+| skorpo | 87 381 | 179.1 → 590.6 | 19 383 995 | 589 | 1183 | 2295 |
+| yehorivka | 87 381 | 202.8 → 705.0 | 12 571 775 | 411 | 631 | 4384 |
+| tallil | 87 381 | 38.3 → 431.3 | 35 313 930 | 801 | 767 | 3045 |
+| kohat | 87 381 | 62.5 → 673.5 | 6 844 452 | 357 | 669 | 3519 |
+| sanxian | 87 381 | 44.2 → 509.1 | 80 807 710 | 256 | 188 | 3299 |
+| blackcoast | 87 381 | 61.0 → 635.9 | 22 318 065 | 267 | 310 | 3223 |
+| lashkar | 87 381 | 94.7 → 991.4 | 18 311 907 | 381 | 562 | 4616 |
+| gorodok | 21 845 | 70.4 → 251.7 | 11 094 512 | 350 | 290 | 2143 |
+| chora | 21 845 | 45.1 → 155.2 | 9 009 368 | 265 | 516 | 943 |
+| pacific | 21 845 | 25.5 → 64.6 | 504 985 | 37 | 382 | 815 |
+| harju | 21 845 | 64.1 → 216.9 | 39 331 963 | 616 | 408 | 1556 |
+| manicouagan | 21 845 | 36.5 → 256.0 | 38 538 050 | 332 | 217 | 1547 |
+| goosebay | 21 845 | 63.4 → 207.6 | 70 135 121 | 793 | 542 | 1051 |
+| jensen | 21 845 | 30.1 → 109.3 | 4 948 333 | 52 | 339 | 638 |
+| albasrah | 21 845 | 49.6 → 190.9 | 67 360 494 | 718 | 274 | 1359 |
+| kamdesh | 21 845 | 66.2 → 219.4 | 28 910 627 | 467 | 397 | 1087 |
+| anvil | 21 845 | 61.0 → 203.8 | 18 022 333 | 348 | 308 | 1243 |
+| fallujah | 21 845 | 45.5 → 162.9 | 57 228 393 | 348 | 289 | 1144 |
+| narva | 21 845 | 37.1 → 127.5 | 26 591 018 | 291 | 214 | 1156 |
+| mutaha | 21 845 | 44.6 → 154.6 | 28 596 176 | 125 | 69 | 800 |
+| kokan | 21 845 | 15.9 → 153.1 | 5 699 344 | 82 | 175 | 759 |
+| mestia | 21 845 | 16.4 → 158.9 | 37 803 519 | 236 | 134 | 1249 |
+| foolsroad | 5 461 | 18.7 → 58.9 | 2 512 426 | 116 | 72 | 288 |
+| logar | 5 461 | 18.0 → 60.6 | 8 656 009 | 94 | 87 | 245 |
+| sumari | 5 461 | 4.1 → 40.6 | 7 658 743 | 65 | 71 | 212 |
+| **25 maps** | 955 725 | 1395 → 7329 |  | 8400 (2.3 h) | 9094 (2.5 h) | 42616 (11.8 h) |
 
 The tiles grow 5.3 times: the finest zoom is one to two levels deeper (0.066-0.124 m/px against 0.17-0.32). Open-sea blocks are hard
 links to one tile (Skorpo 20 400 tiles, Sanxian 13 072, Pacific 11 360, Black Coast 10 176, Harju 2 160).
@@ -975,9 +1271,18 @@ links to one tile (Skorpo 20 400 tiles, Sanxian 13 072, Pacific 11 360, Black Co
 | Lakes and reservoirs missing | Manicouagan's reservoir dry after the sea fix | the lake material's path names its level `WL_<map>_Water`, read as a hidden water surface; the server has no body for the planes | lakes as water planes (`scene_objects.water_planes`) |
 | Engine placeholder textures in Standard HD | the grid and cross patterns of `BlendFunc_DefBase` and `BlendFunc_DefBlend` on 20 landscape layers of 8 maps; the HD gate could not measure Kokan, Fools Road and Sumari | a layer without a texture of its own took the texture nearest its colour, engine ones included | engine textures never a layer's texture (`maprender` `ground_fit.layer_details`, AGL `1027d79`); the 8 maps re-rendered, all pass the gate |
 | HD gate windows over the map's edge | Gorodok passed on its median, but 5 of its 8 windows were centred 0.5 m from the edge (the walls along the border are its largest "roofs"), half of each beyond the map, off by up to 1.8 m | the windows were chosen by roof size alone | only windows wholly inside the map (`check_alignment.hd_window_centres`, `test_scene.HdWindows`); all 25 maps checked again |
+| False water along streams (v1 and v2; found 2026-11-10 by 16.3.7) | Goose Bay's 3 m streams 35 to 45 m wide, a pond 60 m wide on Mestia's 6 m stream | the "static water planes" of the server were water meshes laid along splines (`SplineMeshComponent`), taken at the bounds of the undeformed mesh, 30 x 30 m: all 381 planes of Goose Bay, 818 of Chora, 670 of Skorpo | spline meshes are no planes (`features.water_planes`, `test_cartography.WaterPlanes`); FIXED in the pipeline, PENDING in the served tiles until the rebuild |
+| Rivers drawn dry (v1 and v2; found 2026-11-10 by 16.3.7) | Anvil's river, 131 000 m² in HD, 12 000 m² of water in the tiles | the water of a river spline was drawn below the height of the spline's centre line; the river's surface is its mesh's, which lies up to 0.5 m above that line (median 0.16 m on Anvil) | the top of the scene's river and pond meshes on the 1 m grid is the surface (`scene_prep.river_surface`, `test_cartography.RiverMeshes`); FIXED in the pipeline, PENDING in the served tiles |
+| Power plant drawn as vegetation, decks as buildings (v2; found 2026-11-10 by the audit) | Sanxian's silos and cooling towers green; Black Coast's road bridge a dark bar, Sanxian's quay a house 18 m tall | the class rule matched "plant" in "PowerPlant" (73 mesh names of the 5 143 in the 25 scenes); pavement, road line and dock meshes had no class and were structures (164 names) | `features.object_class` (`test_cartography.ObjectClasses`, every changed name listed by the test's source); FIXED in the pipeline, PENDING in the served tiles (the class is written by the scene step) |
+| The table of 16.4 gave v2's size as v1's | "590.3 → 590.6 MB" beside "the tiles grow 5.3 times" | the collector read v1's size from the folder that by then held v2 | the size of the kept v1 tiles (`collect_v3.py`); table and sentence agree |
 | A claim of "under 1 cm" for the heightmap gate | the windows scatter by pixels | 1 m samples at the nearest node | the README states decimetres |
+| Spline meshes on their side in Standard HD (found 2026-11-10) | Manicouagan's double pipeline, crash barriers, railway tracks and fences drawn as thin lines beside their splines; with the roll, 20 maps draw spline meshes more than 0.3 m differently (Jensen, Kohat, Kokan, Lashkar and Pacific do not) | `maprender` bent a spline mesh without the component's roll: a mesh that runs along its Y axis, which the landscape splines stand up by a roll of −90°, lay on its side and off its line | one deformation for both layers, `AGL:tools/heightmaps/py/spline_mesh.py` (`test_spline_mesh`, `test_maprender.SplineBendTest`): with the roll, 9 943 of the 10 419 rolled components of the 25 maps lie within 2 cm of the server's cooked collision box on the median of their mesh, without it up to 103 m off; fixed in the renderer, PENDING in the served HD tiles, which 16.3 measured against |
+| Road width across the wrong axis of a rolled mesh (found 2026-11-10) | none in the tiles | `road_width.py` took the side axis of the unrolled bend, which for a mesh rolled by −90° is its height | the axis the roll lays level and the side it turns it to (`spline_mesh.axis_across`, `test_scene.RoadWidth`); 474 of the 102 115 road components of the 25 maps (10 maps) are such meshes, all opaque over their whole width, so no segment changes (0 segments, 0.0 m) |
+| Collision without a mesh kept from the old raster (found 2026-11-10) | Manicouagan's dam a block 2 to 3 m above the reservoir where the game shows water (275 m²); Kamdesh's background mountains as blocks along the map's edge | the old-raster rule of 16.2 kept every run of the server's collision 2 m from the scene's objects, the collision of meshes the game shows as something else or not at all (river and lake planes, terrain meshes, road meshes, the gap of a ruined wall) included | a run stays only where the scene shows an object in at least half of its metres (`scene_prep.shown_runs`, `test_scene.OldRasterMerge`); on the 25 maps, of 1 542 runs (29 690 m²) the 1 423 that stay (25 159 m²) are shown in 75 % or more of their metres, the 119 that go (4 531 m² on 13 maps: Kamdesh 1 905, Anvil 1 143, Chora 510, Manicouagan 507 m²) in 10 % or less; fixed in the pipeline, PENDING in the served tiles |
 
 ### 16.7 Figures
+
+Every panel carries a scale bar and a north arrow (north is up: the tile frame's y axis points south); the header of a figure made for the revision (16.9 on) names the window's centre in metres and its width.
 
 ![Figure 16.1](figures/detailed/goosebay_900m.jpg)
 
@@ -1011,6 +1316,38 @@ links to one tile (Skorpo 20 400 tiles, Sanxian 13 072, Pacific 11 360, Black Co
 
 *Figure 16.8.* Manicouagan, 600 m at the dam: water before the fixes, water after (the lake plane ends at the dam), Standard HD.
 
+![Figure 16.9](figures/detailed/v3_gorodok_800m.jpg)
+
+*Figure 16.9.* Gorodok, 800 m at the railway junction (1418, 218): v2, the revision, Standard HD. Slate buildings, a railway with ties, cased dirt roads, summits with their height, lighter rocks.
+
+![Figure 16.10](figures/detailed/v3_mestia_800m.jpg)
+
+*Figure 16.10.* Mestia, 800 m (-700, 60): the 60 m pond and the wide streams of v2 are the spline meshes' bounds; the revision draws the streams at their meshes' width; the ground beyond the landscape is quiet.
+
+![Figure 16.11](figures/detailed/v3_albasrah_800m.jpg)
+
+*Figure 16.11.* Al Basrah, 800 m at the refinery (490, -84): structures against sand and the river's depth.
+
+![Figure 16.12](figures/detailed/v3_manicouagan_800m.jpg)
+
+*Figure 16.12.* Manicouagan, 800 m at the dam (-352, -1240): no contour labels on the reservoir, summits on the land.
+
+![Figure 16.13](figures/detailed/v3_cvd_gorodok.jpg)
+
+*Figure 16.13.* Gorodok, 400 m, v2 (top) and the revision (bottom) under normal vision, protanopia, deuteranopia and tritanopia (Machado et al. 2009): the buildings stay apart from the crowns, the dirt roads keep their casing.
+
+![Figure 16.14](figures/detailed/v3_anvil_water.jpg)
+
+*Figure 16.14.* Anvil, 700 m of the river (660, -390): v2, the revision (tiles of the rebuild of the other maps), Standard HD. v2 draws the river dry; the revision draws it up to its mesh's surface.
+
+![Figure 16.15](figures/detailed/v3_classes_sanxian.jpg)
+
+*Figure 16.15.* Sanxian, 200 m at the power plant (-465, -1140): object classes by v2's rules (the silos vegetation) and by the revised rules, Standard HD.
+
+![Figure 16.16](figures/detailed/v3_legend.png)
+
+*Figure 16.16.* The legend the revised tiles carry in their meta.json, as the page shows it.
+
 ### 16.8 Limitations
 
 * The ground cover is the server's physical material, not the client's painted layers: where a map's art differs from its physics
@@ -1024,8 +1361,27 @@ links to one tile (Skorpo 20 400 tiles, Sanxian 13 072, Pacific 11 360, Black Co
   content.
 * The outline F1 depends on the minimap textures that ship with a layer: six layers of five maps can be scored, and Black Coast's
   cannot be placed.
+* GPU against CPU (16.3.2) was compared on one map, Narva; INFERRED for the others from the shared code.
+* The measures of 16.3.6 to 16.3.8 and the gate take Standard HD as the truth. HD is drawn from the same extraction of the client scene,
+  so an object the extraction lacks or misplaces is wrong in both and found by neither; only 16.3.9 and 16.3.10 compare with data of
+  another build and another tool (the served heightmap).
+* Legibility is argued from an audit by eye of 336 comparison pictures and from colour differences computed for simulated colour vision
+  (16.10); no reader with a colour vision deficiency and no player was tested. UNVERIFIED as a usability result.
+* The revision of 16.10 is rendered and measured on 17 of the 25 maps in this text; the rows marked PENDING are the maps whose
+  rebuild had not finished. The served tiles are still v2 and keep the faults of 16.6 marked PENDING until the rebuilt tiles are deployed;
+  the figures of 16.3 describe v2 unless they say "revised".
+* The intervals of the outline F1 (16.3.3) are on the collision raster's zone; the scene's zone of the table of 16.3.3 would need the scene
+  rasters kept after a build.
+* A class is the mesh's, not its use: a retaining wall laid as a jetty (Manicouagan, `SM_Foundations_RetainingWall_01` at about
+  (−300, −1547) m) is drawn as a wall, where HD shows a light quay.
+* Scattered scrub is a carpet of crown dots at 3 m/px and coarser (Kamdesh, Logar). Drawing crowns under 1.5 px as their summed cover was
+  tried and taken back: it calmed the scrub but made forests paler and their edges softer than v2's, and a forest edge is what a player reads.
+* Crowns take one colour per class and species: a desert shrub is as green as a temperate bush (Logar, Kamdesh), where the game's is dry.
 
 ### 16.9 Reproducibility
+
+Game builds: Squad dedicated server 26005357 and Squad client 26234431 (SteamCMD apps 403240 and 393380). One workstation (16.4). Every
+random choice (stations, trees, windows, bootstrap draws) uses a fixed seed, so a rerun gives the same numbers.
 
 | Result | Command (`AGL` repository root) |
 |---|---|
@@ -1035,3 +1391,137 @@ links to one tile (Skorpo 20 400 tiles, Sanxian 13 072, Pacific 11 360, Black Co
 | GPU against CPU | `SCENE_RASTER=cpu tools/maptiles/maptiles.sh scene narva` into a second work directory, then the cell comparison of `top_h0`, `top_c0`, `top_v0` |
 | Tests | `docker run ... squadcalc-maptiles-py python -m unittest discover -p 'test_*.py'` in `tools/maptiles/py` (`M-README`, the list of files); `test_scene_gpu.py` on the host |
 | Standard HD | `tools/maprender` (`AGL:tools/maprender/README.md`) |
+
+### 16.10 Revision of the symbols (2026-11-10)
+
+**Audit.** Every map was looked at in 336 pictures: the whole map, and windows of 800 m, 120 m and 36 m at its buildings, a
+shore, its strongest relief, its roads and a forest edge, each beside Standard HD and the game's own minimap. The audit recorded 399 defects, 44 of them of the kind that misleads a player or hides something a player needs; the complete table is with the report's sources. The ones the revision answers are in the table of changes; the ones it does not are in 16.8.
+
+**Conventions the revision follows.** Imhof's rules for relief (a main light from the upper left, flat ground in a middle tone: *Cartographic
+Relief Presentation*, 1965, English edition 2007) and the multidirectional variant of Mark (1992) were already the layer's. From the Swiss
+national map's key (swisstopo, *Conventional signs*, 2022: roads by width class, railways with ties, spot heights, lake depth) and the
+colour convention of military topographic maps (black for man-made features, blue for water, green for vegetation, brown for relief:
+TC 3-25.26, *Map Reading and Land Navigation*) come the dark neutral buildings, the cased roads, the railway ties and the spot heights.
+Class colours are chosen by measured difference, after Harrower & Brewer (2003, *The Cartographic Journal* 40(1)): CIEDE2000 of the colours
+as drawn, under normal vision and the three dichromacies simulated with the matrices of Machado, Oliveira & Fernandes (2009, *IEEE TVCG*
+15(6)); map colours are told apart reliably from a difference of about 10 (Brychtová & Çöltekin 2017, *CaGIS* 44(3)).
+
+**Changes.** Each has a cause that was measured or seen in the audit, a rule, and a test that fails when the rule is taken back
+(`AGL:tools/maptiles/py/test_cartography.py`; all 18 take-backs were caught).
+
+| Symbol | Before (v2) | Cause | Revised |
+|---|---|---|---|
+| Structures | a grey-brown ramp by height | 8.5 from a conifer under deuteranopia (21.2 normal), 9.4 from a shadow; buildings lost among crowns and rocks at 1.5 m/px | a slate ramp (CIELAB hue 285°, L* 74 to 25 in even steps): 25.7 (29.8) and 19.4 |
+| Rocks | grey with the buildings' dark rim | louder than the buildings (Gorodok, Fallujah, Yehorivka) | lighter, with a grey rim |
+| Dirt roads | a fill without casing | the fill is 2.6 from forest floor under deuteranopia and 3.5 under protanopia | a casing at half an asphalt road's strength: 10 and more on every ground but dirt and mud |
+| Railways | a dark line | 2.7 from a wall | cross ties every 4 m at 1 m/px and finer |
+| Water colour | linear from shallow to deep over 12 m | a ford and a 2 m channel 4 grey levels apart | the square root of the depth: half the range in the first 3 m |
+| Shore | the rim of the water's cover | a faint band at the finest zooms | the level line of half cover, 1.2 px at every zoom |
+| Rivers | below the spline's centre line | 16.6: Anvil dry | below the top of the river's mesh |
+| Static water planes | every water mesh's bounds | 16.6: streams 40 m wide | not the meshes laid along splines |
+| Summits | none | hilltops could not be read (Lashkar, Pacific, Kohat) | the tops 4 m and more above the ground 60 m around them, as a dot with the height |
+| Ground beyond the game's landscape | shaded and contoured like ground | the loudest surface of Kohat, Skorpo, Chora, Mestia, Sumari | towards a grey, a third of the relief, no contours, labels or summits |
+| Contour labels | anywhere on a major contour | labels on lakes (Manicouagan's reservoir) | none under water or beyond the landscape |
+| Decks, pavements | structures | 16.6: bridge a dark bar | one class, light with a dark rim; lower than 1 m over the ground drawn flat as pavement |
+| Low crops | a tint 3.7 from tall grass (0.2 under protanopia) | fields invisible without their hatch | a wheat colour |
+| Legend | none | a reader had no key to the symbols | `legend` in the tiles' `meta.json`, shown by the page (`SC:src/js/detailedLegend.js`) |
+
+**Contrast of the palette** (`AGL:tools/maptiles/py/palette_contrast.py`, `maptiles.sh palette`): the lowest CIEDE2000 over the ten ground
+covers, of the pairs of classes that meet on the map and of each class against its ground.
+
+| Classes | v2: normal / protan / deutan / tritan | revised: normal / protan / deutan / tritan |
+|---|---|---|
+| building 5 m – conifer | 21.2 / 10.9 / 8.5 / 28.4 | 29.8 / 27.7 / 25.7 / 18.7 |
+| building 5 m – deciduous | 27.5 / 22.2 / 20.0 / 31.6 | 35.8 / 33.9 / 32.4 / 27.5 |
+| building 5 m – rock | 12.7 / 13.0 / 12.4 / 13.0 | 23.7 / 23.2 / 24.0 / 22.4 |
+| building 5 m – shadow | 9.4 / 9.0 / 8.9 / 9.0 | 19.4 / 19.0 / 19.5 / 17.8 |
+| wall – conifer | 21.2 / 13.5 / 10.6 / 23.7 | 27.3 / 24.3 / 21.8 / 18.3 |
+| dirt road – contour major | 21.7 / 22.0 / 19.3 / 21.2 | 22.9 / 23.1 / 20.4 / 22.2 |
+| crop low – crop tall | 7.5 / 5.3 / 5.6 / 10.0 | 9.6 / 6.0 / 7.3 / 17.8 |
+| conifer – deciduous | 11.1 / 11.0 / 11.6 / 10.2 | 11.1 / 11.0 / 11.6 / 10.2 |
+| against its ground: building 2 m | 23.0 / 23.1 / 22.9 / 22.7 | 31.1 / 30.9 / 31.1 / 30.7 |
+| against its ground: wall | 28.4 / 28.6 / 28.1 / 28.5 | 34.1 / 33.8 / 34.0 / 33.1 |
+| against its ground: conifer | 21.8 / 14.7 / 16.6 / 29.1 | 21.8 / 14.7 / 16.6 / 29.1 |
+| against its ground: deciduous | 14.9 / 7.8 / 7.2 / 21.2 | 14.9 / 7.8 / 7.2 / 21.2 |
+| against its ground: bush | 12.0 / 6.8 / 5.7 / 13.8 | 12.0 / 6.8 / 5.7 / 13.8 |
+| against its ground: dirt road | 12.8 / 3.5 / 2.6 / 23.7 | 12.8 / 2.8 / 3.3 / 24.4 |
+| against its ground: dirt road casing | – | 10.4 / 10.2 / 9.5 / 10.5 |
+| against its ground: water shallow | 35.2 / 34.0 / 34.4 / 14.5 | 35.2 / 34.0 / 34.4 / 14.5 |
+| against its ground: contour major | 23.0 / 22.3 / 19.2 / 23.0 | 23.0 / 22.3 / 19.2 / 23.0 |
+| against its ground: crop low | 3.7 / 0.2 / 0.8 / 8.6 | 6.4 / 6.6 / 6.1 / 3.2 |
+
+The fills of ground-like classes (rock on asphalt, a paved road on gravel, a bridge deck) stay under 10 by design: their rim or casing
+carries them. Every label is above the WCAG 2.1 text contrast of 4.5 on its halo (contour 6.8, roof 14.3, summit 9.8).
+
+**Revised tiles.** Complete tiles were rebuilt with the revised pipeline, merged with the fix of the spline meshes' roll and of the kept legacy objects: the scene raster on the GPU, the scene step and the render, from the prepared data of prep.py with the corrected water planes. Six maps were rendered by this revision; the other 19 by a rebuild with a frozen copy of the same tools, of which 11 had finished when this text was built. 17 of 25 maps are measured; 17 of them pass the placement gate, the largest median offset is 0.067 m. The rows marked PENDING are filled by rerunning the generators once the rebuild has finished (16.11).
+
+| Map | Gate, v2: median x, y (m) | Gate, revised: median x, y (m); windows / within 0.1 m | Tiles MB, v2 → revised | Render (s) | Rendered by |
+|---|---|---|---|---|---|
+| skorpo | 0.002, -0.032 | PENDING (rebuild running) | – | – | – |
+| yehorivka | 0.011, -0.014 | PENDING (rebuild running) | – | – | – |
+| tallil | -0.034, -0.010 | PENDING (rebuild running) | – | – | – |
+| kohat | -0.017, -0.033 | -0.027, -0.037; 8 / 7 | 673.5 → 653.5 | 4145 | the rebuild of the other maps |
+| sanxian | 0.019, 0.012 | PENDING (rebuild running) | – | – | – |
+| blackcoast | 0.012, -0.031 | -0.007, -0.046; 6 / 4 | 635.9 → 625.5 | 4876 | the rebuild of the other maps |
+| lashkar | 0.008, -0.067 | PENDING (rebuild running) | – | – | – |
+| gorodok | 0.001, -0.008 | 0.000, -0.004; 7 / 7 | 251.7 → 251.8 | 3430 | this revision |
+| chora | -0.037, -0.020 | -0.036, -0.018; 8 / 8 | 155.2 → 127.3 | 1163 | the rebuild of the other maps |
+| pacific | 0.007, 0.015 | PENDING (rebuild running) | – | – | – |
+| harju | -0.013, -0.027 | -0.017, -0.021; 8 / 8 | 216.9 → 218.9 | 1762 | this revision |
+| manicouagan | -0.014, -0.039 | -0.021, -0.045; 8 / 7 | 256.0 → 257.9 | 1662 | this revision |
+| goosebay | -0.007, -0.020 | -0.007, -0.021; 8 / 7 | 207.6 → 207.9 | 2258 | this revision |
+| jensen | -0.016, -0.017 | -0.013, -0.022; 6 / 4 | 109.3 → 109.8 | 645 | the rebuild of the other maps |
+| albasrah | -0.013, 0.016 | -0.040, 0.002; 8 / 6 | 190.9 → 192.7 | 2095 | this revision |
+| kamdesh | 0.016, -0.003 | 0.012, -0.002; 8 / 8 | 219.4 → 217.4 | 1087 | the rebuild of the other maps |
+| anvil | -0.012, 0.017 | -0.021, 0.017; 8 / 8 | 203.8 → 204.3 | 1761 | the rebuild of the other maps |
+| fallujah | -0.003, 0.011 | -0.002, 0.001; 8 / 8 | 162.9 → 165.0 | 1528 | the rebuild of the other maps |
+| narva | -0.022, -0.005 | PENDING (rebuild running) | – | – | – |
+| mutaha | -0.003, -0.037 | -0.006, -0.038; 8 / 8 | 154.6 → 154.8 | 1942 | the rebuild of the other maps |
+| kokan | 0.005, 0.002 | 0.005, 0.004; 8 / 8 | 153.1 → 153.6 | 1311 | the rebuild of the other maps |
+| mestia | 0.006, -0.003 | 0.002, -0.000; 8 / 7 | 158.9 → 153.6 | 2114 | this revision |
+| foolsroad | -0.006, -0.007 | -0.005, -0.006; 7 / 7 | 58.9 → 59.2 | 397 | the rebuild of the other maps |
+| logar | -0.056, -0.052 | -0.067, -0.047; 8 / 4 | 60.6 → 60.8 | 404 | the rebuild of the other maps |
+| sumari | -0.001, 0.002 | PENDING (rebuild running) | – | – | – |
+
+**Measures on the revised tiles.** Each cell is v2 → revised, both measured by 16.3.6 to 16.3.10 against the same references. Over the 17 measured maps the largest median offset of the revision's road centreline from HD's is 0.081 m (blackcoast); the median difference of the roof labels is unchanged on 17 of 17 maps and the median distance of the contours on 10 of 17 (the largest change is 0.05 px); every lone tree is drawn on 16 of 16 maps with trees. Water IoU rises by more than 0.02 on 3 of 14 maps with water in both builds (anvil 0.06 → 0.79, chora 0.61 → 0.67, kamdesh 0.05 → 0.10). On mestia (0.03) the water of v2 was mostly false (the share of v2's water that is water in HD in brackets) and the revision's is under the 0.05 % of the map the measure needs.
+
+| Map | Road centre, larger axis (m) | Road width, tiles / HD | Water IoU | Water, share of the map (%) | Roof label − heightmap (m) | Contours, finest zoom (px) | Lone trees drawn |
+|---|---|---|---|---|---|---|---|
+| skorpo | PENDING (rebuild running) | – | – | – | – | – | – |
+| yehorivka | PENDING (rebuild running) | – | – | – | – | – | – |
+| tallil | PENDING (rebuild running) | – | – | – | – | – | – |
+| kohat | 0.002 → 0.001 | 1.20 → 1.24 | 0.545 → 0.557 | 0.684 → 0.678 | 0.07 → 0.07 | 0.40 → 0.43 | 300 → 300 / 300 |
+| sanxian | PENDING (rebuild running) | – | – | – | – | – | – |
+| blackcoast | 0.092 → 0.081 | 1.32 → 1.22 | 0.964 → 0.960 | 21.468 → 21.605 | 0.19 → 0.19 | 0.54 → 0.55 | 300 → 300 / 300 |
+| lashkar | PENDING (rebuild running) | – | – | – | – | – | – |
+| gorodok | 0.002 → 0.006 | 1.06 → 1.11 | 0.865 → 0.871 | 3.729 → 3.857 | 0.18 → 0.18 | 0.21 → 0.21 | 300 → 300 / 300 |
+| chora | 0.002 → 0.002 | 1.04 → 1.10 | 0.614 → 0.670 | 0.998 → 0.970 | 0.11 → 0.11 | 0.22 → 0.26 | 298 → 300 / 300 |
+| pacific | PENDING (rebuild running) | – | – | – | – | – | – |
+| harju | 0.017 → 0.017 | 0.78 → 0.75 | 0.984 → 0.981 | 34.164 → 34.311 | 0.14 → 0.14 | 0.21 → 0.21 | 300 → 300 / 300 |
+| manicouagan | 0.003 → 0.003 | 0.76 → 0.76 | 0.934 → 0.947 | 8.722 → 8.907 | 0.08 → 0.08 | 0.21 → 0.21 | 300 → 300 / 300 |
+| goosebay | 0.100 → 0.043 | 0.86 → 0.87 | 0.964 → 0.972 | 15.472 → 15.349 | 0.12 → 0.12 | 0.26 → 0.26 | 300 → 300 / 300 |
+| jensen | 0.029 → 0.021 | 1.20 → 1.51 | – → – | 0.000 → 0.000 | 0.08 → 0.08 | 0.22 → 0.22 | 0 → 0 / 0 |
+| albasrah | 0.000 → 0.000 | 0.99 → 1.00 | 0.907 → 0.901 | 10.516 → 10.830 | 0.12 → 0.12 | 0.20 → 0.20 | 235 → 235 / 235 |
+| kamdesh | 0.045 → 0.045 | 0.48 → 0.48 | 0.053 → 0.101 | 0.101 → 0.120 | 0.01 → 0.01 | 0.21 → 0.21 | 300 → 300 / 300 |
+| anvil | 0.000 → 0.001 | 1.00 → 1.03 | 0.062 → 0.791 | 0.124 → 1.245 | 0.08 → 0.08 | 0.21 → 0.22 | 300 → 300 / 300 |
+| fallujah | 0.007 → 0.006 | 2.22 → 2.22 | 0.762 → 0.772 | 3.917 → 4.009 | 0.08 → 0.08 | 0.20 → 0.20 | 300 → 300 / 300 |
+| narva | PENDING (rebuild running) | – | – | – | – | – | – |
+| mutaha | 0.000 → 0.000 | 0.92 → 0.95 | 0.921 → 0.910 | 2.029 → 2.119 | 0.05 → 0.05 | 0.22 → 0.27 | 300 → 300 / 300 |
+| kokan | 0.006 → 0.021 | 1.26 → 1.22 | 0.289 → 0.287 | 7.970 → 8.087 | 0.07 → 0.07 | 0.51 → 0.52 | 300 → 300 / 300 |
+| mestia | 0.000 → 0.002 | 1.68 → 1.07 | 0.032 → – | 0.229 → 0.034 | 0.15 → 0.15 | 0.45 → 0.45 | 300 → 300 / 300 |
+| foolsroad | 0.043 → 0.047 | 0.89 → 0.87 | 0.329 → 0.342 | 1.133 → 1.205 | 0.21 → 0.21 | 0.21 → 0.21 | 300 → 300 / 300 |
+| logar | 0.002 → 0.044 | 1.41 → 1.39 | – → – | 0.050 → 0.042 | 0.07 → 0.07 | 0.21 → 0.22 | 300 → 300 / 300 |
+| sumari | PENDING (rebuild running) | – | – | – | – | – | – |
+
+### 16.11 Reproducibility of the revision
+
+| Result | Command |
+|---|---|
+| Measures of 16.3.6 to 16.3.10 | `tools/maptiles/maptiles.sh measure [map ...]` → `$WORK/check/<map>_{roads,water,crowns,heights,contours}.json`; the Python image of `maptiles.sh setup` (numpy 2.5.4, scipy 1.18.1, Pillow 13.0.0), bootstrap seed 0 |
+| Pooled statistics of the gate, tables of 16.3 and 16.10 | `collect_v3.py <work dir>` then `assemble16.py <parity json> <out dir>` (the generators kept with the report's sources) |
+| Palette contrast | `tools/maptiles/maptiles.sh palette` |
+| Water of v2 and of the revision against HD | `water_eval.py` (with the report's generators): `render.draw_water` on the prepared ground, zoom 4 |
+| Tests and take-backs | `python -m unittest test_scene test_cartography test_layer_minimaps` in the Python image; `mutation_check.py` |
+| Legend in the page | `SC`: `npm test` (`tests/detailedLegend.test.mjs`), `detailed_legend_check.mjs <site URL>` |
+| Outline F1 with intervals (16.3.3) | `outline_revised.sh` (with the report's generators): `outline_revised.py <map> <pair> <out json> v1=<tiles> v2=<tiles> revised=<tiles> hd=<tiles>` → `check_new/outline/<pair>.json` |
+| Rows marked PENDING | once the rebuild of the other maps has finished: `outline_revised.sh`, `collect_v3.py`, `assemble16.py`, `insert16.py`; the collector takes every map whose rebuild has written its gate and measures |
