@@ -15,7 +15,7 @@ still load them). Then `tools/browser_check/browser_check.mjs https://calc.<doma
 
 Precise heightmaps (`dist/heightmaps/<map>/`, outside the webpack build): built from the game files
 with `tools/heightmaps/heightmaps.sh` (`extract`, `build`, then `deploy`, which backs up the previous
-copy); see `tools/heightmaps/README.md`. Each map has a `heightmap.webp` next to its `heightmap.png`; the
+copy and keeps each map's volume layer); see `tools/heightmaps/README.md`. Each map has a `heightmap.webp` next to its `heightmap.png`; the
 PNGs stay for the older bundles. Without them SquadCalc uses its 8-bit heightmaps. The page requests the
 heavy files as `?v=<generated of meta.json>` and the Caddyfile caches those URLs for a year, so a rebuilt heightmap
 must get a new `generated` (`build` and `webp` write it). To add the WebP to already deployed heightmaps:

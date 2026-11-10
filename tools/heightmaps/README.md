@@ -191,12 +191,15 @@ needs the game client): `$SCENES/<map>` says which of SquadHeight's objects the 
 tools/heightmaps/heightmaps.sh setup     # CUE4Parse at the pinned commit + cue4parse.patch, extractor, Python image
 tools/heightmaps/heightmaps.sh extract   # landscapes and static meshes of every map (about 1 h)
 tools/heightmaps/heightmaps.sh build     # fused heightmaps into $OUT (about 1–2 h); "build skorpo" for one map
-tools/heightmaps/heightmaps.sh deploy    # copy into the served SquadCalc, previous copy kept as heightmaps.bak.<date>
+tools/heightmaps/heightmaps.sh deploy    # replace the built files in the served SquadCalc, previous copy kept as heightmaps.bak.<date>
 ```
 
 Paths are set with `SQUAD_DIR`, `SQUADHEIGHT`, `WORK`, `SCENES`, `CLIENT_DIR`, `OUT` and `DIST` (see the script header).
 After a game patch: update the server with SteamCMD and the client scenes (`tools/maprender/maprender.sh scene`), then
 `extract`, `build`, `deploy`; a new map goes into `py/maps.py` (its SquadHeight name and landscape levels).
+`deploy` replaces in each served map folder only what `build` wrote for it (`heightmap.png`, `heightmap.webp` and the keys of
+`meta.json`); the volume layer of `tools/volumetric` (`volume.vcol`, `terrain.bin` and the `volume` key of `meta.json`) stays,
+and so do the maps `$OUT` does not hold. A map of `$OUT` that lacks one of its three files stops it before anything is touched.
 
 ## Interpolation: the game's triangles
 

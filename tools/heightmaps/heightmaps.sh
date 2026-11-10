@@ -3,10 +3,11 @@
 #
 #   heightmaps.sh setup               clone CUE4Parse at the pinned commit, build the extractor and the Python image
 #   heightmaps.sh extract             landscape collision and static meshes of every map from the paks
-#   heightmaps.sh build [map ...]     fuse them with SquadHeight into $OUT/<map>/{heightmap.png,meta.json}; the client scenes
-#                                     ($SCENES, "maprender.sh scene" of tools/maprender) say which of SquadHeight's objects
-#                                     the game has
-#   heightmaps.sh deploy              copy $OUT into the served SquadCalc (backup first)
+#   heightmaps.sh build [map ...]     fuse them with SquadHeight into $OUT/<map>/{heightmap.png,heightmap.webp,meta.json}; the
+#                                     client scenes ($SCENES, "maprender.sh scene" of tools/maprender) say which of
+#                                     SquadHeight's objects the game has
+#   heightmaps.sh deploy              replace those files of each map of $OUT in the served SquadCalc (backup first); the
+#                                     map's other files and meta.json keys (the volume layer of tools/volumetric) stay
 #   heightmaps.sh webp [map ...]      heightmap.webp and its meta.json for heightmaps already in $DIST/heightmaps, into $OUT_WEBP
 #   heightmaps.sh deploy-webp         copy the WebP files of $OUT_WEBP next to the served PNGs (hard-linked backup first, the
 #                                     PNGs stay, meta.json is not touched: nothing changes for a page yet)
@@ -35,6 +36,8 @@ DIST=${DIST:-$HOME/apps/squadcalc/dist}
 CUE4PARSE_COMMIT=808a7d65aea71cf3d58e142692b4f14215b7c79a
 DOTNET_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
 PY_IMAGE=squadcalc-heightmaps-py
+# The heightmaps "build" writes into $OUT/<map>, next to its meta.json
+HEIGHTMAP_FILES="heightmap.png heightmap.webp"
 USER_FLAGS="--user $(id -u):$(id -g) -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp"
 
 game_build() {
@@ -87,11 +90,33 @@ build)
     python_tool build_all.py /squadheight /work /scene /out "$(game_build)" "$@"
     ;;
 deploy)
+    # Each map of $OUT replaces the files and the meta.json keys that "build" writes; the map's other files (volume.vcol and
+    # terrain.bin of tools/volumetric) and meta.json keys ("volume") stay. A map of $OUT without all of its files stops the
+    # deploy before anything is touched.
+    for dir in "$OUT"/*/; do
+        for file in $HEIGHTMAP_FILES meta.json; do
+            [ -f "$dir$file" ] || { echo "$dir$file is missing: build the map again" >&2; exit 1; }
+        done
+    done
     backup="$DIST/heightmaps.bak.$(date +%Y%m%d-%H%M)"
     if [ -d "$DIST/heightmaps" ]; then cp -a "$DIST/heightmaps" "$backup" && echo "backup: $backup"; fi
-    mkdir -p "$DIST/heightmaps"
-    rsync -a --delete "$OUT/" "$DIST/heightmaps/"
-    echo "deployed $(find "$DIST/heightmaps" -name meta.json | wc -l) heightmaps to $DIST/heightmaps"
+    for dir in "$OUT"/*/; do
+        target="$DIST/heightmaps/$(basename "$dir")"
+        mkdir -p "$target"
+        # Written beside the served file and renamed over it, meta.json last as in deploy-webp and switch-webp: a page reads
+        # whole files, and a page that reads the new meta.json (its new "generated" cache key) gets the new heightmaps
+        for file in $HEIGHTMAP_FILES; do
+            cp -p "$dir$file" "$target/$file.new" && mv "$target/$file.new" "$target/$file"
+        done
+        python3 -c 'import json, os, sys
+built, served = sys.argv[1:]
+meta = json.load(open(served)) if os.path.exists(served) else {}
+meta.update(json.load(open(built)))
+with open(served + ".new", "w") as out:
+    json.dump(meta, out, indent=1)
+os.replace(served + ".new", served)' "${dir}meta.json" "$target/meta.json"
+    done
+    echo "deployed $(find "$OUT" -mindepth 2 -maxdepth 2 -name meta.json | wc -l) heightmaps to $DIST/heightmaps"
     ;;
 webp)
     shift
@@ -118,7 +143,7 @@ switch-webp)
     echo "switched $(find "$OUT_WEBP" -name meta.json | wc -l) heightmaps to WebP in $DIST/heightmaps"
     ;;
 *)
-    sed -n '2,17p' "$0"
+    sed -n '2,18p' "$0"
     exit 2
     ;;
 esac
