@@ -49,6 +49,18 @@ square), the topographic layer removes it and the basemap brings it back, cleari
 (the map's own texture) shows nothing; Tallil Seed v1 shows its texture; a map change leaves none; only the images of layers
 with a texture of their own are requested; console clean. `SHOT_DIR=<dir>` also saves a screenshot. Exits with 1 on any failure.
 
+## home_server_check.mjs: the Deadline server in the servers list
+
+```sh
+node home_server_check.mjs <site URL>
+```
+
+Needs the layer API and the site's `/live/servers.json` (`deploy/live_servers.py`). With the site's own feed,
+`/?server=deadline` opens the layer the game server plays with its map and both factions, and the menu's dropdown offers
+the server. With a made-up feed (Mutaha Seed v1, then Al Basrah Seed v1) the page follows the layer change within the
+20 s it asks again, and the refreshed servers browser lists the home server and no other. With a feed ten minutes old
+the server is not offered and `/?server=deadline` falls back to the plain page. Exits with 1 on any failure.
+
 ## standard_hd_check.mjs: the Standard HD layer
 
 ```sh

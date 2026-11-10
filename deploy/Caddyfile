@@ -12,8 +12,21 @@
 }
 
 :9910 {
+	# Home servers feed (deploy/live_servers.py rewrites live/servers.json every 20 s): outside dist, so a site
+	# deploy does not remove it; never cached, the page drops a feed older than two minutes
+	handle /live/* {
+		root * /home/seregatipich/apps/squadcalc
+		header Cache-Control "no-store"
+		file_server
+	}
+
 	handle {
 		root * /home/seregatipich/apps/squadcalc/dist
+
+		# Cross-origin isolation: SharedArrayBuffer for the WebAssembly engine's threads.
+		# credentialless (not require-corp) keeps cross-origin images and tiles loading without CORP headers.
+		header Cross-Origin-Opener-Policy "same-origin"
+		header Cross-Origin-Embedder-Policy "credentialless"
 
 		# Entry points are revalidated on every load so a deploy is picked up at once;
 		# bundles carry a content hash in their name and never change.

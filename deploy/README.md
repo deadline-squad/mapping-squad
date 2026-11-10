@@ -6,6 +6,16 @@ Copies of the live files; after changing a live file, copy it here and commit.
 |---|---|
 | `Caddyfile` | `~/apps/squadcalc/Caddyfile` (user unit `squadcalc.service`, port 9910, behind the panel Caddy `calc.<domain>`) |
 | `squadcalc.service` | `~/.config/systemd/user/` |
+| `squadcalc-live.service` | `~/.config/systemd/user/` (enabled; `systemctl --user status squadcalc-live`) |
+| `live_servers.py` | `~/apps/squadcalc/live_servers.py`, run by `squadcalc-live.service`; writes `~/apps/squadcalc/live/servers.json` |
+
+Home servers feed: `live_servers.py` asks the Deadline site (`https://deadline-squad.org/api/v1/server`, served from the
+game host) every 20 s and rewrites `live/servers.json`, which the Caddyfile serves as `/live/servers.json` (never cached)
+and SquadCalc reads as `HOME_SERVERS_URL`: the Deadline server in the servers list, with the layer it plays, the players
+and both factions. The folder is outside `dist`, so a site deploy does not touch it. Nothing runs on the game host and
+RCON is not used. SquadCalc drops a feed older than two minutes: when the service or the site is down, the server
+leaves the list instead of showing an old layer. Tests: `python3 -m unittest test_live_servers.py` in this folder;
+in a browser: `tools/browser_check/home_server_check.mjs`.
 
 Site build: from `dev` of `~/agl/SquadCalc` (remote `deadline`), in a worktree, `cp .env.template .env && npm run build`.
 Under `flock /tmp/squadcalc-deploy.lock`, back up `~/apps/squadcalc/dist` to `dist.bak.<date>-<reason>` and
