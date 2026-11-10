@@ -338,6 +338,7 @@ class Loop(unittest.TestCase):
         now = datetime.datetime.now(datetime.timezone.utc)
         in_five_minutes = email.utils.format_datetime(now + datetime.timedelta(minutes=5), usegmt=True)
         for header, pause in (("90", 90), (" 45 ", 45), ("5", 20), ("86400", 3600), ("9" * 5000, 3600),
+                               ("Mon, 01 Jan 9999999999999999999999 00:00:00 GMT", 40),
                                (in_five_minutes, 300)):
             with self.subTest(retry_after=header):
                 self.play([self.GOOD, {SITE: status_error(SITE, 429, {"Retry-After": header})}, self.GOOD])

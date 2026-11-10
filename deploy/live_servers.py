@@ -192,7 +192,7 @@ def retry_after(value):
         return int(seconds) if len(seconds) <= len(str(MAX_RETRY_AFTER_S)) else float("inf")
     try:
         date = email.utils.parsedate_to_datetime(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     if date.tzinfo is None:
         date = date.replace(tzinfo=datetime.timezone.utc)
