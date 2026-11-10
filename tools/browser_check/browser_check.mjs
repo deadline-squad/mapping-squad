@@ -437,6 +437,114 @@ await group("strat markers", async () => {
     await context.close();
 });
 
+// The circles a gameplay layer decides (SquadCalc 45.42.0; needs the layer API). The exclusion circle of a FOB
+// marker is the loaded layer's, whenever the layer came: the map's 400 m on Al Basrah without a layer, 300 m once
+// Al Basrah RAAS v3 has loaded, 400 m once RAAS v1 replaced it, and the map's 400 m again when the layer is cleared.
+// On Goose Bay AAS v1 the protection zone of the first main, whose radius the layer data gives as negative, is
+// drawn with the game's 236 m and its no-deploy circle with 386 m, the second main's with 150 m and 300 m.
+// While no layer is loaded, before the first one and after the layer was cleared, the settings that restyle a
+// layer switch without an error.
+await group("circles of the loaded layer", async () => {
+    const { context, page, problems } = await open();
+    // The layer API is asked at most once a second
+    const apiPause = () => page.waitForTimeout(1100);
+    /** Show the map `name` (unless it is shown) and wait until the selector offers its layer `layer` */
+    const showMap = async (name, layer) => {
+        await apiPause();
+        await page.evaluate((name) => {
+            const app = window.__App;
+            if (app.minimap.activeMap.name !== name) app.MAP_SELECTOR.val(app.MAP_SELECTOR.find(`option[data-i18n="maps:${name}"]`).val()).trigger("change");
+        }, name);
+        await page.waitForFunction(([name, layer]) => window.__App.minimap.activeMap.name === name && [...window.__App.LAYER_SELECTOR[0].options].some((option) => option.value === layer), [name, layer], { timeout: 120000 });
+    };
+    /** Pick `layer` in the layer selector and wait until the map shows it */
+    const loadLayer = async (layer) => {
+        await apiPause();
+        await page.evaluate((layer) => window.__App.LAYER_SELECTOR.val(layer).trigger("change"), layer);
+        await page.waitForFunction((layer) => window.__App.minimap.layer?.layerData?.rawName === layer && !window.__App.minimap._spinning, layer, { timeout: 120000 });
+    };
+    /** Radius of the exclusion circle of every FOB marker on the map, in metres, in the order they were placed */
+    const fobCircles = () => page.evaluate(() => {
+        const map = window.__App.minimap;
+        return map.activeMarkers.getLayers().filter((marker) => marker.icontype === "deployable_fob")
+            .map((marker) => (map.markersGroup.hasLayer(marker.exclusionRange) ? Math.round(marker.exclusionRange.getRadius() * map.mapToGameScale * 10) / 10 : null));
+    });
+    /** Place a FOB marker `east` metres east of the map's centre, as the context menu does */
+    const placeFob = (east) => page.evaluate((east) => {
+        const map = window.__App.minimap;
+        map.createMarker({ lat: -map.pixelSize / 2, lng: map.pixelSize / 2 + east * map.gameToMapScale }, "default", "deployables", "deployable_fob");
+    }, east);
+    const same = (actual, expected) => JSON.stringify(actual) === JSON.stringify(expected);
+    /** Switch the settings that restyle a layer there and back, zoomed in to where its assets show; the error, if any */
+    const restyle = () => page.evaluate(() => {
+        const app = window.__App;
+        app.minimap.setView(app.minimap.getCenter(), 5, { animate: false });
+        try {
+            for (const name of ["showRespawnCam", "showMapBorders", "showMainZones", "showMainAssets"]) {
+                app.userSettings.set(name, !app.userSettings[name]);
+                app.userSettings.set(name, !app.userSettings[name]);
+            }
+            return null;
+        } catch (error) {
+            return error.message;
+        }
+    });
+
+    await showMap("AlBasrah", "AlBasrah_RAAS_v3");
+    const restyledBeforeLayer = await restyle();
+    await placeFob(0);
+    const withoutLayer = await fobCircles();
+    await loadLayer("AlBasrah_RAAS_v3");
+    const layerArrived = await fobCircles();
+    await placeFob(500);
+    const onSmallLayer = await fobCircles();
+    check("FOB circle: the map's 400 m without a layer, 300 m once Al Basrah RAAS v3 has loaded, for the marker placed before it too",
+        same(withoutLayer, [400]) && same(layerArrived, [300]) && same(onSmallLayer, [300, 300]),
+        `without a layer ${JSON.stringify(withoutLayer)} m, once the layer loaded ${JSON.stringify(layerArrived)} m, with a FOB placed on it ${JSON.stringify(onSmallLayer)} m`);
+
+    await loadLayer("AlBasrah_RAAS_v1");
+    const onMediumLayer = await fobCircles();
+    check("FOB circles follow a change of layer: 400 m on Al Basrah RAAS v1", same(onMediumLayer, [400, 400]), `${JSON.stringify(onMediumLayer)} m`);
+
+    await loadLayer("AlBasrah_RAAS_v3");
+    const backOnSmallLayer = await fobCircles();
+    await page.evaluate(() => window.__App.LAYER_SELECTOR.val("").trigger("change"));
+    await placeFob(1000);
+    const cleared = await page.evaluate(() => Boolean(window.__App.minimap.layer));
+    const afterClear = await fobCircles();
+    const restyledAfterClear = await restyle();
+    check("FOB circles return to the map's 400 m when the layer is cleared, and a FOB placed then has it",
+        same(backOnSmallLayer, [300, 300]) && !cleared && same(afterClear, [400, 400, 400]),
+        `on RAAS v3 again ${JSON.stringify(backOnSmallLayer)} m, layer cleared (a layer still loaded: ${cleared}) ${JSON.stringify(afterClear)} m`);
+
+    check("layer settings switch without an error while no layer is loaded", restyledBeforeLayer === null && restyledAfterClear === null,
+        `before the first layer: ${restyledBeforeLayer ?? "no error"}; after the layer was cleared: ${restyledAfterClear ?? "no error"}`);
+
+    await showMap("GooseBay", "GooseBay_AAS_v1");
+    await loadLayer("GooseBay_AAS_v1");
+    const zones = await page.evaluate(() => {
+        const map = window.__App.minimap;
+        const layer = map.layer;
+        return layer.layerData.mapAssets.protectionZones.map((zone) => {
+            const [lat, lng] = layer.convertToLatLng(zone.objects[0].location_x, zone.objects[0].location_y);
+            const circles = layer.mainZones.rectangles.filter((shape) => shape.getRadius && map.hasLayer(shape)
+                && Math.abs(shape.getLatLng().lat - lat) < 1e-6 && Math.abs(shape.getLatLng().lng - lng) < 1e-6);
+            return { team: zone.teamid, dataRadius: zone.objects[0].sphereRadius / 100, drawn: circles.map((circle) => circle.getRadius() * map.mapToGameScale) };
+        });
+    });
+    // The game: a sphere of 150 m scaled by -1.5759 at the first main (236.4 m), 150 m at the second; no deployable
+    // within 150 m of either zone
+    const expectedZones = [["1", [236.38, 386.38]], ["2", [150, 300]]];
+    const zonesDrawn = zones.length === 2 && expectedZones.every(([team, radii], index) => zones[index].team === team && zones[index].drawn.length === 2
+        && radii.every((radius, at) => Math.abs(zones[index].drawn[at] - radius) < 0.01));
+    check("Goose Bay AAS v1: protection and no-deploy circles of both mains, the first main's from a negative radius in the layer data",
+        zonesDrawn && zones[0].dataRadius < 0,
+        zones.map((zone) => `team ${zone.team}: radius in the layer data ${zone.dataRadius.toFixed(2)} m, circles drawn ${JSON.stringify(zone.drawn.map((radius) => Number(radius.toFixed(2))))} m`).join("; "));
+
+    check("layer circles: console and requests clean", problems.length === 0, problems.length ? problems.slice(0, 10).join(" | ") : "no errors");
+    await context.close();
+});
+
 // Every layer change ends its turn of the map's spinner (SquadCalc 45.39.0): a change another one supersedes in
 // the same task, a tile layer another image replaces while its tiles still load (Leaflet fires no load event
 // for a layer taken off the map), a map image that fails to load and a tile layer with no tile in view. Each

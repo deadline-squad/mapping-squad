@@ -26,7 +26,12 @@ Squad Ballistics app reads (targets, weapon, weapon selection; `--ballistics`: e
 Squad Ballistics' weapons.json aimed with the overlay is selected by its name and reported back, the
 hold-laid ones show a hold time), the map's spinner after layer changes (one superseded by another, a tile
 layer replaced while it loaded, a map image that failed to load, a layer with no tile in view: the spinner
-stops and one map image is left) and the absence of the removed device
+stops and one map image is left), the circles a gameplay layer decides (needs the layer API: the exclusion
+circle of FOB markers is the map's 400 m on Al Basrah without a layer, 300 m once Al Basrah RAAS v3 has loaded,
+also for a marker placed before it, 400 m after RAAS v1 replaced it and after the layer was cleared; on Goose
+Bay AAS v1 the first main's protection zone, negative in the layer data, is drawn with 236 m and 386 m and the
+second main's with 150 m and 300 m; the settings that restyle a layer switch without an error while none is
+loaded) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). The checks run in groups, each on a
 page of its own: a page that does not open within 120 s, or a step that throws, is one FAIL under the
 group's name, with the spinner's count and the requests left without an answer, and the other groups still
