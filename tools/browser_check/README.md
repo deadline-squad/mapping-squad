@@ -70,9 +70,24 @@ node home_server_check.mjs <site URL>
 
 Needs the layer API and the site's `/live/servers.json` (`deploy/live_servers.py`). With the site's own feed,
 `/?server=deadline` opens the layer the game server plays with its map and both factions, and the menu's dropdown offers
-the server. With a made-up feed (Mutaha Seed v1, then Al Basrah Seed v1) the page follows the layer change within the
-20 s it asks again, and the refreshed servers browser lists the home server and no other. With a feed ten minutes old
-the server is not offered and `/?server=deadline` falls back to the plain page. Exits with 1 on any failure.
+the server. Every other step answers the feed itself (a route of the browser, the site's file is not touched):
+
+- Mutaha Seed v1, then Al Basrah Seed v1: the page follows the layer change within the 20 s it asks again, and the
+  refreshed servers browser lists the home server and no other.
+- The feed cannot be read (it answers 502): after two failed reads the page still follows the server; it leaves server
+  mode, with one message, only once the feed it last read is two minutes old (95 to 135 s later).
+- The followed server leaves the feed (the feed grows ten minutes old): at its next read the page leaves server mode
+  (no `server` in the URL, no choice in the dropdown, the servers button and the sync timer off, the layer left as it
+  was), shows one message, and the dropdown no longer offers the server. Back in the feed, the server is offered again
+  without a reload, and the page does not follow it by itself.
+- The dropdown is cleared (no message), the server moves to another layer, the server is chosen again: the only layer
+  the page opens is the one played now.
+- The followed server moves to a layer of a map the calculator does not have, then, followed again, to an entry without
+  factions: each time the page leaves server mode with the "no data for the layer" message and the dropdown lists the
+  server as unavailable.
+- A feed ten minutes old at page load: the server is not offered and `/?server=deadline` falls back to the plain page.
+
+Each step that waits for the page's next read of the feed gives it 90 s. Exits with 1 on any failure.
 
 ## standard_hd_check.mjs: the Standard HD layer
 
