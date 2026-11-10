@@ -22,6 +22,10 @@
 //    servers browser says it has no server (in words, also when the feed was read before the translations).
 // 8. The user leaves server mode while the map of the server's next layer is still loading (its list of layers held
 //    back): when the list arrives, the page opens none of the server's layers and says nothing.
+// 9. The request for the layer the server plays fails once: the page still follows the server and opens the layer at
+//    its next read of the feed.
+// 10. A page opened on another map with ?server=: the list of that map's layers arrives after the server's layer has
+//    loaded, and the layer selector keeps the server map's layers.
 //
 // Needs the layer API. Environment as browser_check.mjs. Exits with 1 on any failure.
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
@@ -307,6 +311,35 @@ state = await shown();
 check("leaving server mode while the server's next map loads stops the switch: no layer is opened when its layers arrive",
     switching && listed && !reopened && notFollowing(state) && errors(state) === "[]",
     `map switched ${switching}, layers listed ${listed}, layers opened ${JSON.stringify(await page.evaluate(() => window.__opened))}, ${JSON.stringify(state)}`);
+
+// 9. The layer request fails once
+let refusedLayers = 0;
+const layerOfMutaha = /\/get\/layer\?name=Mutaha_Seed_v1$/;
+await context.route(layerOfMutaha, (route) => (refusedLayers++ === 0 ? route.abort("failed") : route.fallback()));
+serve([first]);
+await page.goto(`${base}/?server=deadline`, { waitUntil: "load" });
+const retried = await waitLayer("Mutaha_Seed_v1", NEXT_READ_MS).then(() => true, () => false);
+await context.unroute(layerOfMutaha);
+state = await shown();
+check("a failed request for the server's layer is made again at the next read of the feed, and the page follows", retried && refusedLayers >= 2
+    && state.followed === "deadline" && state.timer && state.url.includes("server=deadline"), `${refusedLayers} request(s), ${JSON.stringify(state)}`);
+
+// 10. The list of the page's own map arrives last
+let releaseList;
+const heldList = new Promise((resolve) => { releaseList = resolve; });
+const layersOfAlBasrahList = /\/get\/layers\?map=AlBasrah$/;
+await context.route(layersOfAlBasrahList, async (route) => { await heldList; await route.fallback().catch(() => {}); });
+serve([first]);
+await page.goto(`${base}/?map=AlBasrah&server=deadline`, { waitUntil: "load" });
+const loadedFirst = await waitLayer("Mutaha_Seed_v1", 120000).then(() => true, () => false);
+releaseList();
+await page.waitForTimeout(6000);
+await context.unroute(layersOfAlBasrahList);
+const options = await page.evaluate(() => [...window.__App.LAYER_SELECTOR[0].options].map((option) => option.value).filter(Boolean));
+state = await shown();
+check("a list of layers of the page's first map that arrives late leaves the server map's layers in the selector", loadedFirst && options.length > 0
+    && options.every((layer) => layer.startsWith("Mutaha")) && state.layer === "Mutaha_Seed_v1" && state.followed === "deadline",
+`${options.length} option(s), first ${JSON.stringify(options.slice(0, 3))}, ${JSON.stringify(state)}`);
 
 check("no page errors", problems.length === 0, problems.join(" | ") || "none");
 await browser.close();
