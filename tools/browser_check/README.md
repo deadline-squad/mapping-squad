@@ -24,7 +24,9 @@ warning, a 404 falls back at once), regression checks for
 the bugs fixed in 45.5.1 and after the walkthrough review, the `window.squadBallistics` bridge the
 Squad Ballistics app reads (targets, weapon, weapon selection; `--ballistics`: every weapon of
 Squad Ballistics' weapons.json aimed with the overlay is selected by its name and reported back, the
-hold-laid ones show a hold time) and the absence of the removed device
+hold-laid ones show a hold time), the map's spinner after layer changes (one superseded by another, a tile
+layer replaced while it loaded, a map image that failed to load, a layer with no tile in view: the spinner
+stops and one map image is left) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). The checks run in groups, each on a
 page of its own: a page that does not open within 120 s, or a step that throws, is one FAIL under the
 group's name, with the spinner's count and the requests left without an answer, and the other groups still

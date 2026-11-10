@@ -437,6 +437,73 @@ await group("strat markers", async () => {
     await context.close();
 });
 
+// Every layer change ends its turn of the map's spinner (SquadCalc 45.39.0): a change another one supersedes in
+// the same task, a tile layer another image replaces while its tiles still load (Leaflet fires no load event
+// for a layer taken off the map), a map image that fails to load and a tile layer with no tile in view. Each
+// time one map image is left on the map. Before 45.39.0 the spinner could be left turning at page load too (the
+// first change still waited for its meta.json when the page drew the map again), and open() timed out.
+await group("spinner after layer changes", async () => {
+    // Tiles of /maptiles/ are held back while `holdTiles` is set (a tile layer that keeps loading); the
+    // upstream terrain map never loads
+    let holdTiles = null;
+    const { context, page, problems } = await open(undefined, async (context) => {
+        await context.route(/\/maptiles\/[a-z0-9_-]+\/\d+\/\d+_\d+\.webp/, async (route) => {
+            if (holdTiles) await holdTiles;
+            // The page may have dropped the request by now (its layer left the map)
+            await route.fallback().catch(() => {});
+        });
+        await context.route(/\/terrainmap.*\.webp/, (route) => route.abort("failed"));
+    });
+    const click = (layer) => page.evaluate((layer) => document.querySelector(`#mapLayerMenu .btn-${layer}`).click(), layer);
+    // Whether the spinner is gone within 20 s, and the map images then on the map (tile layers and single images)
+    const settled = async () => {
+        const stopped = await page.waitForFunction(() => !window.__App.minimap._spinning, null, { timeout: 20000 }).then(() => true, () => false);
+        return page.evaluate((stopped) => {
+            const map = window.__App.minimap;
+            let images = 0;
+            map.eachLayer((layer) => { if (layer._tiles || layer._image) images++; });
+            return { stopped, spinning: map._spinning, images };
+        }, stopped);
+    };
+
+    await page.evaluate(() => { const map = window.__App.minimap; map.changeLayer(); map.changeLayer(); });
+    const superseded = await settled();
+    check("spinner stops after a layer change that superseded another", superseded.stopped && superseded.images === 1, JSON.stringify(superseded));
+
+    const folder = await page.evaluate(() => window.__App.minimap.activeMap.mapURL.split("/").filter(Boolean).pop());
+    let release;
+    let replaced;
+    holdTiles = new Promise((resolve) => { release = resolve; });
+    try {
+        await click("detailed");
+        await page.waitForFunction((folder) => window.__App.minimap.activeLayer?._url?.startsWith(`/maptiles/${folder}/`), folder, { timeout: 20000 });
+        await click("relief");
+        replaced = await settled();
+    } finally {
+        holdTiles = null;
+        release();
+    }
+    check("spinner stops after a tile layer was replaced while it loaded", replaced.stopped && replaced.images === 1, JSON.stringify(replaced));
+
+    await click("terrainmap");
+    const failed = await settled();
+    check("spinner stops after a map image that failed to load", failed.stopped && failed.images === 1, JSON.stringify(failed));
+
+    await page.evaluate(() => { const map = window.__App.minimap; map.setView([map.pixelSize * 4, -map.pixelSize * 4], 4, { animate: false }); });
+    await click("detailed");
+    const away = await settled();
+    // Back over the map, the layer that had nothing to load shows its tiles
+    await page.evaluate(() => { const map = window.__App.minimap; map.setView([-map.pixelSize / 2, map.pixelSize / 2], 4, { animate: false }); });
+    const tiles = await page.waitForFunction((folder) => [...document.querySelectorAll("img.leaflet-tile-loaded")].some((tile) => tile.src.includes(`/maptiles/${folder}/`)), folder, { timeout: 20000 }).then(() => true, () => false);
+    const back = await settled();
+    check("spinner stops when no tile of the new layer is in view", away.stopped && away.images === 1 && tiles && back.stopped && back.images === 1,
+        `map dragged away ${JSON.stringify(away)}, back over the map: tiles shown ${tiles}, ${JSON.stringify(back)}`);
+
+    const unexpected = problems.filter((problem) => !/terrainmap|net::ERR_FAILED/.test(problem));
+    check("layer changes: console and requests clean but for the terrain map that was refused", unexpected.length === 0, unexpected.length ? unexpected.slice(0, 10).join(" | ") : "no other errors");
+    await context.close();
+});
+
 // The precise heightmap's requests: meta.json first, then the heavy file it names (heightmap.webp or
 // heightmap.png, with ?v=<generated> once meta.json has it)
 const preciseRequest = /\/heightmaps\/[^/]+\/(heightmap\.(?:webp|png)|meta\.json)(?:\?.*)?$/;
