@@ -1,0 +1,11 @@
+[Unit]
+Description=Deadline game server status for the SquadCalc servers list (home servers feed)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/seregatipich/apps/squadcalc/live_servers.py /home/seregatipich/apps/squadcalc/live/servers.json
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
