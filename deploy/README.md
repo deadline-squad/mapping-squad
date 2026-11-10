@@ -38,3 +38,20 @@ weapons SquadCalc lacks with
 `tools/direct_fire/gen_squadcalc_weapons.py <weapons.json> <entries.js> <names.json> src/data/weapons.js`,
 append them at the end of `WEAPONS`, add the names to every `public/locales/*/weapons.json`, and check both apps agree with
 `python3 tools/direct_fire/compare.py ~/dev/Squad-Ballistics ~/agl/SquadCalc` (exit 0). It covers every weapon both apps have, the weapons aimed by elevation included (both arcs, every shell, time of flight, minimum distance and elevation limits), on the grid documented in its docstring.
+
+SquadCalc has one entry per distinct firing solution. Squad Ballistics has an entry per view of a weapon (each zoom
+level of a gunner's sight, the normal view next to an optic); a name whose generated entry equals another weapon's,
+name apart, gets no entry: `--update` and the append list it in that weapon's `ballisticsViews`, and
+`window.squadBallistics.selectWeapon` takes it and reports it back. The data decides, so a view with another launch
+point or shell gets an entry. `compare.py` solves every view name against its entry and fails (`MISSING`) for an overlay
+weapon that is neither an entry nor a view, so a `weapons.json` that SquadCalc was not synced to fails without a browser.
+What the generator cannot do, by hand:
+
+- a weapon Squad Ballistics renamed (its `RENAMED_WEAPONS`) goes into the generator's `RENAMED`, old name first, and its
+  rows of `GAME_MOA` and `GAME_EXPLOSION` under the new name: `--update` then keeps the entry's place and `DF_` identifier and
+  lists the old names as `legacyBallistics`; change its display name in `public/locales/*/weapons.json`;
+- a new name needs its row in `GAME_MOA` (the generator stops without it) and, for a round that explodes, in
+  `GAME_EXPLOSION`, from the first Blueprint of the weapon's `sources.classes` in Squad Ballistics'
+  `tests/data/game_weapons.json`; `gen_squadcalc_weapons.py --verify <resolved.json>` checks the explosions;
+- SquadCalc's own "AGS-17" (the optic emplacement, which the generator skips) follows `weapons.json` by hand:
+  `compare.py` reports its hold times and limits under "AGS-17 · emplacement · optic (RMB ×2.5)".

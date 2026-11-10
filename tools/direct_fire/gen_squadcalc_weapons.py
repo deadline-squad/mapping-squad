@@ -1,7 +1,7 @@
 """Generate SquadCalc's Squad Ballistics weapons from Squad Ballistics' weapons.json.
 
-Every weapon aimed with the overlay (`aim` "overlay", not a mod) becomes a SquadCalc weapon
-named DF_<name>, with `ballistics` set to its Squad Ballistics name:
+The weapons aimed with the overlay (`aim` "overlay", not a mod) become SquadCalc weapons named DF_<name>,
+with `ballistics` set to the Squad Ballistics name, one for each distinct firing solution:
 
 * a weapon laid by holding a key (`hold_rate`, the AGS-17 variants) becomes a "deployables"
   weapon built like SquadCalc's "AGS-17": high arc with the hold time (`elevationRate`,
@@ -21,7 +21,16 @@ checks GAME_EXPLOSION and SQUADCALC_ONLY against the game files (resolved.json o
 
 The AGS-17 optic emplacement is skipped: SquadCalc's "AGS-17" is it.
 
-A weapon Squad Ballistics renamed (RENAMED: the RMB sights, "QLZ87" -> "QLZ87 · optic (RMB ×3)") keeps its DF_ identifier, so its position in WEAPONS and its locale key stay, and gets `legacyBallistics` with the old name.
+Squad Ballistics has an entry for each view of a weapon (every zoom level of a gunner's sight, the normal view next
+to an RMB optic): they differ in what the overlay draws (`zoom`, `bore`, `view`), not in the flight. A name whose
+entry would be the one of another weapon, name apart, gets none: it is listed in that weapon's `ballisticsViews`
+(see `plan`), and SquadCalc's selectWeapon takes it and reports it back. The data decides, never the name: a view
+with another launch point, shell or spread gets an entry of its own.
+
+A weapon Squad Ballistics renamed (RENAMED: the RMB sights, "QLZ87" -> "QLZ87 · optic (RMB ×3)"; the vehicle that kept
+a split entry, "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3" -> "Tank AP · T-72 (2A46)") keeps its DF_ identifier, so
+its position in WEAPONS and its locale key stay, and gets `legacyBallistics` with its old names; its display name in
+public/locales/*/weapons.json is changed by hand.
 
 The projectile's `lifespan` (InitialLifeSpan, the game destroys the round that long after launch) becomes
 `projectileLifespan`, which SquadCalc refuses a solution past; a weapon without one (the mortar) keeps SquadCalc's default.
@@ -35,43 +44,53 @@ A boosted rocket gets `acceleration`/`accelerationTime`, a projectile with a spe
 
 entries.js goes at the end of WEAPONS in src/data/weapons.js (after the existing weapons: the
 selected weapon is stored by index); names.json maps DF_<name> to the display name for
-public/locales/*/weapons.json. With SquadCalc's src/data/weapons.js, only the weapons whose
-Squad Ballistics name it does not have yet are written, in weapons.json order, so an update is
-one run and one append. Prints the number of entries written.
+public/locales/*/weapons.json. With SquadCalc's src/data/weapons.js, only the weapons that are
+neither an entry nor a view of an entry there are written, in weapons.json order, each with its
+own views, so an update is one run and one append. Prints the number of entries written.
 
 --update rewrites, in place and in their positions, the generated entries (DF_<name>) that
-SquadCalc's weapons.js already has, from the current weapons.json (its line endings kept), and
-prints how many changed; an entry whose weapon weapons.json no longer has is kept as it is and
-named on stderr. Run it before the append. Check the result with compare.py.
+SquadCalc's weapons.js already has, from the current weapons.json (its line endings kept), their
+`ballisticsViews` included, and prints how many changed; an entry whose weapon weapons.json no
+longer has is kept as it is and named on stderr. Run it before the append. Check the result with
+compare.py, which also fails for a weapon that ended up as neither an entry nor a view.
 """
 import json, math, os, re, sys
 
 GRAVITY = 9.80  # m/s², the world gravity of the game files (SquadCalc's app.js, Squad Ballistics)
 SKIP = {"AGS-17 · emplacement · optic (RMB ×2.5)"}  # SquadCalc "AGS-17" already is this weapon
-# The RMB sights were renamed in Squad Ballistics (old name -> current name) so that the name says which view the
-# entry is for: "QLZ87" was the ×3 optic's entry and used from the normal view overshot by hundreds of metres.
-# SquadCalc's entry keeps its DF_ identifier (the locale key; the stored weapon is the entry's index) and its old
-# name as `legacyBallistics`, which selectBallisticsWeapon still accepts, so an older Squad Ballistics keeps working.
+# Weapons renamed in Squad Ballistics (its RENAMED_WEAPONS), old name -> current name, a weapon's oldest name first.
+# The RMB sights got their view in the name: "QLZ87" was the ×3 optic's entry and used from the normal view overshot
+# by hundreds of metres. SquadCalc's entry keeps the DF_ identifier of its oldest name here (the locale key; the
+# stored weapon is the entry's index) and its old names as `legacyBallistics`, which selectBallisticsWeapon still
+# accepts, so an older Squad Ballistics keeps working.
 RENAMED = {
     "QLZ87": "QLZ87 · optic (RMB ×3)",
-    "QLZ87 · Lynx / CSK131": "QLZ87 · Lynx / CSK131 · optic (RMB ×3)",
+    # The Lynx, the CSK131 with the WZ551, the ZBL-08 and the bunker tripod got entries of their own (launch heights
+    # and elevation limits differ); the Lynx, the name's first half, kept these.
+    "QLZ87 · Lynx / CSK131": "QLZ87 · Lynx · optic (RMB ×3)",
+    "QLZ87 · Lynx / CSK131 · optic (RMB ×3)": "QLZ87 · Lynx · optic (RMB ×3)",
+    "QLZ87 · Lynx / CSK131 · no optic": "QLZ87 · Lynx · no optic",
     "AGS-17 · emplacement": "AGS-17 · emplacement · optic (RMB ×2.5)",
     "SPG-9 · HEAT · scope": "SPG-9 · HEAT · scope · optic (RMB ×4)",
     "SPG-9 · FRAG · scope": "SPG-9 · FRAG · scope · optic (RMB ×4)",
     "ZiS-3": "ZiS-3 · optic (RMB ×4)",
     # The M1151 and RHIB open turrets were one entry; the M1151 (with its launch point) kept the name's first half.
     "MK19 · M1151 / RHIB open turret": "MK19 · M1151 open turret",
+    # The T-90A and the Sprut-SDM1 sit at other heights than the T-72 and got entries of their own, like every other
+    # tank already had; the T-72 kept these.
+    "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": "Tank AP · T-72 (2A46)",
+    "Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2": "Tank HEAT/HE · T-72 (2A46)",
 }
-OLD_NAME = {new: old for old, new in RENAMED.items()}
 # Weapons renamed earlier (when their data was checked against the game files, Squad build 26005357; Squad
-# Ballistics' RENAMED_WEAPONS): their DF_ identifier is already the new name's, only the old name is accepted too.
+# Ballistics' RENAMED_WEAPONS), current name -> old name: their DF_ identifier was made after that rename, so the
+# old name is only accepted too.
 EARLIER_NAME = {
     "M203 / M320 / GP-25 / HK79 / SL40": "M203 / M320 / GP-25 / HK79 / MKE MGL",
     "MK19": "MK19 / AGS-17 / AGS-30",
     "AGS-30 / BTR-4 AGS": "BTR-4 AGS",
     "M3 MAAWS · HEAT / Smoke": "Carl Gustav / M3 MAAWS · HEAT",
     "M3 MAAWS · Tandem": "Carl Gustav / M3 MAAWS · Tandem",
-    "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": "Tank AP · 2A46 / ZPT98 / 2A20 / M68A2",
+    "Tank AP · T-72 (2A46)": "Tank AP · 2A46 / ZPT98 / 2A20 / M68A2",
     "Tank AP · L30A1 (Challenger 2) / M68A2": "Tank AP · L30A1 (Challenger 2)",
 }
 HOLD_LAID_FAMILY = "AGS-17"  # the only hold-laid weapon whose grenade SquadCalc has (VOG_17)
@@ -94,9 +113,15 @@ GAME_MOA = {
     "QLG10": 40,
     "Rifle grenade": 30,
     "MK19": 50,
+    "MK19 · M1117 · gunner sight ×4.5": 50,
     "MK19 · AAVP-7A1": 50,
+    "MK19 · AAVP-7A1 · gunner sight ×4.5": 50,
     "MK19 · PARS III RWS": 50,
+    "MK19 · PARS III RWS · gunner sight ×3": 50,
+    "MK19 · PARS III RWS · gunner sight ×9": 50,
     "MK19 · TAPV C16 RWS": 15,
+    "MK19 · TAPV C16 RWS · gunner sight ×5": 15,
+    "MK19 · TAPV C16 RWS · gunner sight ×12": 15,
     "MK19 · M113 open turret": 15,
     "MK19 · M113 open turret · no sights": 15,
     "MK19 · M1151 open turret": 15,
@@ -104,15 +129,25 @@ GAME_MOA = {
     "MK19 · MATV open turret": 15,
     "MK19 · MATV open turret · no sights": 15,
     "MK19 · RHIB open turret": 15,
+    "MK19 · RHIB open turret · no sights": 15,
     "MK19 · emplacement / C16 / L134A1": 15,
     "MK19 · emplacement / C16 / L134A1 · no sights": 15,
     "QLZ87 · optic (RMB ×3)": 15,
     "QLZ87 · no optic": 15,
-    "QLZ87 · Lynx / CSK131 · optic (RMB ×3)": 15,
-    "QLZ87 · Lynx / CSK131 · no optic": 15,
+    "QLZ87 · bunker tripod · optic (RMB ×3)": 15,
+    "QLZ87 · bunker tripod · no optic": 15,
+    "QLZ87 · CSK131 / WZ551 · optic (RMB ×3)": 15,
+    "QLZ87 · CSK131 / WZ551 · no optic": 15,
+    "QLZ87 · Lynx · optic (RMB ×3)": 15,
+    "QLZ87 · Lynx · no optic": 15,
+    "QLZ87 · ZBL08 · optic (RMB ×3)": 15,
+    "QLZ87 · ZBL08 · no optic": 15,
     "AGS-30 / BTR-4 AGS": 15,
+    "AGS-30 / BTR-4 AGS · gunner sight ×9": 15,
     "AGS-30 (BMP-1TS)": 15,
+    "AGS-30 (BMP-1TS) · gunner sight ×9": 15,
     "AGS-30 (BMP-2M)": 15,
+    "AGS-30 (BMP-2M) · gunner sight ×6": 15,
     "M72A7 LAW / RPG-26": 15,
     "C90-CR": 10,
     "AT-4": 10,
@@ -150,34 +185,81 @@ GAME_MOA = {
     "SPG-9 · FRAG · INS armoured technical · optic (RMB ×4)": 1,
     "SPG-9 · FRAG · INS armoured technical · no optic": 1,
     "2A28 Grom (BMP-1 / BMD-1) · HEAT": 3,
+    "2A28 Grom (BMP-1) · HEAT · gunner sight ×6": 3,
+    "2A28 Grom (BMP-1 technical) · HEAT · gunner sight ×6": 3,
     "2A28 Grom (BMD-1M) · HEAT": 3,
+    "2A28 Grom (BMP-1 technical) · HEAT": 3,
+    "2A28 Grom (BMD-1M) · HEAT · gunner sight ×6": 3,
     "2A28 Grom (BMP-1 / BMD-1) · FRAG": 3,
+    "2A28 Grom (BMP-1) · FRAG · gunner sight ×6": 3,
+    "2A28 Grom (BMP-1 technical) · FRAG · gunner sight ×6": 3,
     "2A28 Grom (BMD-1M) · FRAG": 3,
+    "2A28 Grom (BMP-1 technical) · FRAG": 3,
+    "2A28 Grom (BMD-1M) · FRAG · gunner sight ×6": 3,
     "2A70 100mm (BMP-3 / BMD-4 / ZBD04A) · FRAG": 1.6,
+    "2A70 100mm (BMP-3) · FRAG · gunner sight ×4": 1.6,
     "2A70 100mm (ZBD-04A) · FRAG": 1.6,
+    "2A70 100mm (ZBD-04A) · FRAG · gunner sight ×4": 1.6,
+    "2A70 100mm (ZBD-04A) · FRAG · gunner sight ×14": 1.6,
     "2A70 100mm (BMD-4M) · FRAG": 1.6,
+    "2A70 100mm (BMD-4M) · FRAG · gunner sight ×5": 1.6,
+    "2A70 100mm (BMP-3 / BMD-4M) · FRAG · gunner sight ×14": 1.6,
     "ZiS-3 · optic (RMB ×4)": 3,
     "ZiS-3 · no optic": 3,
-    "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": 1.5,
+    "Tank AP · T-72 (2A46)": 1.5,
+    "Tank AP · T-90A (2A46M)": 1.5,
+    "Tank AP · Sprut-SDM1 (2A45) · gunner sight ×4": 1.5,
+    "Tank AP · Sprut-SDM1 (2A45) · gunner sight ×12": 1.5,
+    "Tank AP · T-72 (2A46) · gunner sight ×12": 1.5,
+    "Tank AP · T-90A (2A46M) · gunner sight ×12": 1.5,
     "Tank AP · T-62 (2A20)": 1.5,
+    "Tank AP · T-62 (2A20) · gunner sight ×7": 1.5,
     "Tank AP · T-64BM2 (KBA3)": 1.5,
+    "Tank AP · T-64BM2 (KBA3) · gunner sight ×12": 1.5,
     "Tank AP · ZTZ-99 (ZPT-98)": 1.5,
+    "Tank AP · ZTZ-99 (ZPT-98) · gunner sight ×12": 1.5,
     "Tank AP · M256 / Rh120": 1.5,
+    "Tank AP · M1A1 / M1A2 (M256) · gunner sight ×6": 1.5,
+    "Tank AP · M1A1 / M1A2 (M256) · gunner sight ×12": 1.5,
     "Tank AP · Leopard 2A6 (Rh120)": 1.2,
+    "Tank AP · Leopard 2A6 (Rh120) · gunner sight ×12": 1.2,
     "Tank AP · M60T (MG253)": 1.5,
+    "Tank AP · M60T (MG253) · gunner sight ×3": 1.5,
+    "Tank AP · M60T (MG253) · gunner sight ×8": 1.5,
     "Tank AP · L30A1 (Challenger 2) / M68A2": 1.5,
+    "Tank AP · Challenger 2 (L30A1) · gunner sight ×4": 1.5,
+    "Tank AP · Challenger 2 (L30A1) · gunner sight ×10": 1.5,
     "Tank AP · M1128 MGS (M68A2)": 1.5,
-    "Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2": 1.5,
+    "Tank AP · M1128 MGS (M68A2) · gunner sight ×8": 1.5,
+    "Tank HEAT/HE · T-72 (2A46)": 1.5,
+    "Tank HEAT/HE · T-90A (2A46M)": 1.5,
+    "Tank HEAT/HE · Sprut-SDM1 (2A45) · gunner sight ×4": 1.5,
+    "Tank HEAT/HE · Sprut-SDM1 (2A45) · gunner sight ×12": 1.5,
+    "Tank HEAT/HE · T-72 (2A46) · gunner sight ×12": 1.5,
+    "Tank HEAT/HE · T-90A (2A46M) · gunner sight ×12": 1.5,
     "Tank HEAT/HE · M1A1 / M1A2 (M256)": 1.5,
+    "Tank HEAT/HE · M1A1 / M1A2 (M256) · gunner sight ×6": 1.5,
+    "Tank HEAT/HE · M1A1 / M1A2 (M256) · gunner sight ×12": 1.5,
     "Tank HEAT/HE · Leopard 2A6 (Rh120)": 1.2,
+    "Tank HEAT/HE · Leopard 2A6 (Rh120) · gunner sight ×12": 1.2,
     "Tank HEAT/HE · M1128 MGS (M68A2)": 1.5,
+    "Tank HEAT/HE · M1128 MGS (M68A2) · gunner sight ×8": 1.5,
     "Tank HEAT/HE · M60T (MG253)": 1.5,
+    "Tank HEAT/HE · M60T (MG253) · gunner sight ×3": 1.5,
+    "Tank HEAT/HE · M60T (MG253) · gunner sight ×8": 1.5,
     "Tank HEAT/HE · ZTZ-99 (ZPT-98)": 1.5,
+    "Tank HEAT/HE · ZTZ-99 (ZPT-98) · gunner sight ×12": 1.5,
     "Tank HEAT/HE · T-62 (2A20)": 1.5,
+    "Tank HEAT/HE · T-62 (2A20) · gunner sight ×7": 1.5,
     "Tank HEAT/HE · T-64BM2 (KBA3)": 1.5,
+    "Tank HEAT/HE · T-64BM2 (KBA3) · gunner sight ×12": 1.5,
     "Tank HESH · L30A1 (Challenger 2)": 1.5,
+    "Tank HESH · Challenger 2 (L30A1) · gunner sight ×4": 1.5,
+    "Tank HESH · Challenger 2 (L30A1) · gunner sight ×10": 1.5,
     "ZPL-98A 105mm (ZTD-05) · AP": 1.5,
+    "ZPL-98A 105mm (ZTD-05) · AP · gunner sight ×7": 1.5,
     "ZPL-98A 105mm (ZTD-05) · HEAT / HE": 1.5,
+    "ZPL-98A 105mm (ZTD-05) · HEAT / HE · gunner sight ×7": 1.5,
 }
 
 # Explosion of the direct-fire weapons that have one: per weapon, a shell per ammunition (HEAT, HE, Tandem; a
@@ -213,13 +295,31 @@ GAME_EXPLOSION = {
     "MK19": [
         ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
+    "MK19 · M1117 · gunner sight ×4.5": [
+        ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
     "MK19 · AAVP-7A1": [
+        ("default", "BP_AAVP7A1_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "MK19 · AAVP-7A1 · gunner sight ×4.5": [
         ("default", "BP_AAVP7A1_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
     "MK19 · PARS III RWS": [  # BP_SancakRWS_MK19 and BP_C16_MK19 are not in resolved.json: their WeaponConfig.ProjectileClass is BP_40MM_MK19_Proj, the MK19's (/tmp/mech/vdump2)
         ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
+    "MK19 · PARS III RWS · gunner sight ×3": [
+        ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "MK19 · PARS III RWS · gunner sight ×9": [
+        ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
     "MK19 · TAPV C16 RWS": [
+        ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "MK19 · TAPV C16 RWS · gunner sight ×5": [
+        ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "MK19 · TAPV C16 RWS · gunner sight ×12": [
         ("default", "BP_M1117_MK19", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
     "MK19 · M113 open turret": [
@@ -243,6 +343,9 @@ GAME_EXPLOSION = {
     "MK19 · RHIB open turret": [
         ("default", "BP_Mk19_RHIB_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
+    "MK19 · RHIB open turret · no sights": [
+        ("default", "BP_Mk19_RHIB_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
     "MK19 · emplacement / C16 / L134A1": [
         ("default", "BP_Mk19_Weapon", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
@@ -255,19 +358,46 @@ GAME_EXPLOSION = {
     "QLZ87 · no optic": [
         ("default", "BP_QLZ87_Weapon", 115, 1, 11, 0.08, 1),  # native default: damage, falloff
     ],
-    "QLZ87 · Lynx / CSK131 · optic (RMB ×3)": [
+    "QLZ87 · bunker tripod · optic (RMB ×3)": [
+        ("default", "BP_QLZ87_Weapon", 115, 1, 11, 0.08, 1),  # native default: damage, falloff
+    ],
+    "QLZ87 · bunker tripod · no optic": [
+        ("default", "BP_QLZ87_Weapon", 115, 1, 11, 0.08, 1),  # native default: damage, falloff
+    ],
+    "QLZ87 · CSK131 / WZ551 · optic (RMB ×3)": [
+        ("default", "BP_QLZ87_OpenTurret_Weapon", 115, 1, 11, 0.08, 1),  # native default: damage, falloff
+    ],
+    "QLZ87 · CSK131 / WZ551 · no optic": [
+        ("default", "BP_QLZ87_OpenTurret_Weapon", 115, 1, 11, 0.08, 1),  # native default: damage, falloff
+    ],
+    "QLZ87 · Lynx · optic (RMB ×3)": [
         ("default", "BP_QLZ87_Weapon_Lynx8x8", 115, 1, 11, 0.08, 1),  # native default: damage, falloff
     ],
-    "QLZ87 · Lynx / CSK131 · no optic": [
+    "QLZ87 · Lynx · no optic": [
         ("default", "BP_QLZ87_Weapon_Lynx8x8", 115, 1, 11, 0.08, 1),  # native default: damage, falloff
+    ],
+    "QLZ87 · ZBL08 · optic (RMB ×3)": [  # BP_QLZ87_Weapon_ZBL08 is not in resolved.json: its parent is BP_QLZ87_OpenTurret_Weapon and it sets neither MOA nor ProjectileClass (client build 26234431)
+        ("default", "BP_QLZ87_OpenTurret_Weapon", 115, 1, 11, 0.08, 1),  # native default: damage, falloff
+    ],
+    "QLZ87 · ZBL08 · no optic": [
+        ("default", "BP_QLZ87_OpenTurret_Weapon", 115, 1, 11, 0.08, 1),  # native default: damage, falloff
     ],
     "AGS-30 / BTR-4 AGS": [
+        ("default", "BP_BTR4_KBA117", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "AGS-30 / BTR-4 AGS · gunner sight ×9": [
         ("default", "BP_BTR4_KBA117", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
     "AGS-30 (BMP-1TS)": [
         ("default", "BP_BMP1TS_KBA117", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
+    "AGS-30 (BMP-1TS) · gunner sight ×9": [
+        ("default", "BP_BMP1TS_KBA117", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
     "AGS-30 (BMP-2M)": [
+        ("default", "BP_BMP2M_AGS30", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
+    ],
+    "AGS-30 (BMP-2M) · gunner sight ×6": [
         ("default", "BP_BMP2M_AGS30", 115, 1, 15, 0.08, 1),  # native default: damage, falloff, outer radius
     ],
     "M72A7 LAW / RPG-26": [
@@ -381,22 +511,61 @@ GAME_EXPLOSION = {
     "2A28 Grom (BMP-1 / BMD-1) · HEAT": [
         ("default", "BP_BMP1_2A28_HEAT", 100, 2, 8, 0.08, 1),  # native default: falloff
     ],
+    "2A28 Grom (BMP-1) · HEAT · gunner sight ×6": [
+        ("default", "BP_BMP1_2A28_HEAT", 100, 2, 8, 0.08, 1),  # native default: falloff
+    ],
+    "2A28 Grom (BMP-1 technical) · HEAT · gunner sight ×6": [
+        ("default", "BP_Technical_BMP1_2A28_HEAT", 100, 2, 8, 0.08, 1),  # native default: falloff
+    ],
     "2A28 Grom (BMD-1M) · HEAT": [
+        ("default", "BP_BMD1M_2A28_HEAT", 100, 2, 8, 0.08, 1),  # native default: falloff
+    ],
+    "2A28 Grom (BMP-1 technical) · HEAT": [
+        ("default", "BP_Technical_BMP1_2A28_HEAT", 100, 2, 8, 0.08, 1),  # native default: falloff
+    ],
+    "2A28 Grom (BMD-1M) · HEAT · gunner sight ×6": [
         ("default", "BP_BMD1M_2A28_HEAT", 100, 2, 8, 0.08, 1),  # native default: falloff
     ],
     "2A28 Grom (BMP-1 / BMD-1) · FRAG": [
         ("default", "BP_BMP1_2A28_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
     ],
+    "2A28 Grom (BMP-1) · FRAG · gunner sight ×6": [
+        ("default", "BP_BMP1_2A28_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
+    ],
+    "2A28 Grom (BMP-1 technical) · FRAG · gunner sight ×6": [
+        ("default", "BP_Technical_BMP1_2A28_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
+    ],
     "2A28 Grom (BMD-1M) · FRAG": [
+        ("default", "BP_BMD1M_2A28_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
+    ],
+    "2A28 Grom (BMP-1 technical) · FRAG": [
+        ("default", "BP_Technical_BMP1_2A28_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
+    ],
+    "2A28 Grom (BMD-1M) · FRAG · gunner sight ×6": [
         ("default", "BP_BMD1M_2A28_Frag", 200, 2, 16, 0.08, 1),  # native default: falloff
     ],
     "2A70 100mm (BMP-3 / BMD-4 / ZBD04A) · FRAG": [
         ("default", "BP_BMP3M_2A70_HEFrag", 300, 4, 35, 0.2, 5),
     ],
+    "2A70 100mm (BMP-3) · FRAG · gunner sight ×4": [
+        ("default", "BP_BMP3M_2A70_HEFrag", 300, 4, 35, 0.2, 5),
+    ],
     "2A70 100mm (ZBD-04A) · FRAG": [
         ("default", "BP_ZBD04A_2A70_HEFrag", 300, 4, 35, 0.2, 5),
     ],
+    "2A70 100mm (ZBD-04A) · FRAG · gunner sight ×4": [
+        ("default", "BP_ZBD04A_2A70_HEFrag", 300, 4, 35, 0.2, 5),
+    ],
+    "2A70 100mm (ZBD-04A) · FRAG · gunner sight ×14": [
+        ("default", "BP_ZBD04A_2A70_HEFrag", 300, 4, 35, 0.2, 5),
+    ],
     "2A70 100mm (BMD-4M) · FRAG": [
+        ("default", "BP_BMD4M_2A70_HEFrag", 300, 4, 35, 0.2, 5),
+    ],
+    "2A70 100mm (BMD-4M) · FRAG · gunner sight ×5": [
+        ("default", "BP_BMD4M_2A70_HEFrag", 300, 4, 35, 0.2, 5),
+    ],
+    "2A70 100mm (BMP-3 / BMD-4M) · FRAG · gunner sight ×14": [
         ("default", "BP_BMD4M_2A70_HEFrag", 300, 4, 35, 0.2, 5),
     ],
     "ZiS-3 · optic (RMB ×4)": [
@@ -407,23 +576,65 @@ GAME_EXPLOSION = {
         ("HEAT", "BP_ZiS3_Weapon_HEAT", 200, 3.5, 16, 0.15, 2),
         ("HE", "BP_ZiS3_Weapon_Frag", 200, 2, 16, 0.08, 1),
     ],
-    "Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2": [
+    "Tank HEAT/HE · T-72 (2A46)": [
         ("HEAT", "BP_2A46_HEAT", 200, 3.5, 16, 0.15, 2),
         ("HE", "BP_2A46_Frag", 300, 4, 35, 0.2, 5),
     ],
+    "Tank HEAT/HE · T-90A (2A46M)": [
+        ("HEAT", "BP_2A46M_HEAT", 200, 3.5, 16, 0.15, 2),
+        ("HE", "BP_2A46M_Frag", 300, 4, 35, 0.2, 5),
+    ],
+    "Tank HEAT/HE · Sprut-SDM1 (2A45) · gunner sight ×4": [
+        ("HEAT", "BP_2A45_HEAT", 200, 3.5, 16, 0.15, 2),
+        ("HE", "BP_2A45_Frag", 300, 4, 35, 0.2, 5),
+    ],
+    "Tank HEAT/HE · Sprut-SDM1 (2A45) · gunner sight ×12": [
+        ("HEAT", "BP_2A45_HEAT", 200, 3.5, 16, 0.15, 2),
+        ("HE", "BP_2A45_Frag", 300, 4, 35, 0.2, 5),
+    ],
+    "Tank HEAT/HE · T-72 (2A46) · gunner sight ×12": [
+        ("HEAT", "BP_2A46_T72A_HEAT", 200, 3.5, 16, 0.15, 2),
+        ("HE", "BP_2A46_T72A_Frag", 300, 4, 35, 0.2, 5),
+    ],
+    "Tank HEAT/HE · T-90A (2A46M) · gunner sight ×12": [
+        ("HEAT", "BP_2A46M_HEAT", 200, 3.5, 16, 0.15, 2),
+        ("HE", "BP_2A46M_Frag", 300, 4, 35, 0.2, 5),
+    ],
     "Tank HEAT/HE · M1A1 / M1A2 (M256)": [
+        ("default", "BP_M256A1_HEAT", 200, 7, 20, 0.15, 2),
+    ],
+    "Tank HEAT/HE · M1A1 / M1A2 (M256) · gunner sight ×6": [
+        ("default", "BP_M256A1_HEAT", 200, 7, 20, 0.15, 2),
+    ],
+    "Tank HEAT/HE · M1A1 / M1A2 (M256) · gunner sight ×12": [
         ("default", "BP_M256A1_HEAT", 200, 7, 20, 0.15, 2),
     ],
     "Tank HEAT/HE · Leopard 2A6 (Rh120)": [
         ("default", "BP_L55_HEAT", 200, 7, 20, 0.15, 2),
     ],
+    "Tank HEAT/HE · Leopard 2A6 (Rh120) · gunner sight ×12": [
+        ("default", "BP_L55_HEAT", 200, 7, 20, 0.15, 2),
+    ],
     "Tank HEAT/HE · M1128 MGS (M68A2)": [
+        ("default", "BP_M68A2_HEAT", 200, 7, 20, 0.15, 2),
+    ],
+    "Tank HEAT/HE · M1128 MGS (M68A2) · gunner sight ×8": [
         ("default", "BP_M68A2_HEAT", 200, 7, 20, 0.15, 2),
     ],
     "Tank HEAT/HE · M60T (MG253)": [
         ("default", "BP_MG253_Frag", 300, 4, 35, 0.2, 5),
     ],
+    "Tank HEAT/HE · M60T (MG253) · gunner sight ×3": [
+        ("default", "BP_MG253_Frag", 300, 4, 35, 0.2, 5),
+    ],
+    "Tank HEAT/HE · M60T (MG253) · gunner sight ×8": [
+        ("default", "BP_MG253_Frag", 300, 4, 35, 0.2, 5),
+    ],
     "Tank HEAT/HE · ZTZ-99 (ZPT-98)": [
+        ("HEAT", "BP_ZPT-98_HEAT", 200, 3.5, 16, 0.15, 2),
+        ("HE", "BP_ZPT-98_HE", 300, 4, 35, 0.2, 5),
+    ],
+    "Tank HEAT/HE · ZTZ-99 (ZPT-98) · gunner sight ×12": [
         ("HEAT", "BP_ZPT-98_HEAT", 200, 3.5, 16, 0.15, 2),
         ("HE", "BP_ZPT-98_HE", 300, 4, 35, 0.2, 5),
     ],
@@ -431,14 +642,32 @@ GAME_EXPLOSION = {
         ("HEAT", "BP_2A20_HEAT", 200, 3.5, 16, 0.15, 2),
         ("HE", "BP_2A20_Frag", 300, 4, 35, 0.2, 5),
     ],
+    "Tank HEAT/HE · T-62 (2A20) · gunner sight ×7": [
+        ("HEAT", "BP_2A20_HEAT", 200, 3.5, 16, 0.15, 2),
+        ("HE", "BP_2A20_Frag", 300, 4, 35, 0.2, 5),
+    ],
     "Tank HEAT/HE · T-64BM2 (KBA3)": [
+        ("HEAT", "BP_KBA3_HEAT", 200, 3.5, 16, 0.15, 2),
+        ("HE", "BP_KBA3_Frag", 300, 4, 35, 0.2, 5),
+    ],
+    "Tank HEAT/HE · T-64BM2 (KBA3) · gunner sight ×12": [
         ("HEAT", "BP_KBA3_HEAT", 200, 3.5, 16, 0.15, 2),
         ("HE", "BP_KBA3_Frag", 300, 4, 35, 0.2, 5),
     ],
     "Tank HESH · L30A1 (Challenger 2)": [
         ("default", "BP_L30A1_HESH", 200, 7, 20, 0.15, 2),
     ],
+    "Tank HESH · Challenger 2 (L30A1) · gunner sight ×4": [
+        ("default", "BP_L30A1_HESH", 200, 7, 20, 0.15, 2),
+    ],
+    "Tank HESH · Challenger 2 (L30A1) · gunner sight ×10": [
+        ("default", "BP_L30A1_HESH", 200, 7, 20, 0.15, 2),
+    ],
     "ZPL-98A 105mm (ZTD-05) · HEAT / HE": [
+        ("HEAT", "BP_ZTD05_ZPL-98A_HEAT", 200, 3.5, 16, 0.15, 2),
+        ("HE", "BP_ZTD05_ZPL-98A_Frag", 300, 4, 35, 0.2, 5),
+    ],
+    "ZPL-98A 105mm (ZTD-05) · HEAT / HE · gunner sight ×7": [
         ("HEAT", "BP_ZTD05_ZPL-98A_HEAT", 200, 3.5, 16, 0.15, 2),
         ("HE", "BP_ZTD05_ZPL-98A_Frag", 300, 4, 35, 0.2, 5),
     ],
@@ -538,25 +767,30 @@ if sys.argv[1] == "--verify":
     verify(sys.argv[2])
 
 data = json.load(open(sys.argv[1])); data.pop("_comment")
-existing = set()
-if len(sys.argv) > 4 and sys.argv[2] != "--update":
-    source = open(sys.argv[4], encoding="utf-8").read()
-    existing = {json.loads(f'"{name}"') for name in re.findall(r'ballistics:\s*"((?:[^"\\]|\\.)*)"', source)}
+
+
+def old_names(key):
+    """The names weapon `key` had before, from RENAMED, the oldest first."""
+    return [old for old, new in RENAMED.items() if new == key]
 
 
 def ident(key):
-    """DF_<name>; a renamed weapon keeps the identifier of its old name."""
-    return "DF_" + re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9]", "_", OLD_NAME.get(key, key))).strip("_")
+    """DF_<name>; a renamed weapon keeps the identifier of its oldest name in RENAMED."""
+    return "DF_" + re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9]", "_", (old_names(key) or [key])[0])).strip("_")
 
 
-def legacy_lines(key):
-    """The `legacyBallistics` line of a renamed weapon (RENAMED or EARLIER_NAME), none for any other."""
-    old_name = OLD_NAME.get(key) or EARLIER_NAME.get(key)
+def name_lines(key, views):
+    """The lines that name the entry of weapon `key`: its DF_ identifier, its Squad Ballistics name (`ballistics`),
+    the names it had before (`legacyBallistics`: EARLIER_NAME, then RENAMED) and the Squad Ballistics names `views`
+    that share the entry (`ballisticsViews`, see `plan`). A list without names has no line."""
+    lines = [f'        name: "{ident(key)}",', f"        ballistics: {json.dumps(key, ensure_ascii=False)},"]
+    legacy = ([EARLIER_NAME[key]] if key in EARLIER_NAME else []) + old_names(key)
 
-    if old_name is None:
-        return []
+    for prop, names in (("legacyBallistics", legacy), ("ballisticsViews", views)):
+        if names:
+            lines.append(f"        {prop}: [{', '.join(json.dumps(name, ensure_ascii=False) for name in names)}],")
 
-    return [f"        legacyBallistics: [{json.dumps(old_name, ensure_ascii=False)}],"]
+    return lines
 
 
 def num(x):
@@ -638,16 +872,13 @@ def muzzle_lines(w):
     return [f"        muzzle: {{ pivotHeight: {num(w.get('launch_height', 0))}, forward: {num(w.get('muzzle_forward', 0))}, up: {num(w.get('muzzle_up', 0))} }},"]
 
 
-def hold_laid_entry(key, w):
-    """A "deployables" entry built like SquadCalc's "AGS-17"."""
+def hold_laid_lines(key, w):
+    """The lines below the names of a "deployables" entry built like SquadCalc's "AGS-17"."""
     if not key.startswith(HOLD_LAID_FAMILY):
         sys.exit(f"{key}: hold-laid, but SquadCalc only has the grenade of the {HOLD_LAID_FAMILY}")
     lim = w.get("elevation_limits", [-90, 90])
     hold = w["hold_elevation"]
     lines = [
-        "    {",
-        f'        name: "{ident(key)}",',
-        f"        ballistics: {json.dumps(key, ensure_ascii=False)},",
         "        deceleration: 0,",
         "        decelerationTime: 0,",
         f"        gravityScale: {num(w['gravity'])},",
@@ -672,20 +903,16 @@ def hold_laid_entry(key, w):
         f"            velocity: {num(w['velocity'])},",
         "            ...VOG_17,",
         "        }]",
-        "    },",
     ]
     return lines
 
 
-def direct_fire_entry(key, w):
-    """A "directFire" entry: low arc only, the spread of the game weapon and the explosion of its ammunition."""
+def direct_fire_lines(key, w):
+    """The lines below the names of a "directFire" entry: low arc only, the spread of the game weapon and the
+    explosion of its ammunition."""
     if key not in GAME_MOA:
         sys.exit(f"{key}: no MOA in GAME_MOA (WeaponConfig.MOA of its game weapon, see tools/game_weapons.py of Squad Ballistics)")
     lines = [
-        "    {",
-        f'        name: "{ident(key)}",',
-        f"        ballistics: {json.dumps(key, ensure_ascii=False)},",
-        *legacy_lines(key),
         "        deceleration: 0,",
         "        decelerationTime: 0,",
     ]
@@ -715,13 +942,72 @@ def direct_fire_entry(key, w):
         '        image: "DirectFire",',
         "        heatmap: false,",
         *shell_lines(game_shells(key), w["velocity"], w.get("min_distance", 0)),
-        "    },",
     ]
     return lines
 
 
-def entry(key, w):
-    return hold_laid_entry(key, w) if w.get("hold_rate") else direct_fire_entry(key, w)
+def solution_lines(key):
+    """The entry of weapon `key` below its names: all that SquadCalc computes and draws for it (flight, launch point,
+    elevation limits, spread, explosion). Weapons with the same lines get the same firing solution."""
+    w = data[key]
+    return hold_laid_lines(key, w) if w.get("hold_rate") else direct_fire_lines(key, w)
+
+
+def entry(key, views):
+    """The entry of weapon `key`, which also stands for the Squad Ballistics names `views`."""
+    return ["    {", *name_lines(key, views), *solution_lines(key), "    },"]
+
+
+# A generated entry of SquadCalc's weapons.js ("\n" line ends): from its "    {" line to the "    }," that closes it
+GENERATED = re.compile(r'^    \{\n        name: "DF_[^"]*",\n        ballistics: ("(?:[^"\\]|\\.)*"),\n.*?^    \},$', re.M | re.S)
+
+
+def plan(source):
+    """What becomes of the weapons.json names that `source`, SquadCalc's weapons.js ("\n" line ends, "" for none),
+    has no entry for.
+
+    One entry per distinct solution (`solution_lines`). A name whose solution a generated entry of `source` has is
+    a view of that entry, the first one in WEAPONS when several have it (entries that share a solution stay: the
+    selected weapon is stored by its index). The other names with one solution become one new entry, named after
+    the least magnified of them (`zoom`: the view the player has before zooming in; the first in weapons.json among
+    equals), with the rest as its views. Only the entries `update` rewrites from weapons.json take views: SquadCalc's
+    own "AGS-17" and the weapons of SQUADCALC_ONLY are not made from this data.
+
+    Returns (views, added): `views` maps the Squad Ballistics name of an entry, in `source` or new, to the names of
+    its views, `added` lists the names of the new entries; both in weapons.json order.
+    """
+    current = {RENAMED.get(name, name) for name in map(json.loads, re.findall(r'ballistics:\s*("(?:[^"\\]|\\.)*")', source))}
+    owner = {}
+
+    for match in GENERATED.finditer(source):
+        key = json.loads(match.group(1))
+        key = RENAMED.get(key, key)
+        if key in data and key not in SQUADCALC_ONLY:
+            owner.setdefault(tuple(solution_lines(key)), key)
+
+    views, new = {}, {}
+
+    for key, w in data.items():
+        arc = w.get("arc", "low")
+        if w.get("aim", "elevation" if arc == "high" else "overlay") != "overlay" or key in SKIP or w.get("mod"):
+            continue
+        if key in current:
+            continue
+        solution = tuple(solution_lines(key))
+        if solution in owner:
+            views.setdefault(owner[solution], []).append(key)
+        else:
+            new.setdefault(solution, []).append(key)
+
+    added = []
+
+    for names in new.values():
+        first = min(names, key=lambda name: data[name].get("zoom", 1))
+        added.append(first)
+        if len(names) > 1:
+            views[first] = [name for name in names if name != first]
+
+    return views, added
 
 
 def update(path):
@@ -729,8 +1015,7 @@ def update(path):
     raw = open(path, encoding="utf-8", newline="").read()
     newline = "\r\n" if "\r\n" in raw else "\n"
     source = raw.replace("\r\n", "\n")
-    # A generated entry: from its "    {" line to the "    }," that closes it
-    block = re.compile(r'^    \{\n        name: "DF_[^"]*",\n        ballistics: ("(?:[^"\\]|\\.)*"),\n.*?^    \},$', re.M | re.S)
+    views, _ = plan(source)
     changed = 0
 
     def regenerate(match):
@@ -744,11 +1029,11 @@ def update(path):
             print(f"kept, not in {sys.argv[1]}: {key}", file=sys.stderr)
             return match.group(0)
         else:
-            text = "\n".join(entry(key, data[key]))
+            text = "\n".join(entry(key, views.get(key, [])))
         changed += text != match.group(0)
         return text
 
-    source = block.sub(regenerate, source)
+    source = GENERATED.sub(regenerate, source)
     open(path, "w", encoding="utf-8", newline="").write(source.replace("\n", newline))
     print(changed)
 
@@ -757,15 +1042,8 @@ if sys.argv[2] == "--update":
     update(sys.argv[3])
     sys.exit(0)
 
-entries, names = [], {}
-for key, w in data.items():
-    arc = w.get("arc", "low")
-    if w.get("aim", "elevation" if arc == "high" else "overlay") != "overlay" or key in SKIP or w.get("mod"):
-        continue
-    if key in existing:
-        continue
-    names[ident(key)] = key
-    entries.append("\n".join(entry(key, w)))
+views, added = plan(open(sys.argv[4], encoding="utf-8").read() if len(sys.argv) > 4 else "")
+entries = ["\n".join(entry(key, views.get(key, []))) for key in added]
 open(sys.argv[2], "w").write("\n".join(entries) + "\n" if entries else "")
-json.dump(names, open(sys.argv[3], "w"), ensure_ascii=False, indent=4)
+json.dump({ident(key): key for key in added}, open(sys.argv[3], "w"), ensure_ascii=False, indent=4)
 print(len(entries))

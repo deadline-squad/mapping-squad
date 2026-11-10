@@ -2,7 +2,9 @@
 
 Runs SquadCalc's real Weapon and SquadFiringSolution under Node (solve.mjs) and
 Squad Ballistics' solve() on the same distances and heights, for every SquadCalc
-weapon with a `ballistics` name that Squad Ballistics has, every shell of it:
+weapon with a `ballistics` name that Squad Ballistics has, every shell of it, and
+again for every name of its `ballisticsViews` (the views of a weapon that share the
+entry: Squad Ballistics' solution for the view against SquadCalc's for the entry):
 
 * direct-fire weapons: the low arc (elevation, angle over the line of sight shown
   for them, time of flight);
@@ -25,9 +27,13 @@ The grid (documented here, so that a regression in any corner shows up):
   0.5, 0.9, 0.99, 0.999, 1.001 and 1.01 of SquadCalc's own getMaxDistance() at -40, 0 and
   +25 m.
 
+A weapon Squad Ballistics aims with the overlay that SquadCalc has neither as an entry nor
+as a view (`selectWeapon` would refuse its name) is reported as MISSING.
+
     python3 compare.py <Squad-Ballistics checkout> <SquadCalc checkout>
 
-Prints a summary table and exits with 1 on any difference above 1e-6 degree / second.
+Prints a summary table and exits with 1 on any difference above 1e-6 degree / second or
+any missing weapon.
 """
 import json, math, os, subprocess, sys
 sys.path.insert(0, sys.argv[1])
@@ -62,26 +68,31 @@ def differ(a, b):
 
 
 seen = set()
-for row in js:
-    w = weapons.get(row["name"])
+
+
+def compare(row, name):
+    """Check SquadCalc's solution `row` (one case of one shell of an entry) against Squad Ballistics' weapon
+    `name`: the entry's own name or one of its views."""
+    global checked
+    w = weapons.get(name)
     if w is None:
-        continue  # a weapon Squad Ballistics no longer has (mods, machine guns, autocannons)
+        return  # a weapon Squad Ballistics no longer has (mods, machine guns, autocannons)
     # Laid by holding a key and compared on both arcs (AGS-17); mortars only use it for the auto-lay
     laid_by_hold = w.has_hold and w.aim == "overlay"
     direct = row["type"] == "directFire"
     elevation = not direct and not laid_by_hold
-    stats = per_weapon.setdefault(row["name"], [0, 0])
+    stats = per_weapon.setdefault(name, [0, 0])
     before = mismatch
 
-    key = (row["name"], row["shell"])
+    key = (name, row["shell"])
     if elevation and key not in seen:
         seen.add(key)
         if abs(w.velocity - row["velocity"]) > 1e-9:
-            report("VELOCITY", row["name"], row["shell"], w.velocity, row["velocity"])
+            report("VELOCITY", name, row["shell"], w.velocity, row["velocity"])
         if abs(w.min_distance - row["minDistance"]) > 1e-9:
-            report("MIN DISTANCE", row["name"], row["shell"], w.min_distance, row["minDistance"])
+            report("MIN DISTANCE", name, row["shell"], w.min_distance, row["minDistance"])
         if any(abs(a - b) > 1e-9 for a, b in zip(w.elevation_limits, row["minElevation"])):
-            report("ELEVATION LIMITS", row["name"], w.elevation_limits, row["minElevation"])
+            report("ELEVATION LIMITS", name, w.elevation_limits, row["minElevation"])
 
     for arc in ("low", "high"):
         if direct and arc == "high":
@@ -92,37 +103,47 @@ for row in js:
             checked += 1
             stats[0] += 1
             if s.reachable or s.reason_code != "too_close":
-                report("TOO CLOSE", row["name"], arc, row["distance"], row["height"], s.reachable, s.reason_code)
+                report("TOO CLOSE", name, arc, row["distance"], row["height"], s.reachable, s.reason_code)
             continue
         sb = s.angle if s.reachable else math.nan
         sc = row[arc] if row[arc] is not None else math.nan
         checked += 1
         stats[0] += 1
         if differ(sb, sc):
-            report(row["name"], row["shell"], arc, row["distance"], row["height"], sb, sc)
+            report(name, row["shell"], arc, row["distance"], row["height"], sb, sc)
         if not s.reachable or math.isnan(sc):
             continue
         if arc == "low" and not elevation:
             if abs(s.sight_angle - row["sight"]) > TOLERANCE:
-                report("SIGHT", row["name"], row["distance"], row["height"], s.sight_angle, row["sight"])
+                report("SIGHT", name, row["distance"], row["height"], s.sight_angle, row["sight"])
             if (direct or w.g == 0) and abs(s.time_of_flight - row["tofLow"]) > TOLERANCE:
-                report("TOF", row["name"], row["distance"], row["height"], s.time_of_flight, row["tofLow"])
+                report("TOF", name, row["distance"], row["height"], s.time_of_flight, row["tofLow"])
         if elevation:
             tof = row["tofLow" if arc == "low" else "tofHigh"]
             if tof is None or abs(s.time_of_flight - tof) > TOLERANCE:
-                report("TOF", row["name"], arc, row["distance"], row["height"], s.time_of_flight, tof)
+                report("TOF", name, arc, row["distance"], row["height"], s.time_of_flight, tof)
         if laid_by_hold and arc == "high" and abs(s.hold_time - row["hold"]) > 1e-9:
-            report("HOLD", row["distance"], row["height"], s.hold_time, row["hold"])
+            report("HOLD", name, row["distance"], row["height"], s.hold_time, row["hold"])
     stats[1] += mismatch - before
 
     if direct or laid_by_hold or elevation:
         sb_max = w.max_range() if w.g else 10000
         if not laid_by_hold and abs(sb_max - row["max"]) > 1e-3 * max(1, sb_max):
-            worst[row["name"]] = (sb_max, row["max"])
+            worst[name] = (sb_max, row["max"])
+
+
+known = set()
+for row in js:
+    for name in (row["name"], *row["views"]):
+        known.add(name)
+        compare(row, name)
+missing = [name for name, w in weapons.items() if w.aim == "overlay" and name not in known]
 
 print(f"{'weapon':<45}{'checks':>8}{'mismatches':>12}")
 for name, (count, bad) in sorted(per_weapon.items()):
     print(f"{name:<45}{count:>8}{bad:>12}")
-print("weapons:", len(per_weapon), "checked:", checked, "mismatches:", mismatch)
+for name in missing:
+    print("MISSING", name)
+print("weapons:", len(per_weapon), "checked:", checked, "mismatches:", mismatch, "missing:", len(missing))
 print("max range differences:", worst)
-sys.exit(1 if mismatch or worst else 0)
+sys.exit(1 if mismatch or worst or missing else 0)

@@ -1,7 +1,8 @@
 // Solve cases with the real SquadCalc Weapon + SquadFiringSolution; print JSON lines.
 // Every shell of every weapon with a `ballistics` name is solved on the given (distance, height) cases and,
 // for the weapons that fly a gravity trajectory, on a few more distances around the weapon's own maximum
-// range (fractions NEAR_MAX of getMaxDistance) at NEAR_MAX_HEIGHTS.
+// range (fractions NEAR_MAX of getMaxDistance) at NEAR_MAX_HEIGHTS. Each line carries the entry's
+// `ballisticsViews` (`views`), the other Squad Ballistics names the same solution stands for.
 import { App } from "./stub-app.mjs";
 const root = process.argv[2];
 const { WEAPONS } = await import(`${root}/src/data/weapons.js`);
@@ -35,7 +36,7 @@ for (const w of WEAPONS) {
         for (const [distance, height, nearMax] of all) {
             const fs = new SquadFiringSolution({ lat: 0, lng: 0, h: 0 }, { lat: 0, lng: distance, h: height }, map, 0);
             out.push({
-                name: w.ballistics, shell: shell.name, type: w.type, distance, height, nearMax,
+                name: w.ballistics, views: w.ballisticsViews ?? [], shell: shell.name, type: w.type, distance, height, nearMax,
                 low: fs.elevation.low.deg, sight: fs.getSightAngle(fs.elevation.low.rad), high: fs.elevation.high.deg,
                 tofLow: fs.timeOfFlight.low, tofHigh: fs.timeOfFlight.high, hold: fs.holdTime.high,
                 max, velocity: shell.velocity, minDistance: shell.minDistance, minElevation: w.minElevation,
