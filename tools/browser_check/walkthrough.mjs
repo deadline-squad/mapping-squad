@@ -12,7 +12,7 @@
 // Not clicked: the collaborative session (it creates a session on the upstream squadcalc.app server)
 // and the external links. The squadcalc.app statistics endpoints (/post/*) are answered locally so
 // the walkthrough's markers do not end up in the upstream statistics.
-import { mkdirSync, rmSync, renameSync, writeFileSync, readdirSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync, readdirSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -25,6 +25,7 @@ if (!base || base.startsWith("--")) {
     console.error("usage: node walkthrough.mjs <site URL> [--out <dir>] [--only desktop|mobile]");
     process.exit(2);
 }
+const siteOrigin = new URL(base).origin;
 const outDir = option("--out", join(homedir(), "videos", "squadcalc"));
 const only = option("--only", null);
 const framesDir = join(outDir, "frames");
@@ -107,8 +108,15 @@ async function startRun(name, contextOptions, videoSize) {
     const context = await browser.newContext({ ...contextOptions, acceptDownloads: true, recordVideo: { dir: videoTmp, size: videoSize } });
     // Every request is made by Playwright (Node) and handed to the page: Chromium aborts its own
     // requests in flight with ERR_NETWORK_CHANGED whenever a network interface comes or goes, which
-    // on a Docker host happens every few seconds. Routes registered later take precedence.
+    // on a Docker host happens every few seconds. Except two kinds of request of the site's service
+    // worker, which answers the upstream map images (/maps/*.webp) of the cross-origin isolated page
+    // (COEP credentialless): its script, as a worker whose script Playwright fulfilled runs without its
+    // COEP, and its requests to other origins, as an opaque response Playwright fulfilled for the worker
+    // needs a Cross-Origin-Resource-Policy header the upstream does not send. Either way the page gets
+    // net::ERR_FAILED for the image. Routes registered later take precedence.
     await context.route(/^https?:/, async (route) => {
+        const worker = route.request().serviceWorker();
+        if (worker && (route.request().url() === worker.url() || new URL(route.request().url()).origin !== siteOrigin)) return route.continue();
         for (let attempt = 1; ; attempt++) {
             try {
                 return await route.fulfill({ response: await route.fetch({ timeout: 60000 }) });
@@ -263,7 +271,8 @@ async function startRun(name, contextOptions, videoSize) {
             const video = page.video();
             await context.close();
             const target = join(outDir, `${name}.webm`);
-            renameSync(await video.path(), target);
+            // A copy, not a rename: <dir> may be on another file system than the temporary folder
+            await video.saveAs(target);
             rmSync(videoTmp, { recursive: true, force: true });
             run.video = target;
             return target;
@@ -322,19 +331,23 @@ async function desktop() {
     });
     await run.pause(1200);
 
-    // Map styles
-    await run.caption("Map styles: detailed, relief, satellite, HD images");
+    // Map styles: the layer menu of SquadCalc's mapLayers.js (the HD render is the default), a frame of each
+    // once its picture is shown, and the basemap's HD tiles
+    await run.caption("Map styles: detailed, detailed in game colours, relief, basemap and its HD tiles, the HD render");
+    const showStyle = async (button, label) => {
+        await run.click(`#mapLayerMenu ${button}`);
+        await page.waitForFunction(() => !window.__App.minimap.layerChanging, null, { timeout: 60000 });
+        await run.pause(1000);
+        if (label) await run.shot(label);
+    };
     await run.hover("#mapBtnLayers #btn-map-choices");
     await run.pause(600);
-    for (const style of [".btn-detailed", ".btn-relief", ".btn-basemap"]) {
-        await run.click(`#mapLayerMenu ${style}`);
-        await run.pause(1500);
-        if (style === ".btn-relief") await run.shot("relief");
-    }
-    await run.click("#mapLayerMenu .btn-hd");
-    await run.pause(2000);
-    await run.click("#mapLayerMenu .btn-hd");
-    await run.pause(1000);
+    for (const style of ["detailed", "detailed-colour", "relief", "basemap"]) await showStyle(`.btn-${style}`, `style-${style}`);
+    await showStyle(".btn-hd", "style-basemap-hd");
+    await showStyle(".btn-hd");
+    await run.hover("#mapBtnLayers #btn-map-choices");
+    await run.pause(600);
+    await showStyle(".btn-standard-hd", "style-standard-hd");
 
     // Weapon and targets
     await run.caption("Double-click: the first one places the weapon, and the weapon selector appears");
@@ -462,16 +475,19 @@ async function desktop() {
     await run.click("#mapLayerMenu .btn-undo");
     await run.pause(1200);
 
+    // A map button switched off in the settings' map-button toggles (by default the heatmap, focus mode,
+    // download, upload, share and legacy UI) is in the tools menu, which is shown only while it holds one;
+    // the others are in the bar
     await run.caption("More tools: heatmap, focus mode, download, upload, share, legacy UI");
-    await run.hover("#mapBtnTools #btn-map-choices");
-    await run.pause(1200);
     const tool = async (selector, wait = 1500) => {
-        await run.hover("#mapBtnTools #btn-map-choices");
-        // The tool buttons slide in from the right: aim once they stopped
-        await run.pause(1200);
         const button = page.locator(`#mapLayerMenu ${selector}`).first();
+        if (await button.evaluate((element) => element.closest("#mapBtnTools") !== null)) {
+            await run.hover("#mapBtnTools #btn-map-tools");
+            // The tool buttons slide in from the right: aim once they stopped
+            await run.pause(1200);
+        }
         if (!(await button.isVisible().catch(() => false))) {
-            run.note(`tool button ${selector} not visible in the tools menu`);
+            run.note(`tool button ${selector} not visible`);
             return false;
         }
         await run.click(button);
@@ -485,6 +501,9 @@ async function desktop() {
     if (await page.locator(".btn-helpmap.active").count()) run.note("the heatmap stayed on after its button was clicked again");
     await run.caption("Focus mode");
     await tool(".btn-focus", 2000);
+    // Enter while the hidden focus-mode button still has the keyboard focus also presses that button, which turns
+    // focus mode on again: Chromium moves the focus off it at the page's next rendering, which a busy page delays
+    await page.waitForFunction(() => !document.activeElement?.matches(".btn-focus"));
     await run.press("Enter");
     await run.pause(800);
     await run.caption("Download the map state to a file");
@@ -525,8 +544,11 @@ async function desktop() {
         const chooserPromise = page.waitForEvent("filechooser", { timeout: 10000 }).catch(() => null);
         await tool(".btn-upload", 300);
         const chooser = await chooserPromise;
-        if (chooser) await chooser.setFiles(savedFile);
-        else run.note("the upload button opened no file chooser");
+        if (chooser) {
+            await chooser.setFiles(savedFile);
+            // The import loads the map again and places the weapon and targets once its heightmap is loaded
+            await page.waitForFunction(() => window.__App.minimap.activeTargetsMarkers.getLayers().length > 0, null, { timeout: 120000 }).catch(() => {});
+        } else run.note("the upload button opened no file chooser");
         await run.pause(2500);
     }
     const placed = await page.evaluate(() => ({ weapons: window.__App.minimap.activeWeaponsMarkers.getLayers().length, targets: window.__App.minimap.activeTargetsMarkers.getLayers().length }));
@@ -615,6 +637,7 @@ async function desktop() {
     await run.pause(2000);
 
     await run.caption("Settings: layer and faction options");
+    await run.click("#mapLayerMenu .btn-settings");
     await run.click("#settingsControls button[value='panel3']");
     await run.pause(800);
     await run.shot("settings-layer");
@@ -711,9 +734,7 @@ async function mobile() {
     await run.pause(2000);
 
     await run.caption("Settings on a phone");
-    const settings = page.locator("#mapLayerMenu .btn-settings");
-    if (!(await settings.isVisible().catch(() => false))) await tapOn("#mapBtnTools #btn-map-choices");
-    await tapOn(settings);
+    await tapOn("#mapLayerMenu .btn-settings");
     await run.pause(1200);
     await run.shot("settings");
     await tapOn("#settingsControls button[value='panel2']");
