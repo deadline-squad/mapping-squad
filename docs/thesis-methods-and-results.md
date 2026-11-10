@@ -9,6 +9,8 @@ Final state 2026-11-05: the report was read again against SquadCalc `dev` 45.33.
 branch; sections 1.5, 2.3, 9.3 and 12 to 15 are new or rewritten, the PENDING tables are filled with the evidence that exists
 (only the GPU timings stay PENDING, with the owner action, section 12.4), and every issue number, file path and commit named
 in the report is checked by `tools/release/check_report_refs.py` (section 13).
+Updated 2026-11-09: section 16 (the Detailed tactical map: method, accuracy against an independent render, GPU against CPU,
+performance, the faults found and fixed) is new; a row in section 15.
 
 ## 0. How to read this report
 
@@ -44,6 +46,7 @@ community-made map data is a source of any figure.
 | `SBS` | `SB:docs/sight-scales.md` | audit of 2026-11-05 |
 | `V-README` | `AGL:tools/volumetric/README.md` | |
 | `H-README` | `AGL:tools/heightmaps/README.md` | |
+| `M-README` | `AGL:tools/maptiles/README.md` | build of 2026-11-09 |
 | `E-README` | `SC:engine/README.md` | |
 | `CS` | `AGL:tools/volumetric/docs/collision-semantics.md` | |
 | `SDMG` | `AGL:tools/volumetric/docs/structure-damage.md` | |
@@ -744,4 +747,296 @@ image, as in `tools/heightmaps/heightmaps.sh`. Game data: the dedicated server, 
 | Heatmap and damage-footprint tables filled; exact-file re-measure | `#22` C5, C6; (131, -199) replaces the window target the exact file closed | section 12.1, 12.3 |
 | Map count: 25 server-derived maps | the inventory of the server package; the scope sentence of section 0 | `H-README`; SC 45.29.0 |
 | Browser-check fixes | `targets_check` failure was a stale hover timer, not the data (`deadline-squad/deadline-squadcalc#28`, SC 45.33.0) | `CL` 45.33.0 |
+| Detailed tactical map v2 (section 16, 2026-11-09) | the build of 2026-11-09 replaces that of 2026-10-29; the evaluation found Manicouagan's land drawn as sea, the lakes missing, engine placeholder textures in Standard HD and three faults of the outline evaluator, all fixed before the figures were measured | section 16; `M-README` |
 
+## 16. Detailed tactical map (the "Detailed" layer, build of 2026-11-09)
+
+The Detailed layer of SquadCalc is a topographic map of every map drawn from the game files: ground cover, relief, contours,
+water, roads, tracks, crop fields, buildings, walls, rocks, trees and roof heights, served as 256 px WebP tiles
+(`M-README`). This section records how the build of 2026-11-09 (v2) is made, how close it is to the game, and what it costs,
+against the build that was live until then (v1, 2026-10-29). Sources: Squad dedicated server build 26005357 (ground, physical
+materials, collision, splines, ocean actors) and Squad game client build 26234431 (the visible LOD 0 meshes, materials, foliage,
+landscape weightmaps, lakes). Every figure below was produced by the commands of section 16.9 on the tiles that are served; the
+label is VERIFIED unless stated otherwise.
+
+### 16.1 What changed from v1 to v2
+
+| Element | v1 (live 2026-10-29 to 2026-11-09) | v2 | Source |
+|---|---|---|---|
+| Buildings, walls, rocks, props | server collision on a 0.25 m grid | the client's visible LOD 0 meshes, highest surface on a 0.1 m grid, 2 x 2 samples per cell, drawn on the GPU | `M-README`, objects row |
+| Trees and bushes | a disc per instance from the collision radius | the top-down outline of the mesh's LOD 0, turned and scaled with the instance | `M-README` |
+| Relief | one light from the north-west | multi-directional oblique-weighted hillshade (Mark 1992), contrast matched to the single light | `M-README` |
+| Tracks painted into the landscape | not drawn | the landscape's path layers from the client's weightmaps | `M-README` |
+| Crop fields | crops drawn as trees (Yehorivka's wheat as forest) | crop plants as fields: cover and height on the 1 m grid, tinted from low to tall crops, hatched | `M-README` |
+| Roof relief | shaded from the height above the ground under the roof | shaded from the roof's own top; coloured by height over the ground smoothed by 6 m | `M-README` |
+| Road width | the width the road meshes are laid with | the width their material shows from above | `AGL:tools/maptiles/py/road_width.py` |
+| Buildings at the overview zooms | light roofs vanish on snow and sand, no outline coarser than 1.5 m/px, a car in a 10 m pixel at a tenth of its colour | roofs held 90 grey levels below the ground around them, a 1 px outline at every zoom, coverage raised at pixels wider than 1 m | `M-README`, the three rules after the table of what is drawn |
+| Sea level | the median Z of every actor with "ocean" in its name (Manicouagan: 42 m above its ocean, the land drawn as sea) | the ocean blueprints (`BP_Ocean*`) only | `AGL:tools/maptiles/py/features.py` `sea_level` |
+| Lakes and reservoirs | not drawn (Manicouagan's reservoir dry) | the `BP_Lake*` planes of the weather layers | `AGL:tools/maptiles/py/scene_objects.py` `water_planes` |
+| Finest zoom | 0.17 to 0.32 m/px | 0.066 to 0.124 m/px (table 16.3.1) | `meta.json` of the tiles |
+
+### 16.2 Method
+
+**Object raster.** For every 0.1 m cell the highest visible surface over its four sample points, its class (structure, wall,
+rock, vegetation, bridge) and its height above the ground. The surface is found by an orthographic camera looking straight down
+with a "greater" depth test: each mesh is one instanced draw of its triangles, its placements the instances, the fragment writes
+height and class (`AGL:tools/maptiles/py/scene_raster_gpu.py`). Meshes are drawn in ascending class order with a strict test, so a
+tie goes to the lower class index, as in the numpy reference rasteriser (`SCENE_RASTER=cpu`). The two share everything but the
+sampling (ground, coverage, thin objects: `scene_objects.raster_block`); section 16.3.2 compares them cell by cell.
+
+**Crowns.** Each foliage instance is the top-down outline of its mesh's LOD 0, stamped once per mesh (`AGL:tools/maptiles/py/crowns.py`),
+turned and scaled with the instance and lit from the map's light; a crown up to 8 px across is taken from a cache of stamps at 7.5°
+and quarter-pixel steps (its edge moves by at most a quarter pixel).
+
+**Relief.** MDOW: four lights at 45° elevation from the azimuths 360°, 315°, 270° and 225°, each weighted by sin²(aspect − azimuth)
+(the weights sum to 2), then the spread multiplied by 2.5, a typical value of the ratio of the single light's spread to the four
+lights' (1.8 to 2.7 over 21 maps with 2 m gradients: Sanxian 1.83, Al Basrah 2.65, Kamdesh 2.70).
+
+**Roof relief.** A roof or deck is shaded by the slope of its own top (ground plus height above ground), with the ground added back
+bilinearly as the heights were measured, and coloured by its height over the ground smoothed by a 6 m Gaussian. Shading the height
+above the local ground drew the ground's relief on flat roofs: a 1.5 m step of the ground under a deck gave a 44 grey-level line
+on it, 3 levels now (`test_scene.RoofRelief`); adding back a cubic ground left a 16-level ridge along a jetty's edge.
+
+**Crop fields.** Crop plants (wheat, maize, poppies, cannabis, potatoes by mesh name; wild flowers and field grass are not crops)
+are no crowns: each covers the disc of its mesh's reach on the 1 m grid, smoothed by 1.5 m so that a field's rows close; the field
+is tinted from the low crops' colour (0.6 m) to the tall crops' (2 m, what hides a soldier) and hatched at the finer zooms.
+
+**Road width.** A landscape spline's segment has the width its meshes are laid with; what the game shows of it is the part of the
+mesh whose material is opaque from above. Each server segment takes the (mesh, materials) variant of the client's spline mesh
+components along it (the components override the mesh's own material slots: on Gorodok 2007 of the dirt road's components carry
+`M_GoroDirtRoad`); the opacity across the mesh comes from the colour texture's alpha above the masked clip of 1/3, from the `Masks`
+texture's green channel for road layers, or from a ramp over a fifth of the width at each side for roads painted into the virtual
+texture, read through the mesh's UV as a function of the side coordinate. The `Dirt_Road_Long` family shows 0.861 of its width,
+`MI_Dirtroad_LandscapeBlend` 0.574, asphalt 0.85 to 0.96, 81 opaque variants all of it.
+
+**Buildings at the overview zooms.** Three rules, each from a measured cause. The structure ramp's light roofs (luma 170-196 for
+2-5 m) stood 50-76 grey levels below Goose Bay's snow (246), where the game's own minimap has a median step of 125 at roof edges:
+the ramp is squeezed towards its darkest stop until its lightest roof is 90 levels below the ground around it (the ground's luma on
+3.2 m cells, a function of the map alone so a roof looks the same in every block), keeping the order of heights. The outline
+stopped at 1.5 m per pixel; it is now 1 px at every zoom, the inner height steps still only at 1.5 m and finer. The pyramid's
+coverage is a mean, so a 2 x 5 m car in a 10 m pixel was drawn at a tenth of its colour; at pixels wider than 1 m the coverage c is
+drawn as 1 − (1 − c)^(px / 1 m).
+
+**Water.** The sea is the Z of the ocean blueprints (`BP_Ocean*`) of the weather layers. A lake is a `BP_Lake*` actor: a flat
+30 x 30 m plane (`SM_env_river`) scaled and turned to the lake, which the game draws over the landscape, so there is water where the
+ground lies below the plane inside its rectangle; a dam or bank that rises above the plane ends the lake. The server holds no
+collision body for these planes, and the client scene's lake material is a dynamic instance named after its weather-layer level
+(`WL_<map>_Water`), which the object filter had taken for a hidden water surface.
+
+**Objects only the server has.** Blueprint buildings and collision-only props that the client scene lacks stay from the old
+0.25 m raster where no scene object lies within 2 m. Their staircase outline is smoothed: the cell's coverage is the bilinear
+interpolation of the 0.25 m mask, stretched so the half level (the outline) stays in place; height and class come from the
+nearest old cell.
+
+**Open sea.** A 4 x 4 tile block with nothing but sea 13 m and deeper within its reach is not drawn: its tiles are hard links to one
+tile of the deep water's colour (the same bytes the drawing gives).
+
+### 16.3 Accuracy
+
+#### 16.3.1 Placement against an independent render of the game's meshes
+
+The gate of every build compares the finest tiles with the Standard HD layer (`AGL:tools/maprender/README.md`), a camera render of the
+same client meshes that shares no code with the rasteriser: eight 76.8 m windows around the largest roofs, each wholly inside the map, both layers resampled to
+0.1 m, the sub-pixel peak of the cross-correlation of their edge images; pass when the median over at least four measured windows is
+under 0.1 m on both axes (`AGL:tools/maptiles/py/check_alignment.py`). A positive offset means the tiles lie east (x) or south (y) of HD.
+
+| Map | Finest zoom, m/px (v1 → v2) | Median offset x, y (m) | Windows measured / within 0.1 m | Largest deviation from the median (m) |
+|---|---|---|---|---|
+| skorpo | 7 (0.2090) → 8 (0.1045) | 0.002, -0.032 | 8 / 8 | 0.055 |
+| yehorivka | 7 (0.1938) → 8 (0.0969) | 0.011, -0.014 | 8 / 8 | 0.096 |
+| tallil | 6 (0.2856) → 8 (0.0714) | -0.034, -0.010 | 8 / 6 | 0.168 |
+| kohat | 6 (0.2818) → 8 (0.0704) | -0.017, -0.033 | 8 / 7 | 0.122 |
+| sanxian | 6 (0.2808) → 8 (0.0702) | 0.019, 0.012 | 7 / 7 | 0.056 |
+| blackcoast | 6 (0.2806) → 8 (0.0702) | 0.012, -0.031 | 7 / 6 | 0.086 |
+| lashkar | 6 (0.2645) → 8 (0.0661) | 0.008, -0.067 | 6 / 5 | 0.134 |
+| gorodok | 6 (0.2480) → 7 (0.1240) | 0.001, -0.008 | 7 / 7 | 0.039 |
+| chora | 6 (0.2480) → 7 (0.1240) | -0.037, -0.020 | 8 / 8 | 0.051 |
+| pacific | 6 (0.2461) → 7 (0.1230) | 0.007, 0.015 | 6 / 6 | 0.071 |
+| harju | 6 (0.2461) → 7 (0.1230) | -0.013, -0.027 | 8 / 8 | 0.075 |
+| manicouagan | 6 (0.2460) → 7 (0.1230) | -0.014, -0.039 | 8 / 8 | 0.054 |
+| goosebay | 6 (0.2460) → 7 (0.1230) | -0.007, -0.020 | 8 / 7 | 0.116 |
+| jensen | 6 (0.2446) → 7 (0.1223) | -0.016, -0.017 | 6 / 4 | 0.120 |
+| albasrah | 6 (0.2441) → 7 (0.1221) | -0.013, 0.016 | 8 / 6 | 0.098 |
+| kamdesh | 6 (0.2461) → 7 (0.1230) | 0.016, -0.003 | 8 / 8 | 0.047 |
+| anvil | 6 (0.1868) → 7 (0.0934) | -0.012, 0.017 | 8 / 8 | 0.083 |
+| fallujah | 6 (0.1834) → 7 (0.0917) | -0.003, 0.011 | 8 / 7 | 0.120 |
+| narva | 6 (0.1709) → 7 (0.0854) | -0.022, -0.005 | 8 / 6 | 0.085 |
+| mutaha | 6 (0.1682) → 7 (0.0841) | -0.003, -0.037 | 8 / 8 | 0.043 |
+| kokan | 5 (0.3047) → 7 (0.0762) | 0.005, 0.002 | 8 / 8 | 0.039 |
+| mestia | 5 (0.2930) → 7 (0.0732) | 0.006, -0.003 | 8 / 7 | 0.145 |
+| foolsroad | 5 (0.2166) → 6 (0.1083) | -0.006, -0.007 | 7 / 7 | 0.073 |
+| logar | 5 (0.2150) → 6 (0.1075) | -0.056, -0.052 | 8 / 4 | 0.187 |
+| sumari | 4 (0.3174) → 6 (0.0793) | -0.001, 0.002 | 6 / 6 | 0.079 |
+
+All 25 maps pass: the largest median offset is 0.067 m, the largest deviation of one window from its map's median 0.187 m; 188 windows measured, 170 of them within 0.1 m.
+
+The height reference (the contoured ground against the served precise heightmap on open ground) agrees to 0.0009 m (the largest median difference over the 25 maps; open ground 0.50-1.00 of the samples).
+The heightmap gate (the outlines of buildings against the heightmap's bumps) is reported but resolves decimetres, not centimetres:
+its windows are 1 m samples taken at the nearest node and scatter by up to several pixels (Kokan −5.24 to −0.04 px).
+
+#### 16.3.2 GPU raster against the CPU reference
+
+Narva, level 0 (28 000 x 28 000 cells of 0.1 m), the GPU raster against the numpy reference of the same code
+(`SCENE_RASTER=cpu`), cell by cell:
+
+| Cells | Covered, GPU | Covered, CPU | Covered by one only | Height equal | Within 1 cm | Within 10 cm | Class differs |
+|---|---|---|---|---|---|---|---|
+| 784 000 000 | 26 591 018 | 26 590 909 | 1 161 (0.0044 %) | 99.83 % | 99.99 % | 99.998 % | 95 |
+
+Of the 1 161 cells covered by one only, 1 004 have one to three of their four samples covered: they lie on a triangle's edge, where
+the GPU's rasterisation rule and the reference's point-in-triangle test decide a sample on the edge differently. The other 157 are
+fully covered in one and empty in the other; the thin-object filter, which keeps a cell by the footprint of its half-covered
+neighbours, turns an edge difference into a whole cell (INFERRED). Time: GPU 244 s (raster 326 s with the cell work of four worker processes) against 1990 s
+on four CPU processes.
+
+#### 16.3.3 Building outlines against the game's own minimap textures
+
+Seed and Skirmish layers ship a minimap texture of their own that shows the buildings as the game draws them. The edges of the
+tiles, of HD and of v1 are compared with the texture's around the buildings (structures 3 m and taller, grown by 4 m, inside the play
+area; `AGL:tools/maptiles/py/outline_accuracy.py`): F1 at 1, 2 and 3 px tolerance. A picture's edges are its strongest pixels in the
+number the texture has around the buildings, so a picture is not scored on how many lines it draws (contours, forest texture) but on
+where its strongest ones lie. The texture's offset from the map frame is one per layer, kept only when its correlation peak is clear
+(5 standard deviations above the search window and not at its border).
+
+| Layer texture | Pixel (m) | F1 at 1 / 2 / 3 px: v1 | v2 | Standard HD | Shift |
+|---|---|---|---|---|---|
+| skorpo_skirmish | 0.84 | 0.829 / 0.926 / 0.967 | 0.846 / 0.925 / 0.963 | 0.852 / 0.932 / 0.967 | measured |
+| tallil_seed | 0.57 | 0.827 / 0.916 / 0.955 | 0.842 / 0.925 / 0.960 | 0.818 / 0.903 / 0.944 | measured |
+| blackcoast_seed | 0.56 | 0.385 / 0.555 / 0.689 | 0.368 / 0.531 / 0.672 | 0.357 / 0.508 / 0.632 | not measured (peak 2.5 σ) |
+| manicouagan_seed | 0.49 | 0.591 / 0.692 / 0.761 | 0.609 / 0.710 / 0.781 | 0.687 / 0.779 / 0.837 | measured |
+| goosebay_seed | 0.49 | 0.724 / 0.809 / 0.859 | 0.751 / 0.824 / 0.870 | 0.816 / 0.876 / 0.911 | measured |
+| mutaha_seed | 0.34 | 0.551 / 0.684 / 0.769 | 0.635 / 0.739 / 0.803 | 0.627 / 0.750 / 0.830 | measured |
+
+v2 is above v1 on five of the six layers and above HD on Tallil and Mutaha. The Black Coast layer's texture cannot be placed: its
+correlation peak is 2.5 standard deviations high (the pair builder's own registration correlation is 0.027), so its F1 is at an
+unmeasured shift and says nothing.
+
+#### 16.3.4 Road width against Standard HD
+
+Edges measured on straight, isolated stretches of the finest HD tiles (0.25 m/px; 50 % crossing from the ground's colour to the
+road's): Gorodok's 7 m dirt roads 0.826 of their laid width (n = 632) against the predicted 0.861, 0.23 m narrower, under one HD
+pixel; Goose Bay's 10 m dirt roads 0.871 (n = 90) where the landscape under them is not painted, the full width where it is (the
+road-coloured ground layer under the spline, drawn by the tiles' ground cover). The edge detector resolves about 3 px; UNVERIFIED
+beyond that.
+
+#### 16.3.5 Water against Standard HD
+
+The water mask of the renderer against HD's water (colour classes of the HD tiles, IoU): Manicouagan, whole map at zoom 4,
+0.149 before the sea and lake fixes, 0.870 after (HD water covered 0.155 → 0.973); the reservoir window at the dam 0.061 → 0.929.
+Lakes added: Manicouagan 1 263 678 m², Gorodok 21 778 m², Kokan 16 943 m² (rice paddies), Mutaha 13 514 m², Sanxian 3 214 m²; no
+water removed on any map. The HD colour classifier is approximate (a few percent of "outside" is classifier noise); the figures (16.7) are the stronger evidence.
+
+### 16.4 Performance
+
+Workstation tk104: 15 GB RAM, GTX 1650 (4 GB). The scene lane (GPU raster, then `scene_prep.py` with 4 workers) of one map runs while
+the previous map renders (6 workers, 9 GB), so the wall time of the 25 maps is about the render time.
+
+| Map | Tiles | MB (v1 → v2) | Covered 0.1 m cells | GPU raster (s) | scene_prep (s) | Render (s) |
+|---|---|---|---|---|---|---|
+| skorpo | 87 381 | 590.3 → 590.6 | 19 383 995 | 589 | 1183 | 2295 |
+| yehorivka | 87 381 | 704.9 → 705.0 | 12 571 775 | 411 | 631 | 4384 |
+| tallil | 87 381 | 431.3 → 431.3 | 35 313 930 | 801 | 767 | 3045 |
+| kohat | 87 381 | 673.5 → 673.5 | 6 844 452 | 357 | 669 | 3519 |
+| sanxian | 87 381 | 509.0 → 509.1 | 80 807 710 | 256 | 188 | 3299 |
+| blackcoast | 87 381 | 635.9 → 635.9 | 22 318 065 | 267 | 310 | 3223 |
+| lashkar | 87 381 | 991.4 → 991.4 | 18 311 907 | 381 | 562 | 4616 |
+| gorodok | 21 845 | 251.7 → 251.7 | 11 094 512 | 350 | 290 | 2143 |
+| chora | 21 845 | 155.2 → 155.2 | 9 009 368 | 265 | 516 | 943 |
+| pacific | 21 845 | 64.6 → 64.6 | 504 985 | 37 | 382 | 815 |
+| harju | 21 845 | 216.9 → 216.9 | 39 331 963 | 616 | 408 | 1556 |
+| manicouagan | 21 845 | 256.0 → 256.0 | 38 538 050 | 332 | 217 | 1547 |
+| goosebay | 21 845 | 207.6 → 207.6 | 70 135 121 | 793 | 542 | 1051 |
+| jensen | 21 845 | 109.3 → 109.3 | 4 948 333 | 52 | 339 | 638 |
+| albasrah | 21 845 | 190.9 → 190.9 | 67 360 494 | 718 | 274 | 1359 |
+| kamdesh | 21 845 | 219.4 → 219.4 | 28 910 627 | 467 | 397 | 1087 |
+| anvil | 21 845 | 203.8 → 203.8 | 18 022 333 | 348 | 308 | 1243 |
+| fallujah | 21 845 | 162.9 → 162.9 | 57 228 393 | 348 | 289 | 1144 |
+| narva | 21 845 | 127.5 → 127.5 | 26 591 018 | 291 | 214 | 1156 |
+| mutaha | 21 845 | 154.6 → 154.6 | 28 596 176 | 125 | 69 | 800 |
+| kokan | 21 845 | 153.1 → 153.1 | 5 699 344 | 82 | 175 | 759 |
+| mestia | 21 845 | 158.9 → 158.9 | 37 803 519 | 236 | 134 | 1249 |
+| foolsroad | 5 461 | 58.9 → 58.9 | 2 512 426 | 116 | 72 | 288 |
+| logar | 5 461 | 60.6 → 60.6 | 8 656 009 | 94 | 87 | 245 |
+| sumari | 5 461 | 40.5 → 40.6 | 7 658 743 | 65 | 71 | 212 |
+| **25 maps** | 955 725 | 7329 → 7329 |  | 8400 (2.3 h) | 9094 (2.5 h) | 42616 (11.8 h) |
+
+The tiles grow 5.3 times: the finest zoom is one to two levels deeper (0.066-0.124 m/px against 0.17-0.32). Open-sea blocks are hard
+links to one tile (Skorpo 20 400 tiles, Sanxian 13 072, Pacific 11 360, Black Coast 10 176, Harju 2 160).
+
+### 16.5 Decisions taken on evidence
+
+| Question | Evidence | Decision |
+|---|---|---|
+| Ground cover from the client's landscape layers instead of the server's physical materials? | the dominant client layer's physical material equals the server's cover in 100 % of the landscape quads of Kamdesh and 89 % of Al Basrah | keep the server's physical materials: they are what the game's physics uses, and the client adds no class the server lacks |
+| Tint outside the play area in the tiles? | the play area depends on the gameplay layer (up to 1.2 km apart on one map, section 2.3); SquadCalc draws the layer's borders | not baked into the tiles |
+| Roof colour at the overview zooms | the three rules of 16.2 raise the outline F1 of 16.3.3: Goose Bay 0.750 → 0.762, Manicouagan 0.595 → 0.625, Mutaha 0.563 → 0.635 (same scene, tiles rendered without and with them); the roofs of Mutaha are light in the game and now dark grey-brown | keep the contrast: a map is read by its building edges; the colour is a map symbol, not the game's paint |
+| Outline evaluator | the first version used the x scale for y (Skorpo's 7.53 m "shift"), took a noise peak as the shift (Black Coast) and scored line density (Manicouagan's tiles 73 % edge pixels against the texture's 24.5 %) | rewritten as in 16.3.3; v1/v2/HD all re-scored |
+
+### 16.6 Faults found and fixed during the evaluation
+
+| Fault | How it showed | Cause | Fix |
+|---|---|---|---|
+| Manicouagan's land drawn as sea (v1 and v2) | the map centre blue, the reservoir dry | the sea level was the median Z of 38 actors named "ocean", 33 of them ambient sound splines along the river up to 117 m | sea level from `BP_Ocean*` only (`features.sea_level`, `test_scene.SeaLevel`); Sanxian moved 0.20 m and Black Coast 0.04 m too |
+| Lakes and reservoirs missing | Manicouagan's reservoir dry after the sea fix | the lake material's path names its level `WL_<map>_Water`, read as a hidden water surface; the server has no body for the planes | lakes as water planes (`scene_objects.water_planes`) |
+| Engine placeholder textures in Standard HD | the grid and cross patterns of `BlendFunc_DefBase` and `BlendFunc_DefBlend` on 20 landscape layers of 8 maps; the HD gate could not measure Kokan, Fools Road and Sumari | a layer without a texture of its own took the texture nearest its colour, engine ones included | engine textures never a layer's texture (`maprender` `ground_fit.layer_details`, AGL `1027d79`); the 8 maps re-rendered, all pass the gate |
+| HD gate windows over the map's edge | Gorodok passed on its median, but 5 of its 8 windows were centred 0.5 m from the edge (the walls along the border are its largest "roofs"), half of each beyond the map, off by up to 1.8 m | the windows were chosen by roof size alone | only windows wholly inside the map (`check_alignment.hd_window_centres`, `test_scene.HdWindows`); all 25 maps checked again |
+| A claim of "under 1 cm" for the heightmap gate | the windows scatter by pixels | 1 m samples at the nearest node | the README states decimetres |
+
+### 16.7 Figures
+
+![Figure 16.1](figures/detailed/goosebay_900m.jpg)
+
+*Figure 16.1.* Goose Bay, 900 m: v1, v2, Standard HD. The lake is water, the houses on snow read at this zoom, trees are their meshes' outlines.
+
+![Figure 16.2](figures/detailed/yehorivka_900m.jpg)
+
+*Figure 16.2.* Yehorivka, 900 m: the wheat fields are fields (v1 drew them as forest), the tree rows along them as in HD.
+
+![Figure 16.3](figures/detailed/manicouagan_900m.jpg)
+
+*Figure 16.3.* Manicouagan, 900 m at the dam: v1 drew the land as sea (the sea level of the sound splines); v2 has the reservoir up to the dam.
+
+![Figure 16.4](figures/detailed/gorodok_160m.jpg)
+
+*Figure 16.4.* Gorodok, 160 m: building outlines from the client's meshes (v1: the server's 0.25 m collision).
+
+![Figure 16.5](figures/detailed/tallil_160m.jpg)
+
+*Figure 16.5.* Tallil, 160 m: 0.071 m/px against 0.286; the roof panels and skylights as in HD.
+
+![Figure 16.6](figures/detailed/kokan_roads.jpg)
+
+*Figure 16.6.* Kokan, zoom 7: dirt roads at their laid width (left) and at the width their material shows (right).
+
+![Figure 16.7](figures/detailed/goosebay_z3_legibility.jpg)
+
+*Figure 16.7.* Goose Bay, zoom 3 (1.97 m/px): before and after the three legibility rules.
+
+![Figure 16.8](figures/detailed/manicouagan_water.jpg)
+
+*Figure 16.8.* Manicouagan, 600 m at the dam: water before the fixes, water after (the lake plane ends at the dam), Standard HD.
+
+### 16.8 Limitations
+
+* The ground cover is the server's physical material, not the client's painted layers: where a map's art differs from its physics
+  (Lashkar's dirt that the game paints green), the tiles follow the physics.
+* Roofs are drawn in the map's ramp, darker than many roofs in the game (section 16.5).
+* Kohat's low-poly scenery beyond the landscape is drawn as ground relief.
+* The raster measures heights over `ground.npy` and the renderer adds back `top_ground.npy`, which differs where scenery fills a void
+  beyond the landscape (Skorpo 7.1 km², Kohat 4.6 km²); no object cell lies on such a fill on the maps checked (Kokan 0 of 253 680,
+  Mutaha 0), so no drawn roof is affected; INFERRED for the other maps.
+* Standard HD, the reference of 16.3.1, renders the same client meshes: it checks the rasteriser and the frame, not the game's
+  content.
+* The outline F1 depends on the minimap textures that ship with a layer: six layers of five maps can be scored, and Black Coast's
+  cannot be placed.
+
+### 16.9 Reproducibility
+
+| Result | Command (`AGL` repository root) |
+|---|---|
+| All tiles | `tools/maptiles/maptiles.sh extract`, `prep`, `scene`, `render` (per map or all; `WORKERS`, `MEMORY`; GPU raster on the host with `$PYTHON`) |
+| Placement gate, height reference | `tools/maptiles/maptiles.sh check <map>` → `$WORK/check/<map>.json` |
+| Outline F1 | `OUTLINE_BEFORE=<v1 tiles> tools/maptiles/maptiles.sh outline <map>` → `$WORK/check/<map>_outline_<pair>.json` |
+| GPU against CPU | `SCENE_RASTER=cpu tools/maptiles/maptiles.sh scene narva` into a second work directory, then the cell comparison of `top_h0`, `top_c0`, `top_v0` |
+| Tests | `docker run ... squadcalc-maptiles-py python -m unittest discover -p 'test_*.py'` in `tools/maptiles/py` (`M-README`, the list of files); `test_scene_gpu.py` on the host |
+| Standard HD | `tools/maprender` (`AGL:tools/maprender/README.md`) |

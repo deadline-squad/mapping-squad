@@ -4,9 +4,16 @@
 #   maptiles.sh setup                  build the extractor (with the features mode) and the Python image
 #   maptiles.sh extract [map ...]      foliage, landscape splines and water actors of each map from the paks
 #   maptiles.sh prep [map ...]         ground, cover, 0.25 m object raster, features into $WORK/prep/<map>
+#   maptiles.sh scene [map ...]        objects and crowns from the client scene (maprender.sh scene) into $WORK/prep/<map>/top_*,
+#                                      crowns*; the scene raster is drawn on the GPU (py/scene_raster_gpu.py, with $PYTHON on
+#                                      the host) unless SCENE_RASTER=cpu; SCENE_ARGS="--report" names the largest differences
+#                                      to the collision raster
 #   maptiles.sh render [map ...]       webp tiles into $DIST/maptiles/<map> (written in place, map by map)
-#   maptiles.sh all [map ...]          extract, prep and render
-#   maptiles.sh check [map ...]        alignment of the tiles with the heightmap and the upstream images
+#   maptiles.sh all [map ...]          extract, prep, scene and render
+#   maptiles.sh check [map ...]        alignment of the tiles with the Standard HD layer, the heightmap and the upstream images
+#   maptiles.sh outline [map ...]      building outlines of the tiles, the HD layer and OUTLINE_BEFORE against the game's own
+#                                      Seed and Skirmish minimap textures (py/outline_accuracy.py) into
+#                                      $WORK/check/<map>_outline_<pair>.json; needs the scene rasters (run after "scene")
 #   maptiles.sh colour-fit [map ...]   style "colour" (the game's colours) of each map fitted to its upstream basemap
 #   maptiles.sh colour-relief [map ...] relief strength and light direction of the style against the basemap (report)
 #   maptiles.sh colour-render [map ...] webp tiles of the style into $DIST/maptiles/<map>-colour
@@ -27,6 +34,14 @@
 #   DIST         served SquadCalc [~/apps/squadcalc/dist]
 #   CUE4PARSE    CUE4Parse checkout with ../heightmaps/extractor/cue4parse.patch [$EXTRACT/cue4parse]
 #   WORKERS      parallel processes [3]
+#   SCENES       client scenes of tools/maprender (maprender.sh scene) [~/data/squad-scene]
+#   HEIGHTMAPS_SERVED  the served precise heightmaps of "check" [$DIST/heightmaps]
+#   HD_TILES     the folder of the Standard HD layers <map>-hd of "check" and "outline" (tools/maprender) [$DIST/maptiles]
+#   PAIRS        minimap texture pairs of squad-map-restoration: pairs_all.json and pairs/<tag>.npz [~/data/mapsr]
+#   OUTLINE_BEFORE  a second Detailed tile root (<map>/ folders) that "outline" scores beside $DIST/maptiles [none]
+#   MEMORY       memory limit of every container, no swap [3g]
+#   PYTHON       host Python with numpy, scipy and moderngl, for the GPU scene raster [~/data/venv-torch/bin/python]
+#   SCENE_RASTER gpu or cpu: where "scene" draws the scene raster [gpu]
 #   CLIENT_DIR   Squad game client install (its paks hold the minimap textures) [~/data/squad-client]
 #   BASEMAPS     upstream basemap images <map>.webp for the colour styles, fetched when missing [$WORK/basemaps]
 set -eu
@@ -43,6 +58,11 @@ CUE4PARSE=${CUE4PARSE:-$EXTRACT/cue4parse}
 WORKERS=${WORKERS:-3}
 BASEMAPS=${BASEMAPS:-$WORK/basemaps}
 CLIENT_DIR=${CLIENT_DIR:-$HOME/data/squad-client}
+SCENES=${SCENES:-$HOME/data/squad-scene}
+MEMORY=${MEMORY:-3g}
+PYTHON=${PYTHON:-$HOME/data/venv-torch/bin/python}
+SCENE_RASTER=${SCENE_RASTER:-gpu}
+PAIRS=${PAIRS:-$HOME/data/mapsr}
 DOTNET_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
 PY_IMAGE=squadcalc-maptiles-py
 RELIEF_IMAGE=squadcalc-relief-py
@@ -53,18 +73,23 @@ maps() {
     python3 -I -c "import sys; sys.path.insert(0, '$HEIGHTMAPS_TOOL/py'); import maps; print(' '.join(maps.MAPS))"
 }
 
+# buildid of the Squad client the scenes were extracted from
+client_build() {
+    sed -n 's/.*"buildid"[^"]*"\([0-9]*\)".*/\1/p' "$CLIENT_DIR/steamapps/appmanifest_393380.acf" | head -1
+}
+
 python_tool() {
     # shellcheck disable=SC2086
-    nice docker run --rm $USER_FLAGS --shm-size=1g -e PYTHONPATH=/py:/hmpy \
-        -v "$HERE/py:/py:ro" -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" -v "$SQUADHEIGHT:/squadheight:ro" \
-        -v "$EXTRACT:/extract:ro" -v "$HEIGHTMAPS:/heightmaps:ro" -v "$WORK/features:/features:ro" \
+    nice docker run --rm $USER_FLAGS --memory="$MEMORY" --memory-swap="$MEMORY" --shm-size=1g -e PYTHONPATH=/py:/hmpy \
+        -e CLIENT_BUILD="$(client_build)" -v "$HERE/py:/py:ro" -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" -v "$SQUADHEIGHT:/squadheight:ro" \
+        -v "$EXTRACT:/extract:ro" -v "$HEIGHTMAPS:/heightmaps:ro" -v "$WORK/features:/features:ro" -v "$SCENES:/scene:ro" \
         -v "$WORK/prep:/prep" -v "$DIST/maptiles:/tiles" -w /py "$PY_IMAGE" python -W ignore "$@"
 }
 
 # Tools of the colour styles: the styles directory is written, the basemaps are read
 colour_tool() {
     # shellcheck disable=SC2086
-    nice docker run --rm $USER_FLAGS --shm-size=1g -e PYTHONPATH=/py:/hmpy \
+    nice docker run --rm $USER_FLAGS --memory="$MEMORY" --memory-swap="$MEMORY" --shm-size=1g -e PYTHONPATH=/py:/hmpy -e CLIENT_BUILD="$(client_build)" \
         -v "$HERE/py:/py" -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" -v "$EXTRACT:/extract:ro" -v "$HEIGHTMAPS:/heightmaps:ro" \
         -v "$WORK/features:/features:ro" -v "$WORK/prep:/prep" -v "$BASEMAPS:/basemaps:ro" -v "$DIST/maptiles:/tiles" \
         -w /py "$PY_IMAGE" python -W ignore "$@"
@@ -103,6 +128,20 @@ prep)
     mkdir -p "$WORK/prep" "$DIST/maptiles"
     for slug in $(maps "$@"); do python_tool prep.py "$slug" --workers "$WORKERS"; done
     ;;
+scene)
+    shift
+    for slug in $(maps "$@"); do
+        if [ "$SCENE_RASTER" = gpu ]; then
+            PYTHONPATH="$HERE/py:$HEIGHTMAPS_TOOL/py" nice "$PYTHON" -W ignore "$HERE/py/scene_raster_gpu.py" "$slug" \
+                --scene "$SCENES/$slug" --prep "$WORK/prep/$slug" --workers "$WORKERS"
+            # shellcheck disable=SC2086
+            python_tool scene_prep.py "$slug" --workers "$WORKERS" --rasterized ${SCENE_ARGS:-}
+        else
+            # shellcheck disable=SC2086
+            python_tool scene_prep.py "$slug" --workers "$WORKERS" ${SCENE_ARGS:-}
+        fi
+    done
+    ;;
 render)
     shift
     mkdir -p "$WORK/prep" "$DIST/maptiles"
@@ -113,7 +152,29 @@ all)
     for slug in $(maps "$@"); do
         "$0" extract "$slug"
         "$0" prep "$slug"
+        "$0" scene "$slug"
         "$0" render "$slug"
+    done
+    ;;
+outline)
+    shift
+    mkdir -p "$WORK/check"
+    for slug in $(maps "$@"); do
+        # the layers of pairs_all.json with a pair file (a pair file alone has no corners to place it)
+        tags=$(python3 -c "import json, sys; print(*(p['tag'] for p in json.load(open(sys.argv[1])) if p['tag'].startswith(sys.argv[2] + '_')))" \
+            "$PAIRS/pairs_all.json" "$slug")
+        for tag in $tags; do
+            [ -e "$PAIRS/pairs/$tag.npz" ] || continue
+            folders="/tiles/$slug"
+            [ -e "${HD_TILES:-$DIST/maptiles}/$slug-hd/meta.json" ] && folders="$folders /hd/$slug-hd"
+            [ -n "${OUTLINE_BEFORE:-}" ] && [ -e "$OUTLINE_BEFORE/$slug/meta.json" ] && folders="$folders /before/$slug"
+            # shellcheck disable=SC2086
+            nice docker run --rm $USER_FLAGS --memory="$MEMORY" --memory-swap="$MEMORY" -e PYTHONPATH=/py:/hmpy \
+                -v "$HERE/py:/py:ro" -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" -v "$WORK/prep:/prep:ro" -v "$DIST/maptiles:/tiles:ro" \
+                -v "${HD_TILES:-$DIST/maptiles}:/hd:ro" -v "${OUTLINE_BEFORE:-$DIST/maptiles}:/before:ro" -v "$PAIRS:/pairs:ro" \
+                -w /py "$PY_IMAGE" python -W ignore outline_accuracy.py "$slug" /pairs/pairs_all.json "$tag" "/pairs/pairs/$tag.npz" \
+                $folders > "$WORK/check/${slug}_outline_$tag.json"
+        done
     done
     ;;
 check)
@@ -121,7 +182,8 @@ check)
     mkdir -p "$WORK/check"
     # shellcheck disable=SC2086
     nice docker run --rm $USER_FLAGS -e PYTHONPATH=/py:/hmpy -v "$HERE/py:/py:ro" -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" \
-        -v "$WORK/prep:/prep:ro" -v "$DIST/maptiles:/tiles:ro" -v "$DIST/heightmaps:/heightmaps:ro" -v "$WORK/check:/check" \
+        -v "$WORK/prep:/prep:ro" -v "$DIST/maptiles:/tiles:ro" -v "${HEIGHTMAPS_SERVED:-$DIST/heightmaps}:/heightmaps:ro" -v "$WORK/check:/check" \
+        -v "${HD_TILES:-$DIST/maptiles}:/hd:ro" \
         -w /py "$PY_IMAGE" \
         python -W ignore check_alignment.py $(maps "$@")
     ;;

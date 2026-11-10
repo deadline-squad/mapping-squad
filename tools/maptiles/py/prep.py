@@ -96,7 +96,7 @@ def _load_instances(statics_dir, bounds):
         mats = np.array(mats)
         world = np.einsum("cj,njk->nck", corners, mats)[:, :, :2] / 100
         boxes = np.concatenate([world.min(1), world.max(1)], axis=1)
-        meshes[mesh] = (mats, boxes, features.object_class(info.get("path") or ""))
+        meshes[mesh] = (mats, boxes, features.object_class(os.path.basename(info.get("path") or "")))
     return meshes
 
 
@@ -233,23 +233,32 @@ def merge_sdk_objects(out_dir, terrain, surface, foliage, bounds, water):
     return int(sdk.sum())
 
 
-def build_pyramid(out_dir, levels=PYRAMID_LEVELS, strip=4096):
-    """Levels 1..levels of the object pyramid and every level's coverage, from level 0."""
-    h0 = np.load(os.path.join(out_dir, "obj_h0.npy"), mmap_mode="r")
-    cov = open_memmap(os.path.join(out_dir, "obj_v0.npy"), mode="w+", dtype=np.uint8, shape=h0.shape)
-    for top in range(0, h0.shape[0], strip):
-        cov[top:top + strip] = np.where(np.asarray(h0[top:top + strip]) >= COVERAGE_MIN_CM, 255, 0)
-    cov.flush()
-    del cov
+def build_pyramid(out_dir, levels=PYRAMID_LEVELS, strip=4096, prefix="obj", coverage_exists=False, strip_cells=2 ** 24):
+    """Levels 1..levels of the object pyramid and every level's coverage, from level 0.
+
+    ``prefix`` names the files (<prefix>_h<k>.npy, _c, _v). The coverage of level 0 is made from the heights unless
+    ``coverage_exists`` (the scene raster writes its anti-aliased coverage itself). A strip has at most ``strip`` rows and
+    ``strip_cells`` cells (its copies take 5 bytes per cell each), so a 68 000 cell wide level 0 fits a 3 GB container.
+    """
+    rows_for = lambda width: min(strip, max(2, strip_cells // width // 2 * 2))
+    h0 = np.load(os.path.join(out_dir, f"{prefix}_h0.npy"), mmap_mode="r")
+    if not coverage_exists:
+        cov = open_memmap(os.path.join(out_dir, f"{prefix}_v0.npy"), mode="w+", dtype=np.uint8, shape=h0.shape)
+        step = rows_for(h0.shape[1])
+        for top in range(0, h0.shape[0], step):
+            cov[top:top + step] = np.where(np.asarray(h0[top:top + step]) >= COVERAGE_MIN_CM, 255, 0)
+        cov.flush()
+        del cov
     for k in range(1, levels + 1):
-        h = np.load(os.path.join(out_dir, f"obj_h{k - 1}.npy"), mmap_mode="r")
-        c = np.load(os.path.join(out_dir, f"obj_c{k - 1}.npy"), mmap_mode="r")
-        v = np.load(os.path.join(out_dir, f"obj_v{k - 1}.npy"), mmap_mode="r")
+        h = np.load(os.path.join(out_dir, f"{prefix}_h{k - 1}.npy"), mmap_mode="r")
+        step = rows_for(h.shape[1])
+        c = np.load(os.path.join(out_dir, f"{prefix}_c{k - 1}.npy"), mmap_mode="r")
+        v = np.load(os.path.join(out_dir, f"{prefix}_v{k - 1}.npy"), mmap_mode="r")
         shape = ((h.shape[0] + 1) // 2, (h.shape[1] + 1) // 2)
-        out = {name: open_memmap(os.path.join(out_dir, f"obj_{name}{k}.npy"), mode="w+", dtype=dtype, shape=shape)
+        out = {name: open_memmap(os.path.join(out_dir, f"{prefix}_{name}{k}.npy"), mode="w+", dtype=dtype, shape=shape)
                for name, dtype in (("h", np.uint16), ("c", np.uint8), ("v", np.uint8))}
-        for top in range(0, shape[0], strip // 2):
-            rows = slice(2 * top, min(2 * (top + strip // 2), h.shape[0]))
+        for top in range(0, shape[0], step // 2):
+            rows = slice(2 * top, min(2 * (top + step // 2), h.shape[0]))
             hh, cc, vv = (np.asarray(a[rows]) for a in (h, c, v))
             if hh.shape[0] % 2:
                 hh, cc, vv = (np.concatenate([a, a[-1:]]) for a in (hh, cc, vv))
@@ -267,15 +276,14 @@ def build_pyramid(out_dir, levels=PYRAMID_LEVELS, strip=4096):
             array.flush()
 
 
-def building_labels(out_dir, bounds):
-    """Roof heights of the larger buildings: one label per connected building on the 1 m pyramid level.
+def building_labels(h, c, bounds, centre_m=0.375):
+    """Roof heights of the larger buildings: one label per connected building on a 1 m grid.
 
-    A building is a connected area of structures at least LABEL_MIN_HEIGHT_CM tall and
+    ``h`` (cm) and ``c`` (class) are the height and class of the 1 m cells, cell [r, k] centred ``centre_m`` east and
+    south of its corner at min + (k, r). A building is a connected area of structures at least LABEL_MIN_HEIGHT_CM tall and
     LABEL_MIN_AREA_M2 large; its label sits at the point farthest inside it and reads its 98th
     percentile height above ground (an antenna or chimney does not count).
     """
-    h = np.asarray(np.load(os.path.join(out_dir, "obj_h2.npy")))
-    c = np.asarray(np.load(os.path.join(out_dir, "obj_c2.npy")))
     mask = (h >= LABEL_MIN_HEIGHT_CM) & (c == features.STRUCTURE)
     labels, count = ndimage.label(mask, structure=np.ones((3, 3)))
     if not count:
@@ -291,10 +299,9 @@ def building_labels(out_dir, bounds):
         depth = np.where(part, inside[window], -1)
         r, col = np.unravel_index(depth.argmax(), depth.shape)
         heights = h[window][part]
-        # Level 2 cell [r, c] aggregates level 0 points 4r..4r+3, centred 1.5 points (0.375 m) further
         result.append({
-            "x": round(bounds["min_x"] + (window[1].start + col) * 1.0 + 0.375, 2),
-            "y": round(bounds["min_y"] + (window[0].start + r) * 1.0 + 0.375, 2),
+            "x": round(bounds["min_x"] + (window[1].start + col) * 1.0 + centre_m, 2),
+            "y": round(bounds["min_y"] + (window[0].start + r) * 1.0 + centre_m, 2),
             "h": round(float(np.percentile(heights, 98)) / 100, 1),
             "area": int(areas[index]),
             "depth": round(float(depth.max()), 1),
@@ -369,7 +376,7 @@ def main():
     log(slug, f"SDK-only object points {sdk_points}")
     del terrain, surface, ground, water
     build_pyramid(out_dir)
-    labels = building_labels(out_dir, bounds)
+    labels = building_labels(np.load(os.path.join(out_dir, "obj_h2.npy")), np.load(os.path.join(out_dir, "obj_c2.npy")), bounds)
     json.dump(labels, open(os.path.join(out_dir, "labels.json"), "w"))
     log(slug, f"pyramid, {len(labels)} building labels")
 
