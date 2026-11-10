@@ -62,6 +62,22 @@ game's text typed with its spaces, without them and padded landing in the 33.3 m
 with the last one at the middle of the strip left after the last whole keypad, along the grid's north and west edges, and no
 line or label outside the grid. Exits with 1 on any failure.
 
+## coords_check.mjs: the bearing as the game's compass, circles in metres
+
+```sh
+node coords_check.mjs <site URL> [--shots <dir>]
+```
+
+On Skorpo (6849 m by 6869 m, the one map with corners far from square). The bearing reads as the game's HUD compass reads
+it (native `USQCompassMK2`, Squad server build 26005357: cut to a whole degree, three digits, north as 360), with the tenth
+after it: a target 800 m away at 45.96 degrees shows 045.9 in its popup, its summary and the target dialog, one due north
+360.0, and the keypad panel 026.6 from B03-5-5 to C01-5-5. The help of the bearing (panel, target dialog) says the compass
+cuts off the tenth; the help of the distance in the target dialog says the game's marker distance is slant and cut to 50 m
+steps. The Mortar's and UB-32's range rings, the FOB marker's 150 m and 400 m circles and a target's damage radii are their
+radius east to west and north to south within 1 cm (bounds and drawn radii) and within half a pixel on their SVG path.
+Screenshots (popup, dialog with each help, panel with its help, the UB-32 ring) go to `--shots` (default `./shots`). Exits
+with 1 on any failure.
+
 ## layer_minimap_check.mjs: the own minimap of Seed and Skirmish layers
 
 ```sh

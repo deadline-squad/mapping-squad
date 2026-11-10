@@ -415,7 +415,7 @@ await group("strat markers", async () => {
         await page.mouse.move(marker.rect.left + marker.point.x + 150, marker.rect.top + marker.point.y + 150);
         await page.mouse.move(marker.rect.left + marker.point.x, marker.rect.top + marker.point.y, { steps: 5 });
         const over = await shown();
-        const radius = await page.evaluate(() => window.__strat.constructionRange.getRadius() / window.__App.minimap.gameToMapScale);
+        const radius = await page.evaluate(() => window.__strat.constructionRange.getRadius());
         await page.mouse.move(marker.rect.left + marker.point.x + 150, marker.rect.top + marker.point.y + 150, { steps: 5 });
         const after = await shown();
         check(`${icon} marker shows its range circle on hover`, !before && over && !after && Math.abs(radius - range) < 1,
@@ -471,7 +471,7 @@ await group("circles of the loaded layer", async () => {
     const fobCircles = () => page.evaluate(() => {
         const map = window.__App.minimap;
         return map.activeMarkers.getLayers().filter((marker) => marker.icontype === "deployable_fob")
-            .map((marker) => (map.markersGroup.hasLayer(marker.exclusionRange) ? Math.round(marker.exclusionRange.getRadius() * map.mapToGameScale * 10) / 10 : null));
+            .map((marker) => (map.markersGroup.hasLayer(marker.exclusionRange) ? Math.round(marker.exclusionRange.getRadius() * 10) / 10 : null));
     });
     /** Place a FOB marker `east` metres east of the map's centre, as the context menu does */
     const placeFob = (east) => page.evaluate((east) => {
@@ -533,7 +533,7 @@ await group("circles of the loaded layer", async () => {
             const [lat, lng] = layer.convertToLatLng(zone.objects[0].location_x, zone.objects[0].location_y);
             const circles = layer.mainZones.rectangles.filter((shape) => shape.getRadius && map.hasLayer(shape)
                 && Math.abs(shape.getLatLng().lat - lat) < 1e-6 && Math.abs(shape.getLatLng().lng - lng) < 1e-6);
-            return { team: zone.teamid, dataRadius: zone.objects[0].sphereRadius / 100, drawn: circles.map((circle) => circle.getRadius() * map.mapToGameScale) };
+            return { team: zone.teamid, dataRadius: zone.objects[0].sphereRadius / 100, drawn: circles.map((circle) => circle.getRadius()) };
         });
     });
     // The game: a sphere of 150 m scaled by -1.5759 at the first main (236.4 m), 150 m at the second; the dashed
@@ -560,7 +560,7 @@ await group("circles of the loaded layer", async () => {
         return layer.mainZones.rectangles.filter((shape) => map.hasLayer(shape)).flatMap((shape) => {
             const dashed = Boolean(shape.options.dashArray);
             if (shape.getRadius) {
-                return Math.hypot(...toMetres(shape.getLatLng())) < 0.05 ? [{ kind: "circle", dashed, radius: round(shape.getRadius() * map.mapToGameScale) }] : [];
+                return Math.hypot(...toMetres(shape.getLatLng())) < 0.05 ? [{ kind: "circle", dashed, radius: round(shape.getRadius()) }] : [];
             }
             const points = shape.getLatLngs()[0].map(toMetres);
             const mean = [0, 1].map((axis) => points.reduce((sum, point) => sum + point[axis], 0) / points.length);
