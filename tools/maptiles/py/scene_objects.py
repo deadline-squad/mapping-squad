@@ -21,6 +21,7 @@ from scipy import ndimage
 
 import features
 import objects
+import spline_mesh
 
 CELL_M = 0.1
 SUBSAMPLES = 2
@@ -166,41 +167,9 @@ def read_mesh(scene_dir, info):
 
 
 def bend_along_spline(vertices, spline, bounds):
-    """Positions [n, 3] (cm) of a mesh deformed along its spline (USplineMeshComponent, forward axis from the file).
-
-    The engine's slice transform (USplineMeshComponent::CalcSliceTransformAtSplineOffset): cubic Hermite position, smoothstep scale,
-    offset and roll. The roll turns the slice about the spline's direction, after the offset. A mesh whose forward axis is Y has its
-    X axis up until a roll of -90 degrees stands it up, and the landscape splines give it that roll (pipelines, crash barriers,
-    railway tracks, fences): without the roll it is drawn on its side and off its line. tools/maprender/scene_render.py
-    bend_along_spline is this deformation without the roll.
-    """
-    p = spline["p"]
-    vec = lambda v: np.array([v["X"], v["Y"], v["Z"]], np.float64)
-    p0, t0, p1, t1 = vec(p["StartPos"]), vec(p["StartTangent"]), vec(p["EndPos"]), vec(p["EndTangent"])
-    axis = {"X": 0, "Y": 1, "Z": 2}[spline["axis"][-1]]
-    side, up = [(1, 2), (2, 0), (0, 1)][axis]
-    lo, hi = bounds[0][axis], bounds[1][axis]
-    a = np.clip((vertices[:, axis] - lo) / max(hi - lo, 1e-3), 0, 1)[:, None]
-    a2, a3 = a * a, a * a * a
-    position = (2 * a3 - 3 * a2 + 1) * p0 + (a3 - 2 * a2 + a) * t0 + (-2 * a3 + 3 * a2) * p1 + (a3 - a2) * t1
-    direction = (6 * a2 - 6 * a) * p0 + (3 * a2 - 4 * a + 1) * t0 + (-6 * a2 + 6 * a) * p1 + (3 * a2 - 2 * a) * t1
-    direction /= np.maximum(np.linalg.norm(direction, axis=1, keepdims=True), 1e-6)
-    world_up = vec(spline["up"]) if any(spline["up"][k] for k in "XYZ") else np.array([0.0, 0.0, 1.0])
-    right = np.cross(world_up, direction)
-    right /= np.maximum(np.linalg.norm(right, axis=1, keepdims=True), 1e-6)
-    upward = np.cross(direction, right)
-    start_scale, end_scale = p.get("StartScale", {"X": 1, "Y": 1}), p.get("EndScale", {"X": 1, "Y": 1})
-    start_offset, end_offset = p.get("StartOffset", {"X": 0, "Y": 0}), p.get("EndOffset", {"X": 0, "Y": 0})
-    blend = a * a * (3 - 2 * a)
-    scale_x = start_scale["X"] * (1 - blend) + end_scale["X"] * blend
-    scale_y = start_scale["Y"] * (1 - blend) + end_scale["Y"] * blend
-    offset_x = start_offset["X"] * (1 - blend) + end_offset["X"] * blend
-    offset_y = start_offset["Y"] * (1 - blend) + end_offset["Y"] * blend
-    roll = p.get("StartRoll", 0.0) * (1 - blend) + p.get("EndRoll", 0.0) * blend
-    rolled_right = np.cos(roll) * right - np.sin(roll) * upward
-    rolled_upward = np.cos(roll) * upward + np.sin(roll) * right
-    return (position + right * offset_x + upward * offset_y
-            + rolled_right * (vertices[:, side:side + 1] * scale_x) + rolled_upward * (vertices[:, up:up + 1] * scale_y))
+    """Positions [n, 3] (cm) of a mesh deformed along its spline (USplineMeshComponent), bent with the spline's scale, offset and
+    roll: spline_mesh.bend_along_spline of tools/heightmaps, the deformation tools/maprender/scene_render.py draws too."""
+    return spline_mesh.bend_along_spline(vertices[:, :3], spline, bounds)[0]
 
 
 def corners_of(vertices, indices, ranges):

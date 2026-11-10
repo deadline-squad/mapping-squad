@@ -207,6 +207,9 @@ Files:
   `py/objects.py` — static mesh collision rasterizer; `py/build_heightmap.py`, `py/build_all.py` —
   fusion and output; `py/maps.py` — SquadCalc map → SquadHeight name and landscape levels;
   `py/compare_*.py` — the checks above.
+* `py/spline_mesh.py` — the deformation of a mesh along a spline segment as the engine does it, with the spline's scale,
+  offset and roll (`py/test_spline_mesh.py`): the one implementation that `tools/maprender` and `tools/maptiles` draw their
+  spline meshes with.
 * `py/audit_ground_truth.py`, `log_points.awk`, `py/compare_interpolation.py`, `py/compare_resolution.py`: the
   checks above.
 
