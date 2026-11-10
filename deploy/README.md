@@ -13,9 +13,16 @@ Home servers feed: `live_servers.py` asks the Deadline site (`https://deadline-s
 game host) every 20 s and rewrites `live/servers.json`, which the Caddyfile serves as `/live/servers.json` (never cached)
 and SquadCalc reads as `HOME_SERVERS_URL`: the Deadline server in the servers list, with the layer it plays, the players
 and both factions. The folder is outside `dist`, so a site deploy does not touch it. Nothing runs on the game host and
-RCON is not used. SquadCalc drops a feed older than two minutes: when the service or the site is down, the server
-leaves the list instead of showing an old layer. Tests: `python3 -m unittest test_live_servers.py` in this folder;
-in a browser: `tools/browser_check/home_server_check.mjs`.
+RCON is not used. The feed is rewritten only from answers of the shape the script reads: while the site, or the layer
+API for a layer not asked before, gives none (no answer, a timeout, an error status, a body of another shape), the feed
+is left as it is, one line in the journal says which request failed and why, and the next round asks again; after a
+`429` the next round waits for the answer's `Retry-After`, or twice as long as the round before (5 minutes at most).
+SquadCalc drops a feed older than two minutes: when the service or the site is down, the server leaves the list and a
+page that followed it stops following, instead of showing an old layer. A layer the layer API does not have (404) lists
+the server without factions, which SquadCalc shows as unavailable. What the layer API said of a layer is asked again
+after an hour (a game patch gives it new layers and factions); if that request fails, the last answer stands. Tests: `python3 -m unittest test_live_servers.py` in
+this folder (the loop with the network stubbed, the feed file); in a browser:
+`tools/browser_check/home_server_check.mjs`.
 
 Site build: from `dev` of `~/agl/SquadCalc` (remote `deadline`), in a worktree, `cp .env.template .env && npm run build`.
 Under `flock /tmp/squadcalc-deploy.lock`, back up `~/apps/squadcalc/dist` to `dist.bak.<date>-<reason>` and
