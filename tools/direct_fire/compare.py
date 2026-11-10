@@ -12,8 +12,10 @@ entry: Squad Ballistics' solution for the view against SquadCalc's for the entry
   generated hold-laid DF_AGS_17_* entries): both arcs and the hold time;
 * the weapons aimed by elevation (mortars, UB-32, BM-21, Hell Cannon, the technical's
   mortar and UB-32, M1064): both arcs, the time of flight of both, the shell's velocity,
-  the minimum distance (Squad Ballistics must refuse closer targets) and the elevation
-  limits.
+  the elevation limits and the minimum distance: the nearest target on level ground those
+  limits allow, the figure both apps show. Neither app refuses by it, the limits do, so a
+  closer target is compared like any other (uphill it can be reachable); on level ground
+  both must refuse it.
 
 Every weapon is also checked on its maximum range. A projectile that the game destroys before it arrives
 (`lifespan` of Squad Ballistics, `projectileLifespan` of SquadCalc, the game's InitialLifeSpan) is a shot both must refuse.
@@ -21,7 +23,8 @@ Every weapon is also checked on its maximum range. A projectile that the game de
 The grid (documented here, so that a regression in any corner shows up):
 
 * distances (m): DISTANCES, 15 values from 0.5 m (closer than any minimum distance) to 8000 m
-  (past every maximum range), with the M252's 51 m minimum and the M1064's 340 m one on the grid;
+  (past every maximum range), with 51 m and 340 m just inside the minimum of the mortars (51.8 m)
+  and of the M1064 (358 m);
 * heights of the target above the weapon's ground (m): HEIGHTS, 9 values from -300 to +200;
 * near the maximum range: solve.mjs adds, for every weapon that has gravity, the fractions
   0.5, 0.9, 0.99, 0.999, 1.001 and 1.01 of SquadCalc's own getMaxDistance() at -40, 0 and
@@ -98,19 +101,15 @@ def compare(row, name):
         if direct and arc == "high":
             continue  # a direct-fire weapon is aimed on its low arc only
         s = solve(w, row["distance"], row["height"], arc)
-        if elevation and row["distance"] < w.min_distance:
-            # SquadCalc draws the minimum-distance circle instead; Squad Ballistics must refuse the shot
-            checked += 1
-            stats[0] += 1
-            if s.reachable or s.reason_code != "too_close":
-                report("TOO CLOSE", name, arc, row["distance"], row["height"], s.reachable, s.reason_code)
-            continue
         sb = s.angle if s.reachable else math.nan
         sc = row[arc] if row[arc] is not None else math.nan
         checked += 1
         stats[0] += 1
         if differ(sb, sc):
             report(name, row["shell"], arc, row["distance"], row["height"], sb, sc)
+        # The minimum distance is the nearest target on level ground: closer than it neither app has a solution there
+        if elevation and row["height"] == 0 and row["distance"] < w.min_distance and not (math.isnan(sb) and math.isnan(sc)):
+            report("TOO CLOSE", name, arc, row["distance"], sb, sc)
         if not s.reachable or math.isnan(sc):
             continue
         if arc == "low" and not elevation:
