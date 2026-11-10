@@ -340,12 +340,15 @@ Clicks through every user-facing feature and records it for a human to follow: a
 yellow ring on every click or tap, the pressed keys at the bottom right and a caption per step.
 
 * Desktop (`desktop.webm`, 1920x1080): map selector (four maps, Yehorivka as the large one), game
-  layer, wheel zoom, map styles and HD images; weapon placement, the weapon selector with its groups,
+  layer, wheel zoom, every map style of the layer menu (detailed, detailed in game colours, relief,
+  basemap with and without its HD tiles, back to the HD render), a frame of each once its picture is
+  shown; weapon placement, the weapon selector with its groups,
   targets, hover, dragging targets and the weapon, the trajectory and obstacle view, the weapon card
   (extra height); every weapon kind (mortar, Hell Cannon, UB-32, BM-21, M1064 with its second shell,
   AGS-17 hold time, an RPG-7 from the Squad Ballistics direct-fire group); fire correction (Ctrl +
   double-click a burst, right-click removes it); the right-click context menu; fire coverage, undo,
-  heatmap, focus mode, download, share; the shortcuts M, Enter, Ctrl+Z, Ctrl+M, Delete; upload of
+  heatmap, focus mode, download, share (in the bar or in the tools menu, wherever the settings' map-button
+  toggles put them); the shortcuts M, Enter, Ctrl+Z, Ctrl+M, Delete; upload of
   the saved file; faction and server dialogs; every checkbox, map-button toggle and slider of the
   settings, the popup display options shown on the map, shortcut rebinding, three languages and the
   changelog.
@@ -362,7 +365,16 @@ server) and the external links. The upstream statistics endpoints (`/post/*`) ar
 
 Every request of the page is made by Playwright and handed to it: Chromium aborts requests in flight
 with `ERR_NETWORK_CHANGED` whenever a network interface appears or disappears, which on a Docker
-host (CI containers starting and stopping) happens every few seconds.
+host (CI containers starting and stopping) happens every few seconds. Two kinds of request of the site's
+service worker, which answers the upstream map images (`/maps/*.webp`) of the cross-origin isolated page
+(COEP `credentialless`), are left to Chromium: its script (a worker whose script Playwright fulfilled runs
+without its COEP) and its requests to other origins (an opaque response Playwright fulfilled for the worker
+needs a `Cross-Origin-Resource-Policy` header the upstream does not send). Either way the page got
+`net::ERR_FAILED` for every upstream map image.
+
+Recording needs the ffmpeg build of the `playwright-core` in use (its `browsers.json`; `node
+$PLAYWRIGHT_CORE/cli.js install ffmpeg`): another build stops at once on an option it does not know, no
+video is written and saving it fails with `ENOENT`.
 
 To look at a frame of a video, extract it with Playwright's ffmpeg (it decodes VP8 and writes PNG):
 
