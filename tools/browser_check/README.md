@@ -91,6 +91,8 @@ the server. Every other step answers the feed itself (a route of the browser, th
   factions: each time the page leaves server mode with the "no data for the layer" message and the dropdown lists the
   server as unavailable.
 - A feed ten minutes old at page load: the server is not offered and `/?server=deadline` falls back to the plain page.
+- The server moves to a layer of another map, and server mode is left while that map's list of layers is held back:
+  when the list arrives, the page opens none of the server's layers and shows no message.
 
 Each step that waits for the page's next read of the feed gives it 90 s. Exits with 1 on any failure.
 

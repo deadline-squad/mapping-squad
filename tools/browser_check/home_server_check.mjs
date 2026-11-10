@@ -20,6 +20,8 @@
 //    the server as unavailable.
 // 7. With a feed ten minutes old: the server is not offered, /?server=<home id> falls back to the plain page, and the
 //    servers browser says it has no server (in words, also when the feed was read before the translations).
+// 8. The user leaves server mode while the map of the server's next layer is still loading (its list of layers held
+//    back): when the list arrives, the page opens none of the server's layers and says nothing.
 //
 // Needs the layer API. Environment as browser_check.mjs. Exits with 1 on any failure.
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
@@ -281,6 +283,30 @@ state = await shown();
 check("the servers browser of an empty feed says in words that it has no server, and a click on that line does nothing", emptyList.includes(" ")
     && !emptyList.includes("noServersFound") && notFollowing(state) && problems.length === 0,
 `"${emptyList}", ${JSON.stringify(state)}, page errors: ${problems.join(" | ") || "none"}`);
+
+// 8. Left while the server's next map loads
+serve([first]);
+await page.goto(`${base}/?server=deadline`, { waitUntil: "load" });
+await waitLayer("Mutaha_Seed_v1", 120000);
+let releaseLayers;
+const held = new Promise((resolve) => { releaseLayers = resolve; });
+const layersOfAlBasrah = /\/get\/layers\?map=AlBasrah$/;
+await context.route(layersOfAlBasrah, async (route) => { await held; await route.continue(); });
+await page.evaluate(() => {
+    window.__opened = [];
+    window.__App.LAYER_SELECTOR.on("change", (event) => window.__opened.push(event.target.value));
+});
+serve([second]);
+const switching = await reaches(() => window.__App.minimap?.activeMap?.name === "AlBasrah", null, NEXT_READ_MS);
+await page.click("#serverSelector .select2-selection__clear");
+releaseLayers();
+const listed = await reaches(() => window.__App.LAYER_SELECTOR.find("option[value='AlBasrah_Seed_v1']").length > 0, null, 60000);
+const reopened = await reaches(() => window.__opened.length > 0, null, 10000);
+await context.unroute(layersOfAlBasrah);
+state = await shown();
+check("leaving server mode while the server's next map loads stops the switch: no layer is opened when its layers arrive",
+    switching && listed && !reopened && notFollowing(state) && errors(state) === "[]",
+    `map switched ${switching}, layers listed ${listed}, layers opened ${JSON.stringify(await page.evaluate(() => window.__opened))}, ${JSON.stringify(state)}`);
 
 check("no page errors", problems.length === 0, problems.join(" | ") || "none");
 await browser.close();

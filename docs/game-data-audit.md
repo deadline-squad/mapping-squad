@@ -54,7 +54,7 @@ reports 0 differences and the four known ones listed as open below.
 | O6 | Secondary explosions (Mortar, Tech.Mortar, HellCannon, BM-21Grad, M1064M121) | one explosion per shell, the wider one | two explosions | **open**, small: the 100 and 25 damage radii are set by the wider explosion; only for the M121 impact shell would 100 damage reach 7.4 m instead of 7.2 m, if the two damages add (native code, not read) | one-off (values in `resolved.json`, section 2.5) |
 | O7 | Capture-area shapes in the upstream API | 8 zones on 3 layers displaced 4.7 to 73 m (zones with pitch or roll), 4 zones on 2 layers with the unscaled radius | section 3.2 | **open**, upstream data: the objective positions themselves agree to 0.02 cm; no firing solution uses the shapes | tool (3.2) |
 | O8 | World gravity | 9.80 m/s^2 | `DefaultGravityZ` -980 (engine default); no layer overrides it | **not re-proven**: the engine config is not readable with the extractor; section 4 | one-off |
-| O9 | `SDK_data.heightmap.origin` of Skorpo | [-4811, -3947]: the location of the landscape actor | the terrain starts 508 x 1524 quads from the actor, which is turned by -2.006 deg: first vertex at (-4138.02, -2141.58) | **open**, found by the rerun (section 5): for the other 24 maps `origin` is the first vertex, and the audit moved Chora's from the actor's location to it, but took the actor's location for Skorpo. No calculation reads the field; `tests/maps.test.mjs` of the calculator pins the actor's location | tool (1.2), `KNOWN` in `check_calculator.py` |
+| O9 | `SDK_data.heightmap.origin` of Skorpo | [-4811, -3947]: the location of the landscape actor | the terrain starts 508 x 1524 quads from the actor, which is turned by -2.006 deg: first vertex at (-4138.02, -2141.58) | **fixed** in SquadCalc 45.44.0: `origin` [-4138, -2142], the first vertex as on the other 24 maps, so that `origin` and `size` describe one rectangle (found by the rerun, section 5; no calculation reads the field) | tool (1.2), `check_calculator.py` |
 
 No other difference was found. Weapon velocities, gravity scales, motors, speed caps, spreads and explosions of the ten
 hand-kept weapons, the game corners of the 25 maps, the objectives, mains, factions, tickets and game modes of the 64
@@ -156,7 +156,7 @@ were wrong on seven maps and are corrected (D5), with a test in the calculator t
 | Narva | [-2032, -2032] / [4065, 4065] / [1, 1, 1] | [-2032.00, -2032.00] / [4065, 4065] / [1.0, 1.0, 1.0] | `L_070_Landscape_Narva` / `Landscape_1`, [0, 0] | EQUAL since 45.38.0 (D5; was origin [-2016, -2016], size [4033, 4033]) |
 | Pacific | [-2016, -2016] / [4033, 4033] / [1, 1, 0.28] | [-2016.00, -2016.00] / [4033, 4033] / [1.0, 1.0, 0.28] | `PacificProvingGrounds_Geo` / `Landscape_0`, [0, 0] | EQUAL |
 | Sanxian | [-2040, -2040] / [4081, 4081] / [1, 1, 1] | [-2040.00, -2040.00] / [4081, 4081] / [1.0, 1.0, 1.0] | `L_070_Landscape_Sanxian_01` / `Landscape_0`, [0, 0] | EQUAL |
-| Skorpo | [-4811, -3947] / [7113, 5081] / [1.2, 1.2, 3.5] | [-4138.02, -2141.58] / [7113, 5081] / [1.2, 1.2, 3.5] | `Skorpo_Baselayer` / `Uskedal`, [508, 1524], yaw -2.006 deg | DIFFERS, open (O9) |
+| Skorpo | [-4138, -2142] / [7113, 5081] / [1.2, 1.2, 3.5] | [-4138.02, -2141.58] / [7113, 5081] / [1.2, 1.2, 3.5] | `Skorpo_Baselayer` / `Uskedal`, [508, 1524], yaw -2.006 deg | EQUAL since 45.44.0 (O9; was origin [-4811, -3947]) |
 | Sumari | [-682, -372] / [1427, 1055] / [1, 1, 0.75] | [-682.01, -371.99] / [1427, 1055] / [1.0, 1.0, 0.75] | `Sumari_master` / `Landscape_0`, [310, 620] | EQUAL since 45.38.0 (D5; was origin [-683, -373]) |
 | Tallil | [-2286, -2286] / [4573, 4573] / [1, 1, 1.25] | [-2285.91, -2285.77] / [4573, 4573] / [1.0, 1.0, 1.25] | `Tallil_Outskirts` / `Landscape_1`, [-254, -254] | EQUAL since 45.38.0 (D5; was origin [-2287, -2287]) |
 | Yehorivka | [-3302, -3302] / [6351, 6351] / [1, 1, 4] | [-3301.97, -3302.00] / [6351, 6351] / [1.0, 1.0, 4.0] | `L_070_Landscape_Yehorivka` / `Landscape_0`, [762, 762] | EQUAL |
@@ -164,7 +164,7 @@ were wrong on seven maps and are corrected (D5), with a test in the calculator t
 Skorpo (O9): its actor is the only one that is turned, and its components begin 508 x 1524 quads (610 m, 1829 m) from
 it. `maps.js` has the actor's location as `origin` and the extent of the components as `size`, so the two fields do not
 describe one rectangle. The audit called this row equal by taking the actor's location for a turned landscape; by the
-rule of the other 24 rows it is not. `heightmap.BWlevels` and `heightmapPNG.scale` were not checked (see Coverage).
+rule of the other 24 rows it is not. SquadCalc 45.44.0 takes the first vertex, as for the other maps. `heightmap.BWlevels` and `heightmapPNG.scale` were not checked (see Coverage).
 
 ## 2. Weapons (`src/data/weapons.js`)
 
@@ -420,7 +420,7 @@ at CUE4Parse `808a7d65`, and `extract-mounts` (29 assets), `extract-layer-data` 
 | BTR4-AGS display range | -4.9..45.1 | -4.9..45.1 | `mounts.py`: `PitchInterval` -5..45 of `BP_BMP1TS_Turret`, `FirstPersonCamera` pitch 0.1 |
 | Hell cannon's longest shot | 924.43 m | 924.43 m | `calculator.mjs` |
 | Landscape of the seven corrected maps | section 1.2 | the same to the centimetre | `landscapes.py` |
-| Landscape of the other maps | equal on all 18 | equal on 17; **Skorpo differs** (O9) | `landscapes.py` |
+| Landscape of the other maps | equal on all 18 | equal on 17; **Skorpo differs** (O9, fixed in SquadCalc 45.44.0) | `landscapes.py` |
 | Minimap corners, 25 maps | `game_corners.json` | identical file | `layers.py`, `minimap_corners.py table` |
 | FOB radius per layer | 221 layers, 77 small, 38 of them on 400 m maps | the same rows for all 221 | `fob_radius.py` |
 | Protection zone of Goose Bay AAS v1 and RAAS v1 | sphere 15000 cm, scale 31149.6, 31149.6, -1.5759 | the same: 23637.9 cm | `layers.py zones` |
@@ -457,7 +457,7 @@ tools/game_audit/game_audit.sh extract-layer-data    # $WORK/audit/layerdata
 tools/game_audit/game_audit.sh extract-landscapes    # $WORK/landscapes (the same files as heightmaps.sh extract)
 tools/game_audit/game_audit.sh extract-layers        # $WORK/audit/layers, 219 x .json.gz
 tools/game_audit/game_audit.sh derive                # tools/game_audit/data/*.json; git diff shows a change
-tools/game_audit/game_audit.sh check                 # sections 1, 2.2, 2.4 and 4: 0 differences, 4 known
+tools/game_audit/game_audit.sh check                 # sections 1, 2.2, 2.4 and 4: 0 differences, 3 known
 tools/game_audit/game_audit.sh api                   # section 3
 node --import ./tools/direct_fire/register.mjs tools/game_audit/btr4_ags.mjs ~/agl/SquadCalc ~/dev/Squad-Ballistics   # O1
 python3 tools/game_ballistics/provenance.py --resolved ~/data/squad-weapons/resolved.json --dump ~/data/squad-weapons/dump \
