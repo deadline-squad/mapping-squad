@@ -413,6 +413,20 @@ def ground_on_grid(ground, z_min, rows_m, cols_m):
     return (along_rows @ weights).astype(ground.dtype) + z_min
 
 
+def ground_points(ground, z_min, rows_m, cols_m):
+    """Absolute ground height (m) at scattered points rows_m metres south and cols_m metres east of the minimum corner: bilinear
+    on the 1 m grid, the edge values beyond it (ground_on_grid's answer at points that make no grid)."""
+    def axis(coordinates, size):
+        clamped = np.clip(coordinates, 0, size - 1)
+        low = np.minimum(np.floor(clamped).astype(np.int64), max(size - 2, 0))
+        return low, np.minimum(low + 1, size - 1), clamped - low
+    r_low, r_high, r_share = axis(rows_m, ground.shape[0])
+    c_low, c_high, c_share = axis(cols_m, ground.shape[1])
+    north = ground[r_low, c_low] * (1 - c_share) + ground[r_low, c_high] * c_share
+    south = ground[r_high, c_low] * (1 - c_share) + ground[r_high, c_high] * c_share
+    return north * (1 - r_share) + south * r_share + z_min
+
+
 def remove_thin(height_cm, cls, cover):
     """Drop the parts of objects narrower than THIN_WIDTH_M (wires, cables, antennas) in place; walls and bridges are kept at any width.
 
@@ -451,14 +465,15 @@ def block_samples(scene, bounds, r0, r1, c0, c1, sampler):
     return sampler(scene, hits, x0, y0, step, rows, cols) if hits else None
 
 
-def block_cells(samples, ground, z_min, bounds, r0, r1, c0, c1):
+def block_cells(samples, ground, z_min, bounds, r0, r1, c0, c1, thin=True):
     """The second half of raster_block: its result from block_samples' (top, class) or None. Needs no scene, so it can run in another
-    process than the sampling (scene_raster_gpu.py)."""
+    process than the sampling (scene_raster_gpu.py). ``thin=False`` keeps the objects that remove_thin would take out."""
     rows, cols = r1 - r0, c1 - c0
     if samples is None:
         return np.zeros((rows, cols), np.uint16), np.zeros((rows, cols), np.uint8), np.zeros((rows, cols), np.uint8)
     height_cm, cell_class, cover = _cells(*samples, ground, z_min, bounds, r0 - THIN_MARGIN, c0 - THIN_MARGIN)
-    remove_thin(height_cm, cell_class, cover)
+    if thin:
+        remove_thin(height_cm, cell_class, cover)
     inner = (slice(THIN_MARGIN, -THIN_MARGIN), slice(THIN_MARGIN, -THIN_MARGIN))
     return height_cm[inner], cell_class[inner], cover[inner]
 

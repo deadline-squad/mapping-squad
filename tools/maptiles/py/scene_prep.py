@@ -31,7 +31,8 @@ top_raster.json); --rasterized starts from that.
 
 The grid of level 0 has cells of CELL_M metres, cell [r, c] covering [c, c + 1) * CELL_M east and [r, r + 1) * CELL_M south of
 the map's minimum corner. Objects that the scene raster does not draw but the static meshes' collision in the old raster (prep.py)
-holds are kept from the old raster: its cells farther than OLD_KEEP_M from any scene object, in runs of at least OLD_KEEP_MIN_M2.
+holds are kept from the old raster: its cells farther than OLD_KEEP_M from any scene object, in runs of at least OLD_KEEP_MIN_M2
+that the scene shows before its thin objects are taken out (shown_runs: a run it shows nothing of is collision without a mesh).
 What the old raster holds besides is no object (old_non_objects): the tops of the meshes the scene has as terrain or water
 (scene_objects.surface_groups: background mountains, _Vista levels, rivers) and of the sheets the game does not show
 (scene_objects.sheet_groups), which the server's collision holds as objects; what only SquadHeight holds; ground cover; the
@@ -68,6 +69,8 @@ SURFACE_MATCH_M = 2.0
 SURFACE_FLUSH_M = 0.25
 TERRAIN_RUN_SHARE = 0.5
 SERVICE_SHARE = 0.5
+SHOWN_RUN_SHARE = 0.5
+SHOWN_TILE_M = 16
 LEGACY_STEP_M = 0.25
 REPORT_MIN_M2 = 40
 REPORT_ITEMS = 8
@@ -217,6 +220,83 @@ def without_service_runs(keep, service):
     return keep & ~dropped[labels]
 
 
+def edge_points(triangles, spacing):
+    """Points [n, 3] along the edges of triangles [t, 3, 3], their corners included, at most ``spacing`` apart."""
+    starts = triangles.reshape(-1, 3)
+    ends = triangles[:, [1, 2, 0]].reshape(-1, 3)
+    steps = np.maximum(np.ceil(np.linalg.norm(ends - starts, axis=1) / spacing), 1).astype(np.int64)
+    edge = np.repeat(np.arange(len(steps)), steps)
+    share = (np.arange(steps.sum()) - np.repeat(np.cumsum(steps) - steps, steps)) / steps[edge]
+    return starts[edge] + (ends - starts)[edge] * share[:, None]
+
+
+def unthinned_objects(objects_of_scene, ground, z_min, bounds, wanted):
+    """Bool [rows, cols] on the 1 m grid of ``wanted``: the scene has an object standing prep.COVERAGE_MIN_CM and more in the metre,
+    however thin: what the game shows there, where the raster the tiles are drawn from has lost what is narrower than
+    scene_objects.THIN_WIDTH_M.
+
+    A metre holds an object when a cell of the scene raster stands that high in it before scene_objects.remove_thin, or when an
+    edge of a shown mesh passes that high through it: the raster's points are 5 cm apart and miss a wire, a clothesline or a fence
+    of one sheet that runs between them, and the old raster's run along such an object must not depend on how the object lies on
+    the grid. Drawn on the CPU (scene_objects.sample_tops) in tiles of SHOWN_TILE_M metres, and only the tiles that hold a wanted
+    metre or one beside it: the cost follows the wanted area, not the map's. A metre of a tile that was not drawn is False.
+    """
+    per = round(1 / scene.CELL_M)
+    shape0 = level0_shape(bounds)
+    seen = np.zeros(wanted.shape, bool)
+    rows, cols = np.nonzero(ndimage.binary_dilation(wanted, structure=np.ones((3, 3))))
+    for tile_row, tile_col in sorted(set(zip((rows // SHOWN_TILE_M).tolist(), (cols // SHOWN_TILE_M).tolist()))):
+        r0, c0 = tile_row * SHOWN_TILE_M * per, tile_col * SHOWN_TILE_M * per
+        r1, c1 = min(r0 + SHOWN_TILE_M * per, shape0[0]), min(c0 + SHOWN_TILE_M * per, shape0[1])
+        samples = scene.block_samples(objects_of_scene, bounds, r0, r1, c0, c1, scene.sample_tops)
+        if samples is None:
+            continue
+        height_cm, _, _ = scene.block_cells(samples, ground, z_min, bounds, r0, r1, c0, c1, thin=False)
+        metres = (-(-(r1 - r0) // per), -(-(c1 - c0) // per))
+        cells = np.zeros((metres[0] * per, metres[1] * per), np.uint16)
+        cells[:height_cm.shape[0], :height_cm.shape[1]] = height_cm
+        part = seen[tile_row * SHOWN_TILE_M:tile_row * SHOWN_TILE_M + metres[0], tile_col * SHOWN_TILE_M:tile_col * SHOWN_TILE_M + metres[1]]
+        part |= (cells.reshape(metres[0], per, metres[1], per).max((1, 3)) >= prep.COVERAGE_MIN_CM)[:part.shape[0], :part.shape[1]]
+        # The edges of the meshes that reach the tile
+        x0, y0 = bounds["min_x"] + tile_col * SHOWN_TILE_M, bounds["min_y"] + tile_row * SHOWN_TILE_M
+        x1, y1 = x0 + part.shape[1], y0 + part.shape[0]
+        for group, hit in scene.hit_groups(objects_of_scene, x0, y0, x1, y1):
+            corners = objects_of_scene.triangles(group)
+            for m in group["matrices"][hit]:
+                world = ((corners @ m[:3, :3]) + m[3, :3]).reshape(-1, 3, 3) / 100
+                reach = (world[:, :, 0].max(1) >= x0) & (world[:, :, 0].min(1) < x1) & (world[:, :, 1].max(1) >= y0) & (world[:, :, 1].min(1) < y1)
+                points = edge_points(world[reach], 1.0 / per)
+                points = points[(points[:, 0] >= x0) & (points[:, 0] < x1) & (points[:, 1] >= y0) & (points[:, 1] < y1)]
+                if not len(points):
+                    continue
+                below = scene.ground_points(ground, z_min, points[:, 1] - bounds["min_y"], points[:, 0] - bounds["min_x"])
+                high = points[points[:, 2] - below >= prep.COVERAGE_MIN_CM / 100]
+                part[(high[:, 1] - y0).astype(np.int64), (high[:, 0] - x0).astype(np.int64)] = True
+    return seen
+
+
+def shown_runs(keep, seen):
+    """keep without its connected runs (8-neighbour) that the scene does not show: runs of which less than SHOWN_RUN_SHARE of the
+    metres have a metre of ``seen`` (unthinned_objects) in them or beside them.
+
+    What merge_old keeps is what the scene raster drops as thin and the server collides with: the frames of unfinished tents,
+    power lines, clotheslines, signs, pipe stands. The game shows them, and the scene has them all along their runs: of the
+    29 690 m2 kept on the 25 maps, 25 159 m2 lie in 1 423 runs of which none is shown in less than three quarters of its metres.
+    A run of which the scene shows nothing is collision without a mesh over it: the collision of Manicouagan's dam meshes that
+    stands 2 to 3 m above the reservoir where the game shows water (275 m2), that of background mountains and terrain meshes
+    along a map's edge (Kamdesh's mountains, 1 905 m2), of river and lake planes, of road meshes, of the gap in a ruined wall.
+    Those are 4 531 m2 in 119 runs, none shown in more than a tenth of its metres.
+    """
+    labels, count = ndimage.label(keep, structure=np.ones((3, 3)))
+    if not count:
+        return keep
+    total = np.bincount(labels.ravel(), minlength=count + 1)
+    beside = ndimage.binary_dilation(seen, structure=np.ones((3, 3)))
+    shown = np.bincount(labels.ravel(), weights=beside.ravel(), minlength=count + 1) >= SHOWN_RUN_SHARE * np.maximum(total, 1)
+    shown[0] = False
+    return keep & shown[labels]
+
+
 def collision_footprints(statics_dir, bounds, shape):
     """(any, ground cover): bool [rows, cols] on the 1 m grid, inside the box of a static mesh placement with collision (the placements
     prep.py rasterizes), and inside the box of such a placement of ground cover.
@@ -317,7 +397,7 @@ def legacy_cells(leg_h, leg_c, rows, cols):
             nearest_r + r0, nearest_c + c0)
 
 
-def merge_old(prep_dir, new_h1, shape1, service, not_objects, strip=1000):
+def merge_old(prep_dir, new_h1, shape1, service, not_objects, unthinned, strip=1000):
     """Paint the old raster's objects that the scene lacks into level 0; returns (old mask, kept mask, old-only mask) on the 1 m grid.
 
     What ``not_objects`` marks is no object: the old raster's lake surfaces (legacy_water_surface), its terrain (legacy_terrain), its
@@ -326,6 +406,8 @@ def merge_old(prep_dir, new_h1, shape1, service, not_objects, strip=1000):
     The old raster holds collision the game does not show (invisible walls around the map, zone boxes): its runs that lie
     in the scene's service volumes (``service``) are not kept. Nor are its rocks: the scene shows every rock mesh, and what
     only the collision has of them is the scenery beyond the map (mountains, background terrain, SCENERY_MIN_SIDE_M and wider).
+    Nor are the runs of which the scene shows nothing even before its thin objects are taken out (shown_runs; ``unthinned``: the
+    function that gives unthinned_objects for a bool grid of metres): collision with no mesh over it.
     The kept objects are painted with smoothed outlines (legacy_cells) where the scene has nothing.
     """
     legacy_h2 = np.load(os.path.join(prep_dir, "obj_h2.npy"))
@@ -336,6 +418,7 @@ def merge_old(prep_dir, new_h1, shape1, service, not_objects, strip=1000):
     new = new_h1 >= prep.COVERAGE_MIN_CM
     near = ndimage.binary_dilation(new, iterations=OLD_KEEP_M)
     keep = without_service_runs(small_runs_removed(keep_candidates & ~near & ~old_rocks, OLD_KEEP_MIN_M2), service)
+    keep = shown_runs(keep, unthinned(keep))
     old_only = old & ~ndimage.binary_dilation(new, iterations=1)
     per = round(1 / scene.CELL_M)
     leg_h = np.load(os.path.join(prep_dir, "obj_h0.npy"), mmap_mode="r")
@@ -670,7 +753,8 @@ def main():
     log(slug, f"tracks painted into the landscape: {path_m2} m2")
     lines = write_top_lines(scene_dir, os.path.join("/features", slug), prep_dir)
     log(slug, f"{lines} road segments narrowed to their visible width")
-    old, keep, old_only = merge_old(prep_dir, new_h1, shape1, service, np.logical_or.reduce(list(not_objects.values())))
+    old, keep, old_only = merge_old(prep_dir, new_h1, shape1, service, np.logical_or.reduce(list(not_objects.values())),
+                                    lambda wanted: unthinned_objects(objects_of_scene, ground, z_min, bounds, wanted))
     new = new_h1 >= prep.COVERAGE_MIN_CM
     new_only = new & ~ndimage.binary_dilation(old, iterations=1)
     log(slug, f"old raster objects kept: {int(keep.sum())} m2, in service volumes {int((old & service).sum())} m2")

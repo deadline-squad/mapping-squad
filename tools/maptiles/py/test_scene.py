@@ -483,11 +483,12 @@ class OldRasterMerge(unittest.TestCase):
         np.save(os.path.join(self.dir, "obj_h2.npy"), old_h[::4, ::4][:n, :n])
         np.save(os.path.join(self.dir, "obj_c2.npy"), old_c[::4, ::4][:n, :n])
 
-    def merge(self):
+    def merge(self, seen=None):
+        """``seen``: what the scene shows before its thin objects are taken out; by default all that is asked about."""
         new_h1, _ = sp.pool_metres(self.dir)
         service = np.zeros(new_h1.shape, bool)
         service[3:28, 36:40] = True
-        return sp.merge_old(self.dir, new_h1, new_h1.shape, service, np.zeros(new_h1.shape, bool))
+        return sp.merge_old(self.dir, new_h1, new_h1.shape, service, np.zeros(new_h1.shape, bool), lambda wanted: wanted if seen is None else seen)
 
     def test_blueprint_is_kept_halo_and_service_wall_are_not(self):
         old, keep, old_only = self.merge()
@@ -499,6 +500,81 @@ class OldRasterMerge(unittest.TestCase):
         self.assertEqual(int(h0[300:380, 250:330].max()), 0)  # the old raster's rock
         self.assertGreater(int(old_only.sum()), 0)
         self.assertEqual(int(keep.sum()), 25)
+
+    def test_a_run_the_scene_shows_nothing_of_is_not_kept(self):
+        # Manicouagan: the dam meshes' collision stands 2 to 3 m above the reservoir, where the game shows water
+        old, keep, _ = self.merge(seen=np.zeros((40, 40), bool))
+        h0 = np.load(os.path.join(self.dir, "top_h0.npy"))
+        self.assertEqual(int(h0[300:360, 40:110].max()), 0)
+        self.assertEqual(int(keep.sum()), 0)
+        self.assertTrue(old[30:35, 5:10].all())
+
+    def test_runs_the_scene_shows_stay_whole_and_the_others_go(self):
+        keep = np.zeros((30, 30), bool)
+        keep[2:4, 2:12] = True  # a tent frame: seen along its whole run
+        keep[8, 2:12] = True  # a fence whose mesh stands a metre beside its collision
+        keep[14:18, 2:12] = True  # a block of collision with a pole at one corner
+        keep[22:26, 2:12] = True  # collision over water
+        seen = np.zeros((30, 30), bool)
+        seen[2:4, 2:11] = True
+        seen[9, 2:12] = True
+        seen[14, 2] = True
+        kept = sp.shown_runs(keep, seen)
+        self.assertTrue(kept[2:4, 2:12].all() and kept[8, 2:12].all())
+        self.assertFalse(kept[14:18, 2:12].any() or kept[22:26, 2:12].any())
+        np.testing.assert_array_equal(sp.shown_runs(np.zeros((5, 5), bool), np.ones((5, 5), bool)), np.zeros((5, 5), bool))
+
+    def test_the_unthinned_raster_sees_what_the_tiles_raster_drops_as_thin(self):
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory)
+        s = Scene(directory)
+        s.place(s.add_mesh("TentFrame", [((0, 0, 0, 600, 10, 300), OPAQUE)]), (10, 10))  # a bar 6 m long, 0.1 m wide and 3 m high
+        s.place(s.add_mesh("Hut", [((0, 0, 0, 300, 300, 250), OPAQUE)]), (40, 40))
+        s.write()
+        scene = so.SceneObjects(directory)
+        ground = flat_ground()
+        tiles_raster, _, _ = so.raster_block(scene, ground, 0.0, BOUNDS, 80, 130, 80, 180)
+        self.assertEqual(int(tiles_raster.max()), 0)  # the bar is thinner than THIN_WIDTH_M
+        wanted = np.zeros((60, 60), bool)
+        wanted[10, 10:16] = True  # the collision of the bar
+        wanted[30, 30] = True  # collision with nothing of the scene near it
+        seen = sp.unthinned_objects(scene, ground, 0.0, BOUNDS, wanted)
+        self.assertTrue(seen[10, 10:16].all())
+        self.assertFalse(seen[30, 30] or seen[12, 10:16].any())
+        self.assertFalse(seen[40:43, 40:43].any())  # the hut's tile holds nothing wanted and is not drawn
+        self.assertTrue(sp.unthinned_objects(scene, ground, 0.0, BOUNDS, np.ones((60, 60), bool))[40:43, 40:43].all())
+
+    def test_a_wire_between_the_rasters_points_is_seen_by_its_edges(self):
+        # A wire 1 cm thick along the grid, between two rows of points 5 cm apart, and a fence of one upright sheet: no point of
+        # the raster falls in either, and the server's collision of both is a run of the old raster
+        directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, directory)
+        s = Scene(directory)
+        s.place(s.add_mesh("Wire", [((0, 3, 800, 2000, 4, 801), OPAQUE)]), (10, 10))
+        s.place(s.add_mesh("FenceSheet", [((0, 0, 0, 1000, 0, 200), OPAQUE)]), (10, 30.02))
+        s.place(s.add_mesh("Kerb", [((0, 0, 0, 1000, 0, 20), OPAQUE)]), (10, 40.02))  # too low to be an object
+        s.write()
+        scene = so.SceneObjects(directory)
+        ground = flat_ground()
+        raster, _, _ = so.raster_block(scene, ground, 0.0, BOUNDS, 80, 320, 80, 320)
+        self.assertEqual(int(raster.max()), 0)
+        wanted = np.zeros((60, 60), bool)
+        wanted[10, 10:30] = wanted[30, 10:20] = wanted[40, 10:20] = True
+        seen = sp.unthinned_objects(scene, ground, 0.0, BOUNDS, wanted)
+        self.assertTrue(seen[10, 10:30].all() and seen[30, 10:20].all())
+        self.assertFalse(seen[40, 10:20].any() or seen[20, 10:30].any())
+
+    def test_points_along_the_edges_of_a_triangle(self):
+        points = sp.edge_points(np.array([[[0.0, 0.0, 7.0], [1.0, 0.0, 7.0], [1.0, 2.0, 7.0]]]), 0.5)
+        self.assertEqual(sorted(map(tuple, points[:, :2].round(3).tolist())), sorted([(0.0, 0.0), (0.5, 0.0), (1.0, 0.0), (1.0, 0.5), (1.0, 1.0), (1.0, 1.5),
+                                                                                   (1.0, 2.0), (0.8, 1.6), (0.6, 1.2), (0.4, 0.8), (0.2, 0.4)]))
+        np.testing.assert_array_equal(points[:, 2], 7.0)
+
+    def test_the_ground_under_scattered_points_is_that_of_the_grid(self):
+        ground = np.arange(36, dtype=np.float32).reshape(6, 6)
+        rows, cols = np.array([0.0, 1.5, 4.25, 9.0]), np.array([0.0, 2.5, 0.75, 9.0])
+        np.testing.assert_allclose(so.ground_points(ground, 10.0, rows, cols), [10.0, 10 + 1.5 * 6 + 2.5, 10 + 4.25 * 6 + 0.75, 10 + 35.0])
+        np.testing.assert_allclose(so.ground_points(ground, 10.0, rows[1:3], cols[1:3]), np.diag(so.ground_on_grid(ground, 10.0, rows[1:3], cols[1:3])))
 
     def test_lake_surface_of_the_old_raster_is_found(self):
         ground = np.zeros((40, 40), np.float32)
