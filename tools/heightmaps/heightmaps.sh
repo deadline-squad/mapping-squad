@@ -143,7 +143,7 @@ switch-webp)
     echo "switched $(find "$OUT_WEBP" -name meta.json | wc -l) heightmaps to WebP in $DIST/heightmaps"
     ;;
 *)
-    sed -n '2,18p' "$0"
+    sed -n '2,/^set -eu$/{/^#/p;}' "$0"
     exit 2
     ;;
 esac

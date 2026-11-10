@@ -258,7 +258,7 @@ colour-distance)
     colour_tool colour_distance.py "$slug" "/tiles/$folder" "$@"
     ;;
 *)
-    sed -n '2,30p' "$0"
+    sed -n '2,/^set -eu$/{/^#/p;}' "$0"
     exit 2
     ;;
 esac
