@@ -1265,14 +1265,17 @@ class RoadWidth(unittest.TestCase):
         pixels.tofile(os.path.join(self.directory, "textures", f"{index}.bin"))
         self.textures[path] = {"file": str(index), "format": "PF_R8G8B8A8", "width": len(alpha), "height": 2}
 
-    def road_mesh(self, name, materials, flip_u=False, sections=1):
-        """A mesh 900 cm long and 400 cm wide with U across it (increasing with Y, or decreasing with ``flip_u``), cut into ``sections`` strips across."""
+    def road_mesh(self, name, materials, flip_u=False, sections=1, along_y=False):
+        """A mesh 900 cm long and 400 cm wide with U across it (increasing with Y, or decreasing with ``flip_u``), cut into ``sections`` strips across.
+
+        ``along_y``: the mesh runs along its Y axis and is 400 cm wide in X, with U increasing with X.
+        """
         ys = np.linspace(-200, 200, sections + 1)
         vertices = []
         for y in ys:
             u = 0.5 - y / 400 if flip_u else 0.5 + y / 400
             for x, v in ((-450, 0.0), (450, 1.0)):
-                vertices.append((x, y, 0, 0, 0, 1, u, v))
+                vertices.append((y, x, 0, 0, 0, 1, u, v) if along_y else (x, y, 0, 0, 0, 1, u, v))
         indices, info = [], []
         for k in range(sections):
             a = 2 * k
@@ -1287,15 +1290,20 @@ class RoadWidth(unittest.TestCase):
         self.meshes[path] = {"id": mesh_id, "materials": list(materials), "lod": 0, "vertices": len(vertices), "indices": len(indices), "sections": info}
         return path
 
-    def lay(self, mesh_path, x, y, overrides=(), flip=False, owner="Landscape"):
-        """A spline mesh component laid straight along X with its middle at world (x, y) metres."""
-        mesh = self.meshes[mesh_path]
+    def spline(self, flip=False, axis="X", roll=0.0):
+        """A straight spline 9 m east; ``flip``: the scale of the frame's X vector is negative."""
         side = -1.0 if flip else 1.0
-        spline = {"p": {"StartPos": {"X": -450.0, "Y": 0.0, "Z": 0.0}, "StartTangent": {"X": 900.0, "Y": 0.0, "Z": 0.0}, "StartScale": {"X": side, "Y": 1.0},
-                        "EndPos": {"X": 450.0, "Y": 0.0, "Z": 0.0}, "EndTangent": {"X": 900.0, "Y": 0.0, "Z": 0.0}, "EndScale": {"X": side, "Y": 1.0}},
-                  "axis": "X", "up": {"X": 0.0, "Y": 0.0, "Z": 1.0}}
+        return {"p": {"StartPos": {"X": -450.0, "Y": 0.0, "Z": 0.0}, "StartTangent": {"X": 900.0, "Y": 0.0, "Z": 0.0}, "StartScale": {"X": side, "Y": 1.0},
+                      "StartRoll": roll, "EndPos": {"X": 450.0, "Y": 0.0, "Z": 0.0}, "EndTangent": {"X": 900.0, "Y": 0.0, "Z": 0.0},
+                      "EndScale": {"X": side, "Y": 1.0}, "EndRoll": roll},
+                "axis": axis, "up": {"X": 0.0, "Y": 0.0, "Z": 1.0}}
+
+    def lay(self, mesh_path, x, y, overrides=(), owner="Landscape", **spline):
+        """A spline mesh component laid straight along X with its middle at world (x, y) metres (``spline``: the arguments of self.spline)."""
+        mesh = self.meshes[mesh_path]
         self.items.append({"level": "SquadGame/Content/Maps/T/L.umap", "name": "SplineMeshComponent_0", "type": "SplineMeshComponent", "owner": owner,
-                           "mesh": mesh["id"], "hidden": False, "cull": [0, 0, 0, 0], "overrides": list(overrides), "chain": chain(x, y), "instances": None, "spline": spline})
+                           "mesh": mesh["id"], "hidden": False, "cull": [0, 0, 0, 0], "overrides": list(overrides), "chain": chain(x, y), "instances": None,
+                           "spline": self.spline(**spline)})
 
     def write(self):
         json.dump(self.meshes, open(os.path.join(self.directory, "meshes.json"), "w"))
@@ -1304,11 +1312,11 @@ class RoadWidth(unittest.TestCase):
         with open(os.path.join(self.directory, "instances.ndjson"), "w") as handle:
             handle.write("\n".join(json.dumps(item) for item in self.items))
 
-    def span_of(self, mesh_path, materials=None, axis="X"):
+    def span_of(self, mesh_path, materials=None, side=1):
         self.write()
         info = self.meshes[mesh_path]
         vertices, indices = so.read_mesh(self.directory, info)
-        return rw.mesh_span(vertices, indices, info, materials or info["materials"], self.materials, rw.Textures(self.directory), axis)
+        return rw.mesh_span(vertices, indices, info, materials or info["materials"], self.materials, rw.Textures(self.directory), side)
 
     def test_an_opaque_material_shows_the_whole_width(self):
         span, sources = self.span_of(self.road_mesh("Opaque", [OPAQUE]))
@@ -1402,6 +1410,38 @@ class RoadWidth(unittest.TestCase):
         straight, mirrored = rw.narrowed_lines(self.directory, [self.line(10, meshes=[mesh]), self.line(20, meshes=[mesh])])
         self.assertAlmostEqual(mirrored["span"][0], 1 - straight["span"][1], places=3)
         self.assertAlmostEqual(mirrored["span"][1], 1 - straight["span"][0], places=3)
+
+    def test_a_mesh_that_runs_along_y_is_measured_across_the_axis_its_roll_lays_level(self):
+        # Al Basrah's and Fallujah's pavements, the rail crossings of Narva and Harju: road meshes modelled along Y, which the
+        # landscape spline rolls by -90 degrees to stand them up
+        mesh = self.road_mesh("FringeAlongY", [self.MASKED], along_y=True)
+        across_x, _ = self.span_of(mesh, side=0)
+        self.assertAlmostEqual(across_x[0], 3 / 16 + rw.OPACITY_CLIP * 2 / 16, delta=0.01)
+        self.assertAlmostEqual(across_x[1], 13 / 16 + (1 - rw.OPACITY_CLIP) * 2 / 16, delta=0.01)
+        # Z, the side axis of the bend without the roll, is the mesh's height: it has no width to show a part of
+        self.assertIsNone(self.span_of(mesh, side=2)[0])
+
+    def test_a_rolled_mesh_narrows_its_segment_on_the_side_the_roll_turns_it_to(self):
+        mesh = self.road_mesh("FringeAlongY", [self.MASKED], along_y=True)
+        self.lay(mesh, 30, 10, axis="Y", roll=-math.pi / 2)
+        self.write()
+        (line,) = rw.narrowed_lines(self.directory, [self.line(10, meshes=[mesh])])
+        # The wide transparent fringe is at the mesh's -X edge, which the bend lays south of the spline, the segment's right
+        vertices, _ = so.read_mesh(self.directory, self.meshes[mesh])
+        bent = so.bend_along_spline(vertices.astype(np.float64), self.spline(axis="Y", roll=-math.pi / 2), (vertices[:, :3].min(0), vertices[:, :3].max(0)))
+        np.testing.assert_allclose(bent[vertices[:, 0] < 0, 1], 200.0, atol=1e-6)
+        self.assertIn("span", line, "the segment keeps its whole width")
+        self.assertAlmostEqual(line["span"][0], 1 - (13 / 16 + (1 - rw.OPACITY_CLIP) * 2 / 16), delta=0.01)
+        self.assertAlmostEqual(line["span"][1], 1 - (3 / 16 + rw.OPACITY_CLIP * 2 / 16), delta=0.01)
+        self.assertAlmostEqual(line["right"][0][1], 8 + 4 * line["span"][1], places=2)
+
+    def test_a_quarter_turn_the_other_way_keeps_the_sides_of_the_mesh(self):
+        mesh = self.road_mesh("FringeAlongY", [self.MASKED], along_y=True)
+        self.lay(mesh, 30, 10, axis="Y", roll=math.pi / 2)
+        self.write()
+        (line,) = rw.narrowed_lines(self.directory, [self.line(10, meshes=[mesh])])
+        self.assertIn("span", line, "the segment keeps its whole width")
+        self.assertAlmostEqual(line["span"][0], 3 / 16 + rw.OPACITY_CLIP * 2 / 16, delta=0.01)
 
     def test_components_that_are_not_the_landscapes_are_ignored(self):
         mesh = self.road_mesh("Dirt", [self.DIRT])

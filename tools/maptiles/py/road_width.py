@@ -7,9 +7,11 @@ which part of the mesh's width a player sees, and pulls the segments' edges in t
 
 Method, per mesh with the materials its spline mesh components use (the component's material slots override the mesh's):
 
-1. The mesh's side axis is the one the spline bends it by (``scene_objects.bend_along_spline``: Y for a mesh running along X).
-   Its extent over all vertices is the spline's width, so a position across the road is a fraction 0..1 of that extent,
-   from the -side edge (the segment's ``left`` edge) to the +side edge (``right``).
+1. The mesh's side axis is the one its component lays across the spline once the spline's roll has turned the mesh
+   (``spline_mesh.axis_across``: Y for a mesh running along X, X for a mesh running along Y that the landscape spline rolls by
+   -90 degrees to stand it up; the axis the unrolled bend would name for the latter, Z, is its height). Its extent over all
+   vertices is the spline's width, so a position across the road is a fraction 0..1 of that extent, from the -side edge to the
+   +side edge: the segment's ``left`` and ``right`` edges, or the other way round where the roll or a negative scale mirrors it.
 2. Per section (one material): sections whose material is not shown from above (``scene_objects.hidden_material``) are dropped.
    The texture coordinate across the road (the UV channel that is a function of the side coordinate) is read off the
    section's vertices as a piecewise linear function of the side coordinate.
@@ -37,6 +39,7 @@ from scipy import spatial
 
 import objects
 import scene_objects as scene
+import spline_mesh
 from render import smoothstep
 
 OPACITY_CLIP = 0.33
@@ -46,7 +49,6 @@ MATCH_M = 4.0
 RESAMPLE_M = 1.0
 MIN_SHRINK = 0.005
 ROAD_CLASSES = ("asphalt", "dirt", "pavement")
-SIDE_AXIS = {"X": 1, "Y": 2, "Z": 0}
 UV_COLUMNS = (6, 7)
 UV_SPREAD = 0.01
 
@@ -145,14 +147,14 @@ def coordinate_across(vertices, side):
     return (positions, best[1]) if best[0] <= UV_SPREAD else None
 
 
-def mesh_span(vertices, indices, info, slot_materials, materials, textures, axis="X"):
+def mesh_span(vertices, indices, info, slot_materials, materials, textures, side=1):
     """((lo, hi) visible span of the mesh's width as fractions from its -side edge to its +side edge, None when no section is shown) and sources.
 
-    ``slot_materials`` are the material paths per slot as a component has them (its overrides over the mesh's own); sources are the
-    set of SOFT, MASK, ALPHA, OPAQUE, UNRESOLVED (a section whose UV is no function of the side coordinate counts as fully visible) and
-    HIDDEN (sections not shown, which add nothing).
+    ``slot_materials`` are the material paths per slot as a component has them (its overrides over the mesh's own); ``side`` is the
+    mesh axis (0..2) laid across the road (spline_mesh.axis_across; Y for a mesh that runs along X); sources are the set of SOFT, MASK,
+    ALPHA, OPAQUE, UNRESOLVED (a section whose UV is no function of the side coordinate counts as fully visible) and HIDDEN (sections
+    not shown, which add nothing).
     """
-    side = SIDE_AXIS[axis]
     low, high = float(vertices[:, side].min()), float(vertices[:, side].max())
     sources = set()
     spans = []
@@ -191,9 +193,10 @@ def mesh_span(vertices, indices, info, slot_materials, materials, textures, axis
 
 
 def spline_meshes(scene_dir):
-    """The shown spline mesh components of the landscape: {mesh path, materials (the component's slots), axis, flip, x, y (world m, the middle)}.
+    """The shown spline mesh components of the landscape: {mesh path, materials (the component's slots), side, flip, x, y (world m, the middle)}.
 
-    ``flip``: the component's scale across the road is negative, so its +side edge is the segment's left one.
+    ``side``: the mesh axis (0..2) that the component lays across the road; ``flip``: its +side edge is the segment's left one, by
+    the spline's roll or a negative scale across the road (spline_mesh.axis_across).
     """
     meshes = json.load(open(os.path.join(scene_dir, "meshes.json")))
     by_id = {info["id"]: (path, info) for path, info in meshes.items() if "error" not in info}
@@ -210,19 +213,20 @@ def spline_meshes(scene_dir):
         world = (np.append(middle, 1.0) @ objects.component_world(item["chain"]))[:2] / 100
         overrides = item["overrides"]
         slots = tuple(overrides[i] if i < len(overrides) and overrides[i] else material for i, material in enumerate(info["materials"]))
-        yield {"mesh": path, "materials": slots, "axis": item["spline"]["axis"][-1], "flip": p.get("StartScale", {"X": 1})["X"] < 0, "x": float(world[0]), "y": float(world[1])}
+        side, towards_right = spline_mesh.axis_across(item["spline"])
+        yield {"mesh": path, "materials": slots, "side": side, "flip": towards_right < 0, "x": float(world[0]), "y": float(world[1])}
 
 
 def variant_spans(scene_dir, components):
-    """{(mesh path, materials, axis): (span or None, sources)} for the variants among the spline mesh components."""
+    """{(mesh path, materials, side axis): (span or None, sources)} for the variants among the spline mesh components."""
     materials = json.load(open(os.path.join(scene_dir, "materials.json")))
     meshes = json.load(open(os.path.join(scene_dir, "meshes.json")))
     textures = Textures(scene_dir)
     spans = {}
-    for key in {(c["mesh"], c["materials"], c["axis"]) for c in components}:
-        path, slots, axis = key
+    for key in {(c["mesh"], c["materials"], c["side"]) for c in components}:
+        path, slots, side = key
         vertices, indices = scene.read_mesh(scene_dir, meshes[path])
-        spans[key] = mesh_span(vertices, indices, meshes[path], slots, materials, textures, axis)
+        spans[key] = mesh_span(vertices, indices, meshes[path], slots, materials, textures, side)
     return spans
 
 
@@ -256,7 +260,7 @@ def segment_spans(lines, components, spans):
         distance, nearest = spatial.cKDTree(points).query(middles)
         for component, d, k in zip(by_mesh[mesh], distance, nearest):
             if d <= MATCH_M:
-                votes.setdefault((int(owner[k]), mesh), Counter())[(component["materials"], component["axis"], component["flip"])] += 1
+                votes.setdefault((int(owner[k]), mesh), Counter())[(component["materials"], component["side"], component["flip"])] += 1
     result = []
     for i, line in enumerate(lines):
         lo, hi = 1.0, 0.0
@@ -265,8 +269,8 @@ def segment_spans(lines, components, spans):
             if (i, mesh) not in votes:
                 found = False
                 break
-            (slots, axis, flip), _ = votes[(i, mesh)].most_common(1)[0]
-            span = spans[(mesh, slots, axis)][0]
+            (slots, side, flip), _ = votes[(i, mesh)].most_common(1)[0]
+            span = spans[(mesh, slots, side)][0]
             if span is None:
                 found = False
                 break

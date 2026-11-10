@@ -87,5 +87,36 @@ class BendAlongSpline(unittest.TestCase):
         np.testing.assert_allclose(unrolled, np.tile((0.0, 1.0, 0.0), (len(corners), 1)), atol=1e-6)
 
 
+class AxisAcross(unittest.TestCase):
+    def test_the_axis_and_its_direction_are_those_of_the_bent_mesh(self):
+        # One point a metre out on every mesh axis: the axis named must be the one that lands level beside the spline, on the side named
+        for axis, roll, scale in itertools.product("XYZ", (0.0, -math.pi / 2, math.pi / 2, math.pi, 0.2, -1.4), ((1.0, 1.0), (-1.0, 1.0), (1.0, -1.0))):
+            with self.subTest(axis=axis, roll=roll, scale=scale):
+                record = spline(axis, roll=roll, scale=scale)
+                across, towards_right = spline_mesh.axis_across(record)
+                point = np.zeros((1, 3))
+                point[0, across] = 100.0
+                positions, _ = spline_mesh.bend_along_spline(point, record, (np.zeros(3), np.ones(3)))
+                self.assertGreater(towards_right * positions[0, 1], abs(positions[0, 2]))
+
+    def test_the_landscape_splines_cases(self):
+        self.assertEqual(spline_mesh.axis_across(spline("X")), (1, 1))
+        self.assertEqual(spline_mesh.axis_across(spline("X", scale=(-1.0, 1.0))), (1, -1))
+        self.assertEqual(spline_mesh.axis_across(spline("Y", roll=-math.pi / 2)), (0, -1))
+        self.assertEqual(spline_mesh.axis_across(spline("Y", roll=-math.pi / 2, scale=(1.0, -1.0))), (0, 1))
+        self.assertEqual(spline_mesh.axis_across(spline("Z", roll=-math.pi / 2)), (1, -1))
+
+    def test_a_banked_road_keeps_its_axis(self):
+        self.assertEqual(spline_mesh.axis_across(spline("X", roll=math.radians(37), end_roll=math.radians(28))), (1, 1))
+
+    def test_missing_parameters_are_the_engines_defaults(self):
+        record = spline("X")
+        for key in ("StartScale", "EndScale", "StartRoll", "EndRoll", "StartOffset", "EndOffset"):
+            del record["p"][key]
+        self.assertEqual(spline_mesh.axis_across(record), (1, 1))
+        positions, _ = bent(slab(0, 1, 2), record)
+        np.testing.assert_allclose(positions.max(0), (LENGTH, WIDTH / 2, THICKNESS), atol=1e-6)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,8 @@ StartTangent, StartScale, StartRoll in radians, StartOffset and the same for End
 "Z") and ``up`` (SplineUpDir). Positions are centimetres in the component's space.
 """
 
+import math
+
 import numpy as np
 
 FORWARD_AXIS = {"X": 0, "Y": 1, "Z": 2}
@@ -64,3 +66,19 @@ def bend_along_spline(positions, spline, bounds, normals=None):
     turned = direction * normals[:, forward:forward + 1] + x_vector * normals[:, side:side + 1] + y_vector * normals[:, up:up + 1]
     return bent, turned / np.maximum(np.linalg.norm(turned, axis=1, keepdims=True), 1e-6)
 
+
+def axis_across(spline):
+    """(mesh axis 0..2, +1 or -1): the mesh axis that the component lays across its spline and level with the ground, and whether
+    that axis' positive end is on the spline's right (+1: the frame's X vector, up x direction) or on its left (-1).
+
+    Without a roll it is the axis laid along the frame's X vector (Y for a mesh that runs along X); a roll nearer a quarter turn
+    than none swaps it for the axis laid along the Y vector (X for a mesh that runs along Y and is rolled by -90 degrees, its
+    positive end then on the left). A negative scale of the axis mirrors it. Roll and scale are the segment's middle ones.
+    """
+    p = spline["p"]
+    side, up = SLICE_AXES[FORWARD_AXIS[spline["axis"][-1]]]
+    roll = (p.get("StartRoll", 0.0) + p.get("EndRoll", 0.0)) / 2
+    scale = lambda key: p.get("StartScale", {}).get(key, 1.0) + p.get("EndScale", {}).get(key, 1.0)
+    if abs(math.cos(roll)) >= abs(math.sin(roll)):
+        return side, int(math.copysign(1, math.cos(roll) * scale("X")))
+    return up, int(math.copysign(1, math.sin(roll) * scale("Y")))
