@@ -3,7 +3,7 @@
 The "Detailed" layer of the Deadline SquadCalc: a topographic map of every map, drawn from the exact
 game data of the Squad dedicated server and client paks, with tiles down to 0.07–0.125 m per pixel (see "Tile frame"). Served as 256 px
 webp tiles from `/maptiles/<map>/<z>/<x>_<y>.webp` with `/maptiles/<map>/meta.json`
-(`src/js/squadMinimap.js` `showDetailedLayer`; a map without tiles shows the upstream topographic map).
+(`src/js/squadMinimap.js` `showDetailedLayer`; a map without tiles shows the upstream basemap).
 
 ## What is drawn, and from which data
 
@@ -311,6 +311,16 @@ and `maptiles.sh relief [map ...]` (`RELIEF_ARGS="--tint"` multiplies a hypsomet
 * RVT anisotropic sky-view factor (level 1, direction 315, 16 directions, 25 m), stretched from its 1st percentile to 1;
 * Multiply at 50 % opacity of the SVF over the MDOW hillshade: `MDOW * (0.5 + 0.5 * SVF)`;
 * resampled with Lanczos to the finest zoom (heightmap samples on the frame's nodes), coarser zooms average 2 x 2 pixels.
+
+Placement (measured 2026-11-10; zoom-4 mosaic of the served archives, 0.4 to 1.7 m a pixel, registered in 8 x 8 windows with
+an affine fit): the layer lies in the tile frame, which `build` checks against the heightmap's. Against a plain MDOW hillshade
+it reads 0.2 to 1.8 m south-east at the centre of every map but Skorpo (Jensen +1.80 m east, +0.52 m south; Yehorivka +1.62,
++0.66 m), against the same heightmap shaded with this layer's own formula (`shade_map`, `blend`) within 0.01 to 0.03 m on
+Al Basrah, Fallujah, Goose Bay, Jensen, Logar, Mutaha, Narva and Sumari, 0.11 m on Sanxian and 0.25 m on Skorpo, and against
+the game's bare ground (`prep/<map>/ground.npy`) with the same formula within 0.19 m on the other maps. The offset is the
+drawing: the anisotropic sky-view term (main direction 315 degrees) darkens the slopes facing away from the light and moves
+the edges a hillshade alone would show south-east; the frame is right. On towns the bare ground reads 0.30 to 0.66 m off, as
+the heightmap's buildings shade and the bare ground has none.
 
 The Python image `py/Dockerfile.relief` installs `rvt-py` without its GDAL dependency (`vis.py` needs only numpy and scipy).
 Size: 1.8 to 4 MB for Fallujah, 3 to 11 MB for Chora, depending on the extra zoom.

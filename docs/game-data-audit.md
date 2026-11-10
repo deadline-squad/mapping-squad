@@ -83,11 +83,20 @@ Source: `MapTextureCornerZero` / `MapTextureCornerOne` of the `SQWorldSettings` 
 (`game_audit.sh extract-layers`), reduced (`layers.py reduce`, `corners`) and put through
 `tools/heightmaps/py/minimap_corners.py table`. Result `tools/game_audit/data/minimap_corners.json`.
 
-Verdict: `SDK_data.minimap.game` of the 25 maps is equal to the table, 0 differences. `corner0/1` (the extent of the
-map image, the heightmap and the markers) is the game's rounded or truncated to whole metres on 24 maps (largest 1.00 m,
-Black Coast); on Skorpo the image was fitted 9.5 m (west) and 10.5 m (east) off, which is known and why the grid takes
-`game`. A layer with a minimap of its own (Skirmish, Seed) gets its corners from the API; they agree with the game to
-0.006 cm on the 64 pool layers (section 3).
+Verdict: `SDK_data.minimap.game` of the 25 maps is equal to the table, 0 differences. `corner0/1` (the extent of the map
+image, the heightmap and the markers) is the game's rounded or truncated to whole metres on 24 maps (largest 1.00 m,
+Black Coast); on Skorpo the image corners lie 9.5 m (west) and 10.5 m (east) off the game's, which is why the grid takes
+`game`. Skorpo's texture shows neither rectangle: registered on the level data (33 windows of its edges on the objects,
+crowns and roads, within 0.08 m at its edges and 0.24 m at its worst corner; its own shading on the ground, 34 windows,
+0.44 and 0.57 m west at its west and east edges, so no scale is left) it shows (-3611.1, -3291.8) to (3257.7, 3575.8) m,
+6868.8 m wide: the image corners fit it at the west edge (0.1 m), and its east edge lies 9.2 m east of the game's corner
+and 19.7 m east of the image corner; SquadCalc 45.50.0 draws the basemap and its HQ tiles there (`minimap.image`). A
+layer with a minimap of its own (Skirmish, Seed) gets its corners from the API; they agree with the levels to 0.006 cm
+on the 64 pool layers (section 3). The game, though, takes a layer's texture and corners from its data asset where that
+sets them (`Gameplay_Layer_Data/<layer>`: `OveriddenMinimapTexture`, `MinimapCornersPosition`), which the API does not
+read: on 6 layers (Black Coast Seed v1, Narva Skirmish v1, Yehorivka Skirmish v1, v1 WP and v2, Fallujah Skirmish v1)
+the game shows another texture than the API names. SquadCalc 45.50.0 takes both from the data assets (`tools/maptiles`,
+step `layer-minimaps`).
 
 | Map | Image corners `corner0/1` (min / max) | `game` in maps.js | Game (modal corners of its layers) | Image against game, worst edge | Layers read / with the modal corners | Verdict |
 |---|---|---|---|---|---|---|
@@ -112,7 +121,7 @@ Black Coast); on Skorpo the image was fitted 9.5 m (west) and 10.5 m (east) off,
 | Narva | [-1390, -1402] / [1410, 1398] | [-1389.71, -1402.07] / [1410.29, 1397.93] | [-1389.71, -1402.07] / [1410.29, 1397.93] | 0.29 m | 9 / 9 | EQUAL |
 | Pacific | [-2016, -2016] / [2016, 2016] | [-2016, -2016] / [2016, 2016] | [-2016, -2016] / [2016, 2016] | 0.00 m | 4 / 4 | EQUAL |
 | Sanxian | [-2300, -2050] / [2300, 2550] | [-2300, -2050] / [2300, 2550] | [-2300, -2050] / [2300, 2550] | 0.00 m | 11 / 11 | EQUAL |
-| Skorpo | [-3611, -3293] / [3238, 3576] | [-3601.5, -3293] / [3248.5, 3576.08] | [-3601.5, -3293] / [3248.5, 3576.08] | 10.50 m | 5 / 4 | EQUAL; image fitted 9.5 / 10.5 m off, the grid uses `game` |
+| Skorpo | [-3611, -3293] / [3238, 3576] | [-3601.5, -3293] / [3248.5, 3576.08] | [-3601.5, -3293] / [3248.5, 3576.08] | 10.50 m | 5 / 4 | EQUAL; image corners 9.5 / 10.5 m off, the grid uses `game`; the texture shows [-3611.1, -3291.8] / [3257.7, 3575.8], where the basemap is drawn (45.50.0) |
 | Sumari | [-640, -447] / [660, 853] | [-639.74, -447.28] / [660.34, 852.97] | [-639.74, -447.28] / [660.34, 852.97] | 0.34 m | 9 / 6 | EQUAL |
 | Tallil | [-2340, -2340] / [2340, 2340] | [-2340, -2340] / [2340, 2340] | [-2340, -2340] / [2340, 2340] | 0.00 m | 9 / 6 | EQUAL |
 | Yehorivka | [-3302, -3302] / [3048, 3048] | [-3301.97, -3301.99] / [3048.03, 3048] | [-3301.97, -3301.99] / [3048.03, 3048] | 0.03 m | 15 / 15 | EQUAL |
