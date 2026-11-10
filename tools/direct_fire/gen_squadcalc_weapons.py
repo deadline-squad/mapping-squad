@@ -30,7 +30,10 @@ with another launch point, shell or spread gets an entry of its own.
 A weapon Squad Ballistics renamed (RENAMED: the RMB sights, "QLZ87" -> "QLZ87 · optic (RMB ×3)"; the vehicle that kept
 a split entry, "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3" -> "Tank AP · T-72 (2A46)") keeps its DF_ identifier, so
 its position in WEAPONS and its locale key stay, and gets `legacyBallistics` with its old names; its display name in
-public/locales/*/weapons.json is changed by hand.
+public/locales/*/weapons.json is changed by hand. A renamed weapon that is a view of an entry ("Tank AP · T-72 / T-90
+(2A46) · gunner sight ×12" -> "Tank AP · T-72 (2A46) · gunner sight ×12") is named in that entry's
+`legacyBallisticsViews`, old name -> the view's name: selectWeapon takes the old name and reports the view, not the
+entry's own name, which is another view to Squad Ballistics.
 
 The projectile's `lifespan` (InitialLifeSpan, the game destroys the round that long after launch) becomes
 `projectileLifespan`, which SquadCalc refuses a solution past; a weapon without one (the mortar) keeps SquadCalc's default.
@@ -62,7 +65,8 @@ SKIP = {"AGS-17 · emplacement · optic (RMB ×2.5)"}  # SquadCalc "AGS-17" alre
 # The RMB sights got their view in the name: "QLZ87" was the ×3 optic's entry and used from the normal view overshot
 # by hundreds of metres. SquadCalc's entry keeps the DF_ identifier of its oldest name here (the locale key; the
 # stored weapon is the entry's index) and its old names as `legacyBallistics`, which selectBallisticsWeapon still
-# accepts, so an older Squad Ballistics keeps working.
+# accepts, so an older Squad Ballistics keeps working. A current name that is a view of an entry (the data decides,
+# see `plan`) gives that entry a `legacyBallisticsViews` pair instead.
 RENAMED = {
     "QLZ87": "QLZ87 · optic (RMB ×3)",
     # The Lynx, the CSK131 with the WZ551, the ZBL-08 and the bunker tripod got entries of their own (launch heights
@@ -80,6 +84,9 @@ RENAMED = {
     # tank already had; the T-72 kept these.
     "Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3": "Tank AP · T-72 (2A46)",
     "Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2": "Tank HEAT/HE · T-72 (2A46)",
+    # The ×12 zoom of the T-72's sight carried the T-90 in its name in Squad Ballistics 1.6.4 only
+    "Tank AP · T-72 / T-90 (2A46) · gunner sight ×12": "Tank AP · T-72 (2A46) · gunner sight ×12",
+    "Tank HEAT/HE · T-72 / T-90 (2A46) · gunner sight ×12": "Tank HEAT/HE · T-72 (2A46) · gunner sight ×12",
 }
 # Weapons renamed earlier (when their data was checked against the game files, Squad build 26005357; Squad
 # Ballistics' RENAMED_WEAPONS), current name -> old name: their DF_ identifier was made after that rename, so the
@@ -781,14 +788,22 @@ def ident(key):
 
 def name_lines(key, views):
     """The lines that name the entry of weapon `key`: its DF_ identifier, its Squad Ballistics name (`ballistics`),
-    the names it had before (`legacyBallistics`: EARLIER_NAME, then RENAMED) and the Squad Ballistics names `views`
-    that share the entry (`ballisticsViews`, see `plan`). A list without names has no line."""
-    lines = [f'        name: "{ident(key)}",', f"        ballistics: {json.dumps(key, ensure_ascii=False)},"]
+    the names it had before (`legacyBallistics`: EARLIER_NAME, then RENAMED), the Squad Ballistics names `views`
+    that share the entry (`ballisticsViews`, see `plan`) and the names those views had before
+    (`legacyBallisticsViews`: old name -> view, from RENAMED). A list or mapping without names has no line."""
+    def quoted(name):
+        return json.dumps(name, ensure_ascii=False)
+
+    lines = [f'        name: "{ident(key)}",', f"        ballistics: {quoted(key)},"]
     legacy = ([EARLIER_NAME[key]] if key in EARLIER_NAME else []) + old_names(key)
 
     for prop, names in (("legacyBallistics", legacy), ("ballisticsViews", views)):
         if names:
-            lines.append(f"        {prop}: [{', '.join(json.dumps(name, ensure_ascii=False) for name in names)}],")
+            lines.append(f"        {prop}: [{', '.join(map(quoted, names))}],")
+
+    renamed_views = [f"{quoted(old)}: {quoted(view)}" for view in views for old in old_names(view)]
+    if renamed_views:
+        lines.append(f"        legacyBallisticsViews: {{ {', '.join(renamed_views)} }},")
 
     return lines
 

@@ -20115,7 +20115,7 @@
     "bUseSecondaryExplosion"
    ],
    "weapons": [
-    "Tank HEAT/HE \u00b7 M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2",
+    "Tank HEAT/HE \u00b7 T-62 (2A20)",
     "ZPL-98A 105mm (ZTD-05) \u00b7 HEAT / HE"
    ]
   },
@@ -20131,9 +20131,14 @@
     "bUseSecondaryExplosion"
    ],
    "weapons": [
-    "Tank AP \u00b7 2A46 / ZPT98 / 2A20 / 2A45 / KBA3",
     "Tank AP \u00b7 L30A1 (Challenger 2) / M68A2",
-    "Tank AP \u00b7 M256 / Rh120"
+    "Tank AP \u00b7 M256 / Rh120",
+    "Tank AP \u00b7 Sprut-SDM1 (2A45) \u00b7 gunner sight \u00d74",
+    "Tank AP \u00b7 T-62 (2A20)",
+    "Tank AP \u00b7 T-64BM2 (KBA3)",
+    "Tank AP \u00b7 T-72 (2A46)",
+    "Tank AP \u00b7 T-90A (2A46M)",
+    "Tank AP \u00b7 ZTZ-99 (ZPT-98)"
    ]
   },
   "BP_Projectile_120mm_HEAT": {
@@ -20151,7 +20156,9 @@
     "bUseSecondaryExplosion"
    ],
    "weapons": [
-    "Tank HEAT/HE \u00b7 M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2",
+    "Tank HEAT/HE \u00b7 Leopard 2A6 (Rh120)",
+    "Tank HEAT/HE \u00b7 M1128 MGS (M68A2)",
+    "Tank HEAT/HE \u00b7 M1A1 / M1A2 (M256)",
     "Tank HESH \u00b7 L30A1 (Challenger 2)"
    ]
   },
@@ -20188,7 +20195,8 @@
     "bUseSecondaryExplosion"
    ],
    "weapons": [
-    "Tank HEAT/HE \u00b7 M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2",
+    "Tank HEAT/HE \u00b7 M60T (MG253)",
+    "Tank HEAT/HE \u00b7 T-72 (2A46)",
     "ZPL-98A 105mm (ZTD-05) \u00b7 HEAT / HE"
    ]
   },
@@ -20207,7 +20215,8 @@
     "bUseSecondaryExplosion"
    ],
    "weapons": [
-    "Tank HEAT/HE \u00b7 M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2"
+    "Tank HEAT/HE \u00b7 T-72 (2A46)",
+    "Tank HEAT/HE \u00b7 ZTZ-99 (ZPT-98)"
    ]
   },
   "BP_Projectile_14_5mm": {
@@ -20385,7 +20394,7 @@
     "bUseSecondaryExplosion"
    ],
    "weapons": [
-    "QLZ87"
+    "QLZ87 \u00b7 optic (RMB \u00d73)"
    ]
   },
   "BP_40MM_Proj2": {
@@ -20846,7 +20855,7 @@
     "bUseSecondaryExplosion"
    ],
    "weapons": [
-    "AGS-17 \u00b7 emplacement"
+    "AGS-17 \u00b7 emplacement \u00b7 optic (RMB \u00d72.5)"
    ]
   },
   "BP_Projectile_76mm_Frag": {
@@ -20864,7 +20873,7 @@
     "bUseSecondaryExplosion"
    ],
    "weapons": [
-    "ZiS-3"
+    "ZiS-3 \u00b7 optic (RMB \u00d74)"
    ]
   },
   "BP_Projectile_76mm_HEAT": {
@@ -20882,7 +20891,7 @@
     "bUseSecondaryExplosion"
    ],
    "weapons": [
-    "ZiS-3"
+    "ZiS-3 \u00b7 optic (RMB \u00d74)"
    ]
   },
   "BP_Projectile_40mm_GPR": {

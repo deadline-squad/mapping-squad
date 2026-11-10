@@ -115,8 +115,8 @@ statement that AP does not damage structures).
 
 | projectile | damage type | direct hit | explosion (dmg, inner-outer m, falloff) | secondary (type) | used by |
 |---|---|---|---|---|---|
-| BP_30mm_VOG19_Proj | BasicHeat | 60 | 115, 1.5-18, 1 * | - | AGS-17 · emplacement |
-| BP_35MM_Proj_QLZ87_HEDP | BasicHeat | 60 | 115, 1-11, 1 * | - | QLZ87 |
+| BP_30mm_VOG19_Proj | BasicHeat | 60 | 115, 1.5-18, 1 * | - | AGS-17 · emplacement · optic (RMB ×2.5) |
+| BP_35MM_Proj_QLZ87_HEDP | BasicHeat | 60 | 115, 1-11, 1 * | - | QLZ87 · optic (RMB ×3) |
 | BP_40MM_MK19_Proj | BasicHeat | 60 | 115, 1-15, 1 * | - | MK19; MK19 · emplacement / C16 / L134A1 |
 | BP_40MM_Proj2 | BasicHeat | 60 | 115, 1-15, 1 * | - | AK-40GL (MPT-76); M203 / M320 / GP-25 / HK79 / SL40; ... |
 | BP_40MM_VOG_Proj2 | Fragmentation | 10 | 115, 1-15, 1 * | - | M203 / M320 / GP-25 / HK79 / SL40; QLG10 |
@@ -139,12 +139,12 @@ statement that AP does not damage structures).
 | BP_PF-98_Tandem_Proj | HAT | 1400 | 200, 2-8, 0 * | - | PF98 · Tandem |
 | BP_Projectile_100mm_Frag | Fragmentation | 200 | 300, 4-35, 5 * | - | 2A70 100mm (BMP-3 / BMD-4 / ZBD04A) · FRAG |
 | BP_Projectile_105mm_AP | Kinetic | - | none | - | ZPL-98A 105mm (ZTD-05) · AP |
-| BP_Projectile_115mm_HEAT | BasicHeat | 1900 | 200, 3.5-16, 2 * | - | Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2; ZPL-98A 105mm (ZTD-05) · HEAT / HE |
-| BP_Projectile_120mm_AP | Kinetic | - | none | - | Tank AP · 2A46 / ZPT98 / 2A20 / 2A45 / KBA3; Tank AP · L30A1 (Challenger 2) / M68A2; ... |
-| BP_Projectile_120mm_HEAT | BasicHeat | 1900 | 200, 7-20, 2 * | - | Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2; Tank HESH · L30A1 (Challenger 2) |
+| BP_Projectile_115mm_HEAT | BasicHeat | 1900 | 200, 3.5-16, 2 * | - | Tank HEAT/HE · T-62 (2A20); ZPL-98A 105mm (ZTD-05) · HEAT / HE |
+| BP_Projectile_120mm_AP | Kinetic | - | none | - | Tank AP · L30A1 (Challenger 2) / M68A2; Tank AP · M256 / Rh120; ... |
+| BP_Projectile_120mm_HEAT | BasicHeat | 1900 | 200, 7-20, 2 * | - | Tank HEAT/HE · Leopard 2A6 (Rh120); Tank HEAT/HE · M1128 MGS (M68A2); ... |
 | BP_Projectile_120mm_Smoke | Kinetic | 100 | 150, 2-10, 1 * | - | Tank HESH · L30A1 (Challenger 2) |
-| BP_Projectile_125mm_Frag | Fragmentation | 200 | 300, 4-35, 5 * | - | Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2; ZPL-98A 105mm (ZTD-05) · HEAT / HE |
-| BP_Projectile_125mm_HEAT | BasicHeat | 1900 | 200, 3.5-16, 2 * | - | Tank HEAT/HE · M256 / Rh120 / 2A46 / ZPT98 / 2A20 / M68A2 |
+| BP_Projectile_125mm_Frag | Fragmentation | 200 | 300, 4-35, 5 * | - | Tank HEAT/HE · M60T (MG253); Tank HEAT/HE · T-72 (2A46); ... |
+| BP_Projectile_125mm_HEAT | BasicHeat | 1900 | 200, 3.5-16, 2 * | - | Tank HEAT/HE · T-72 (2A46); Tank HEAT/HE · ZTZ-99 (ZPT-98) |
 | BP_Projectile_14_5mm | Kinetic | - | none | - | KPVT 14.5mm |
 | BP_Projectile_30mm_AP | Kinetic | - | none | - | 2A42 / 2A72 30mm · AP; 2A72 30mm (BMP-3M) · AP / HE; ... |
 | BP_Projectile_30mm_HE | Fragmentation | 100 | 125, 1-7.5, 2 * | - | 2A42 30mm (BMP-2) · HE; 2A72 30mm (BMD-4M) · HE; ... |
@@ -152,8 +152,8 @@ statement that AP does not damage structures).
 | BP_Projectile_40mm_GPR | Fragmentation | 100 | 175, 1-12.5, 2 * | - | CTAS40 40mm · GP |
 | BP_Projectile_50cal | Kinetic | - | none | - | DShK-M; M2A1 .50; ... |
 | BP_Projectile_50cal_ACOG | Kinetic | - | none | - | Kord · SPP emplacement; M2A1 .50 · ACOG emplacement |
-| BP_Projectile_76mm_Frag | Fragmentation | 100 | 200, 2-16, 1 * | - | ZiS-3 |
-| BP_Projectile_76mm_HEAT | BasicHeat | 1900 | 200, 3.5-16, 2 * | - | ZiS-3 |
+| BP_Projectile_76mm_Frag | Fragmentation | 100 | 200, 2-16, 1 * | - | ZiS-3 · optic (RMB ×4) |
+| BP_Projectile_76mm_HEAT | BasicHeat | 1900 | 200, 3.5-16, 2 * | - | ZiS-3 · optic (RMB ×4) |
 | BP_Projectile_Hell_Cannon | Fragmentation | 100 | 125, 1-50, 1 | 450, 3-10, 3.5 (Explosives_) | Hell Cannon |
 | BP_Projectile_RifleGrenade_FNFAL_Frag | Fragmentation | 0 | 250, 4-18, 1 * | - | Rifle grenade |
 | BP_Projectile_RifleGrenade_FNFAL_HEAT | BasicHeat | 900 | 130, 2-8, 1 * | - | Rifle grenade |
