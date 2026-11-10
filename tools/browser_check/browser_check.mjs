@@ -439,13 +439,15 @@ await group("strat markers", async () => {
     await context.close();
 });
 
-// The circles a gameplay layer decides (SquadCalc 45.42.0; needs the layer API). The exclusion circle of a FOB
-// marker is the loaded layer's, whenever the layer came: the map's 400 m on Al Basrah without a layer, 300 m once
-// Al Basrah RAAS v3 has loaded, 400 m once RAAS v1 replaced it, and the map's 400 m again when the layer is cleared.
-// On Goose Bay AAS v1 the protection zone of the first main, whose radius the layer data gives as negative, is
-// drawn with the game's 236 m and its no-deploy circle with 386 m, the second main's with 150 m and 300 m.
-// While no layer is loaded, before the first one and after the layer was cleared, the settings that restyle a
-// layer switch without an error.
+// The circles and outlines a gameplay layer decides (SquadCalc 45.42.0 and 45.45.0; needs the layer API). The
+// exclusion circle of a FOB marker is the loaded layer's, whenever the layer came: the map's 400 m on Al Basrah without
+// a layer, 300 m once Al Basrah RAAS v3 has loaded, 400 m once RAAS v1 replaced it, and the map's 400 m again when the
+// layer is cleared. On Goose Bay AAS v1 the protection zone of the first main, whose radius the layer data gives as
+// negative, is drawn with the game's 236 m and its no-deploy circle 150 m further (386 m), the second main's with
+// 150 m and 300 m. The capsule of Kohat TC v1 is drawn as its footprint and the three boxes of Fallujah Invasion v2's
+// second zone each with its size and turn, none of them with a dashed outline; the point of 0.44 m of Sumari Invasion
+// v1 has its no-deploy box of 50.44 m. While no layer is loaded, before the first one and after the layer was
+// cleared, the settings that restyle a layer switch without an error.
 await group("circles of the loaded layer", async () => {
     const { context, page, problems } = await open();
     // The layer API is asked at most once a second
@@ -534,14 +536,75 @@ await group("circles of the loaded layer", async () => {
             return { team: zone.teamid, dataRadius: zone.objects[0].sphereRadius / 100, drawn: circles.map((circle) => circle.getRadius() * map.mapToGameScale) };
         });
     });
-    // The game: a sphere of 150 m scaled by -1.5759 at the first main (236.4 m), 150 m at the second; no deployable
-    // within 150 m of either zone
+    // The game: a sphere of 150 m scaled by -1.5759 at the first main (236.4 m), 150 m at the second; the dashed
+    // circles are the zones grown by their lock distance of 150 m
     const expectedZones = [["1", [236.38, 386.38]], ["2", [150, 300]]];
     const zonesDrawn = zones.length === 2 && expectedZones.every(([team, radii], index) => zones[index].team === team && zones[index].drawn.length === 2
         && radii.every((radius, at) => Math.abs(zones[index].drawn[at] - radius) < 0.01));
     check("Goose Bay AAS v1: protection and no-deploy circles of both mains, the first main's from a negative radius in the layer data",
         zonesDrawn && zones[0].dataRadius < 0,
         zones.map((zone) => `team ${zone.team}: radius in the layer data ${zone.dataRadius.toFixed(2)} m, circles drawn ${JSON.stringify(zone.drawn.map((radius) => Number(radius.toFixed(2))))} m`).join("; "));
+
+    /**
+     * The outlines of the loaded layer's protection zones centred within 5 cm of the world point `centre` (cm): circle
+     * or polygon, dashed or not, a circle's radius, and how far a polygon reaches from there along the direction
+     * `degrees` (from world X towards world Y) both ways and across it both ways, in metres
+     */
+    const outlinesAt = (centre, degrees) => page.evaluate(([centre, degrees]) => {
+        const map = window.__App.minimap;
+        const layer = map.layer;
+        const [lat, lng] = layer.convertToLatLng(centre[0], centre[1]);
+        const toMetres = (point) => [(point.lng - lng) * map.mapToGameScale, -(point.lat - lat) * map.mapToGameScaleY];
+        const turn = degrees * Math.PI / 180;
+        const round = (metres) => Math.round(metres * 100) / 100;
+        return layer.mainZones.rectangles.filter((shape) => map.hasLayer(shape)).flatMap((shape) => {
+            const dashed = Boolean(shape.options.dashArray);
+            if (shape.getRadius) {
+                return Math.hypot(...toMetres(shape.getLatLng())) < 0.05 ? [{ kind: "circle", dashed, radius: round(shape.getRadius() * map.mapToGameScale) }] : [];
+            }
+            const points = shape.getLatLngs()[0].map(toMetres);
+            const mean = [0, 1].map((axis) => points.reduce((sum, point) => sum + point[axis], 0) / points.length);
+            if (Math.hypot(...mean) >= 0.05) return [];
+            const along = points.map(([x, y]) => x * Math.cos(turn) + y * Math.sin(turn));
+            const across = points.map(([x, y]) => -x * Math.sin(turn) + y * Math.cos(turn));
+            return [{ kind: "polygon", dashed, reach: [Math.max(...along), -Math.min(...along), Math.max(...across), -Math.min(...across)].map(round) }];
+        });
+    }, [centre, degrees]);
+    /** Outlines as `outlinesAt` gives them against the expected ones, sizes within 5 cm */
+    const sameOutlines = (actual, expected) => actual.length === expected.length && expected.every((outline, index) => actual[index].kind === outline.kind
+        && actual[index].dashed === outline.dashed && [outline.reach ?? [outline.radius]].flat().every((metres, at) => Math.abs([actual[index].reach ?? [actual[index].radius]].flat()[at] - metres) < 0.05));
+    const solid = (along, across) => ({ kind: "polygon", dashed: false, reach: [along, along, across, across] });
+
+    // Team 2's first zone (Team2ProtectionZone1) is a capsule of radius 200 m and half-height 600 m, centred at
+    // (150212.58, -152349.81) cm, pitched by -87.18282 degrees, yaw -171.56177, roll -180: seen from above the segment
+    // between its half-spheres' centres is 2 x 400 m x |sin(pitch)| long, along the yaw turned by 180 degrees
+    await showMap("Kohat", "Kohat_TC_v1");
+    await loadLayer("Kohat_TC_v1");
+    const capsuleHalfLength = 400 * Math.abs(Math.sin(-87.18282 * Math.PI / 180));
+    const capsule = await outlinesAt([150212.58, -152349.81], -171.56177 + 180);
+    check("Kohat TC v1: the capsule zone of team 2 is its footprint on the map, 1199 m by 400 m along 8.44 degrees, without a dashed outline",
+        sameOutlines(capsule, [solid(capsuleHalfLength + 200, 200)]),
+        `outlines at the capsule's centre ${JSON.stringify(capsule)}; the game's reach ${(capsuleHalfLength + 200).toFixed(2)} m along, 200 m across`);
+
+    // Team 1's second zone (Team1ProtectionZone2): boxes Box, Box1 and Box2 of half-size 3 x 35 m, 25 x 20 m and
+    // 15 x 15 m at the centres (cm) and with the yaws (degrees) of the level
+    await showMap("Fallujah", "Fallujah_Invasion_v2");
+    await loadLayer("Fallujah_Invasion_v2");
+    const fallujahBoxes = [[[-109939.67, 600.3696], -24.905027, 3, 35], [[-111755.67, -2131.6304], -33.847927, 25, 20], [[-108480.67, 3529.3696], -28.723526, 15, 15]];
+    const boxes = [];
+    for (const [centre, yaw] of fallujahBoxes) boxes.push(await outlinesAt(centre, yaw));
+    check("Fallujah Invasion v2: the three boxes of team 1's second zone, each with the game's size and turn, without a dashed outline",
+        fallujahBoxes.every(([, , x, y], index) => sameOutlines(boxes[index], [solid(x, y)])),
+        boxes.map((outlines, index) => `box ${index + 1}: ${JSON.stringify(outlines)}`).join("; "));
+
+    // Team 2's third zone (Team2ProtectionZone2): a box of 0.5 m scaled by 0.888996, centred at (-32086.55, 3599.1) cm,
+    // yaw -17.40924, lock distance 50 m
+    await showMap("Sumari", "Sumari_Invasion_v1");
+    await loadLayer("Sumari_Invasion_v1");
+    const point = 0.5 * 0.888996;
+    const pointOutlines = await outlinesAt([-32086.55, 3599.1], -17.40924);
+    check("Sumari Invasion v1: the point of 0.44 m of team 2 and its dashed no-deploy box of 50.44 m",
+        sameOutlines(pointOutlines, [solid(point, point), { kind: "polygon", dashed: true, reach: Array(4).fill(point + 50) }]), JSON.stringify(pointOutlines));
 
     check("layer circles: console and requests clean", problems.length === 0, problems.length ? problems.slice(0, 10).join(" | ") : "no errors");
     await context.close();

@@ -30,8 +30,10 @@ stops and one map image is left), the circles a gameplay layer decides (needs th
 circle of FOB markers is the map's 400 m on Al Basrah without a layer, 300 m once Al Basrah RAAS v3 has loaded,
 also for a marker placed before it, 400 m after RAAS v1 replaced it and after the layer was cleared; on Goose
 Bay AAS v1 the first main's protection zone, negative in the layer data, is drawn with 236 m and 386 m and the
-second main's with 150 m and 300 m; the settings that restyle a layer switch without an error while none is
-loaded) and the absence of the removed device
+second main's with 150 m and 300 m; the capsule zone of Kohat TC v1 is its footprint, 1199 m by 400 m, and the
+three boxes of Fallujah Invasion v2's zone of three each have the game's size and turn, all without a dashed
+no-deploy outline; the point of 0.44 m of Sumari Invasion v1 has its no-deploy box of 50.44 m; the settings that
+restyle a layer switch without an error while none is loaded) and the absence of the removed device
 link (settings controls, relay requests, leftover localStorage keys). The checks run in groups, each on a
 page of its own. A page that does not open (the page itself, its heightmap or its map image, each given
 120 s) is one FAIL under the group's name: it says which of the three failed and why, with the spinner's count
