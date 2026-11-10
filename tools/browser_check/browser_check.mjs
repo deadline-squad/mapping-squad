@@ -677,6 +677,88 @@ await group("spinner after layer changes", async () => {
     await context.close();
 });
 
+// Layers across map changes (SquadCalc 45.47.0; needs the layer API). A Training layer of Pacific Proving Grounds,
+// whose objectives the calculator does not draw, opens with its other assets and ends its turn of the spinner (it
+// threw and left the spinner turning). A layer whose answer is still on its way when the map changes is not drawn on
+// the new map. A list of layers that arrives after the map changed again does not fill the selector.
+await group("layers across map changes", async () => {
+    // The answer of Al Basrah RAAS v3 and the list of Mutaha's layers are held back while their promise is set
+    let holdLayer = null;
+    let holdList = null;
+    const { context, page, problems } = await open(undefined, async (context) => {
+        await context.route(/\/get\/layer\?name=AlBasrah_RAAS_v3$/, async (route) => {
+            if (holdLayer) await holdLayer;
+            // The page may have dropped the request by now (the map changed)
+            await route.fallback().catch(() => {});
+        });
+        await context.route(/\/get\/layers\?map=Mutaha$/, async (route) => {
+            if (holdList) await holdList;
+            await route.fallback().catch(() => {});
+        });
+    });
+    // The layer API is asked at most once a second
+    const apiPause = () => page.waitForTimeout(1100);
+    const pickMap = (name) => page.evaluate((name) => {
+        const app = window.__App;
+        app.MAP_SELECTOR.val(app.MAP_SELECTOR.find(`option[data-i18n="maps:${name}"]`).val()).trigger("change");
+    }, name);
+    /** Whether the selector offers `layer` within 60 s */
+    const listed = (layer) => page.waitForFunction((layer) => [...window.__App.LAYER_SELECTOR[0].options].some((option) => option.value === layer), layer, { timeout: 60000 }).then(() => true, () => false);
+    const pick = (layer) => page.evaluate((layer) => window.__App.LAYER_SELECTOR.val(layer).trigger("change"), layer);
+    const state = () => page.evaluate(() => {
+        const map = window.__App.minimap;
+        return { map: map.activeMap.name, layer: map.layer?.layerData?.rawName ?? null, spinning: map._spinning,
+            options: [...window.__App.LAYER_SELECTOR[0].options].map((option) => option.value).filter(Boolean) };
+    });
+    const pageErrors = () => problems.filter((problem) => problem.startsWith("pageerror"));
+
+    await apiPause();
+    await pickMap("Pacific");
+    const pacific = await listed("PacificProvingGrounds_USMC-RGF");
+    await apiPause();
+    await pick("PacificProvingGrounds_USMC-RGF");
+    const opened = await page.waitForFunction(() => window.__App.minimap.layer?.layerData?.rawName === "PacificProvingGrounds_USMC-RGF" && !window.__App.minimap._spinning,
+        null, { timeout: 60000 }).then(() => true, () => false);
+    const training = await state();
+    check("a Training layer of Pacific Proving Grounds opens without objectives and the spinner stops", pacific && opened && pageErrors().length === 0,
+        `${JSON.stringify({ ...training, options: undefined })}, page errors: ${pageErrors().join(" | ") || "none"}`);
+
+    let releaseLayer;
+    holdLayer = new Promise((resolve) => { releaseLayer = resolve; });
+    await apiPause();
+    await pickMap("AlBasrah");
+    const alBasrah = await listed("AlBasrah_RAAS_v3");
+    await apiPause();
+    await pick("AlBasrah_RAAS_v3");
+    await page.waitForTimeout(500);
+    await apiPause();
+    await pickMap("Jensen");
+    const jensen = await listed("JensensRange_ADF-PLAAGF");
+    releaseLayer();
+    holdLayer = null;
+    await page.waitForTimeout(6000);
+    const moved = await state();
+    check("a layer still loading when the map changes is not drawn on the new map", alBasrah && jensen && moved.map === "Jensen" && moved.layer !== "AlBasrah_RAAS_v3" && moved.spinning === 0,
+        JSON.stringify({ ...moved, options: undefined }));
+
+    let releaseList;
+    holdList = new Promise((resolve) => { releaseList = resolve; });
+    await apiPause();
+    await pickMap("Mutaha");
+    await apiPause();
+    await pickMap("AlBasrah");
+    const listedAgain = await listed("AlBasrah_RAAS_v3");
+    releaseList();
+    holdList = null;
+    await page.waitForTimeout(6000);
+    const late = await state();
+    check("a list of layers that arrives after the map changed again does not fill the selector", listedAgain && late.map === "AlBasrah"
+        && late.options.length > 0 && late.options.every((layer) => layer.startsWith("AlBasrah")) && late.spinning === 0,
+        JSON.stringify(late));
+    check("layers across map changes: no page error", pageErrors().length === 0, pageErrors().join(" | ") || "none");
+    await context.close();
+});
+
 // The precise heightmap's requests: meta.json first, then the heavy file it names (heightmap.webp or
 // heightmap.png, with ?v=<generated> once meta.json has it)
 const preciseRequest = /\/heightmaps\/[^/]+\/(heightmap\.(?:webp|png)|meta\.json)(?:\?.*)?$/;
