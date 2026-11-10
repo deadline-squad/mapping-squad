@@ -11,7 +11,8 @@
 // window.squadBallistics, by its name. Environment: PLAYWRIGHT_CORE = path of the playwright-core package
 // if it is not
 // resolvable from here, CHROME = Chromium executable if Playwright's own is not installed.
-// Exits with 1 on any failure.
+// The checks run in groups, each on a page of its own (`group`): a page that does not open is one FAIL and the
+// other groups still run. The last line gives the totals. Exits with 1 on any failure.
 //
 // SquadCalc keeps its App in a module; the check exposes it as window.__App by rewriting the main
 // bundle in transit (the served files are not changed).
@@ -26,13 +27,36 @@ const allMaps = process.argv.includes("--maps");
 const ballisticsIndex = process.argv.indexOf("--ballistics");
 const ballisticsFile = ballisticsIndex > 0 ? process.argv[ballisticsIndex + 1] : null;
 
+let checks = 0;
 let failures = 0;
 function check(label, ok, detail) {
     console.log(`${ok ? "ok  " : "FAIL"} ${label}: ${detail}`);
+    checks++;
     if (!ok) failures++;
 }
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined });
+
+// Requests Chromium dropped because the network of the host changed under it (an interface came or went, as
+// when Docker starts or stops a container): it fails every request in flight then, whatever the site does
+const NETWORK_CHANGED = "net::ERR_NETWORK_CHANGED";
+let networkChanges = 0;
+
+/**
+ * Run a group of checks that share a page. A page that does not open, or a step that throws, is one FAIL under
+ * the group's name: the checks left in the group are not reached, the groups after it still run.
+ * @param {string} label - name of the group in the FAIL line
+ * @param {() => Promise<void>} body - the checks of the group
+ */
+async function group(label, body) {
+    try {
+        await body();
+    } catch (error) {
+        check(label, false, `stopped by ${error.message.split("\n")[0]}`);
+        // The page the group left open
+        await Promise.all(browser.contexts().map((context) => context.close()));
+    }
+}
 
 /**
  * Open SquadCalc with window.__App and a log of console errors, page errors and failed requests
@@ -40,7 +64,8 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME || un
  * @param {(context: object) => Promise<void>} [prepare] - called with the context before the page loads (routes)
  * @param {boolean} [precise] - wait for the precise heightmap (true) or for any heightmap result, also
  *   the 8-bit one or a failure (false)
- * @throws {Error} when the heightmap does not load within 120 s
+ * @throws {Error} when the page does not load, or the heightmap or the map image does not, within 120 s each: the
+ *   error names the spinner's count and the requests without an answer, and the context is closed
  */
 async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }, prepare = async () => {}, precise = true) {
     const context = await browser.newContext(contextOptions);
@@ -60,14 +85,32 @@ async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }
     });
     page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
     page.on("response", (response) => { if (response.status() >= 400) problems.push(`HTTP ${response.status()}: ${response.url()}`); });
-    await page.goto(base, { waitUntil: "load" });
-    await page.waitForFunction((precise) => {
-        const heightmap = window.__App?.minimap?.heightmap;
-        return precise ? heightmap?.precise : heightmap?.jsonPng.length || heightmap?.failed;
-    }, precise, { timeout: 120000 });
-    // The map image still fades in after the heights (the WebP heightmap is usually there first): clicks
-    // before the spinner is gone are lost
-    await page.waitForFunction(() => !window.__App.minimap._spinning, null, { timeout: 120000 });
+    const unanswered = new Set();
+    page.on("request", (request) => unanswered.add(request));
+    page.on("requestfinished", (request) => unanswered.delete(request));
+    page.on("requestfailed", (request) => {
+        unanswered.delete(request);
+        if (request.failure()?.errorText === NETWORK_CHANGED) networkChanges++;
+    });
+    // A wait that ran out says what the page still waited for: the spinner's count and the requests without an answer
+    const stalled = (what) => async () => {
+        const spinning = await page.evaluate(() => window.__App?.minimap?._spinning).catch(() => undefined);
+        const requests = [...unanswered].map((request) => request.url());
+        throw new Error(`${what} after 120 s (spinner count ${spinning}, ${requests.length} request(s) without an answer${requests.length ? `: ${requests.slice(0, 5).join(", ")}` : ""})`);
+    };
+    try {
+        await page.goto(base, { waitUntil: "load", timeout: 120000 });
+        await page.waitForFunction((precise) => {
+            const heightmap = window.__App?.minimap?.heightmap;
+            return precise ? heightmap?.precise : heightmap?.jsonPng.length || heightmap?.failed;
+        }, precise, { timeout: 120000 }).catch(stalled("no heightmap"));
+        // The map image still fades in after the heights (the WebP heightmap is usually there first): clicks
+        // before the spinner is gone are lost
+        await page.waitForFunction(() => !window.__App.minimap._spinning, null, { timeout: 120000 }).catch(stalled("the map's spinner still turns"));
+    } catch (error) {
+        await context.close();
+        throw error;
+    }
     return { context, page, problems };
 }
 
@@ -84,7 +127,7 @@ const place = (page, targets) => page.evaluate((targets) => {
 }, targets);
 const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
-{
+await group("desktop checks", async () => {
     const { context, page, problems } = await open();
 
     // Markers placed before the precise heightmap arrives are solved again once it has
@@ -323,9 +366,9 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
         }
     }
     await context.close();
-}
+});
 
-{
+await group("settings dialog", async () => {
     // Every row of every settings panel stays above the footer of the dialog (on a 1920 x 1080 screen
     // the Mortars panel spilled past the bottom of the fixed-height dialog)
     const { context, page } = await open({ viewport: { width: 1920, height: 1080 } });
@@ -347,12 +390,12 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     check("settings rows above the dialog footer", settingsRows.length === 0, settingsRows.length ? settingsRows.join(" | ") : "every panel fits");
 
     await context.close();
-}
+});
 
 // Placed mortar and Hell Cannon strat markers show their range circle while hovered (Leaflet 2 fires
 // pointerover/pointerout, not mouseover/mouseout), and dragging one pauses the keypad popup under the cursor
 // through the pointermove listener it was bound with
-{
+await group("strat markers", async () => {
     const { context, page } = await open();
     // The start-up splash still covers the map for a moment after the heights are there: pointer events need it gone
     await page.waitForFunction(() => document.elementFromPoint(800, 500)?.closest("#map"), null, { timeout: 30000 });
@@ -392,7 +435,7 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
     });
     check("strat marker drag pauses the pointer popup and restores it", drag.idle && !drag.dragging && drag.dropped, JSON.stringify(drag));
     await context.close();
-}
+});
 
 // The precise heightmap's requests: meta.json first, then the heavy file it names (heightmap.webp or
 // heightmap.png, with ?v=<generated> once meta.json has it)
@@ -456,12 +499,12 @@ for (const dropped of ["heightmap", "meta.json"]) {
         const { requests, result } = await openWithHeightmapRequests((route, file) =>
             file === "heightmap" && /\.webp(\?|$)/.test(route.request().url()) ? answer(route) : route.fallback());
         const announcedWebp = requests.heightmap > 0 && await fetch(new URL("/heightmaps/albasrah/meta.json", base)).then((response) => response.json()).then((meta) => meta.format === "webp-rg16");
-        check(`precise heightmap from the PNG when the WebP is ${label}`, !announcedWebp || (requests.heightmap === 2 && result.precise === true),
+        check(`precise heightmap from the PNG when the WebP is ${label}`, !result.error && (!announcedWebp || (requests.heightmap === 2 && result.precise === true)),
             `requests ${JSON.stringify(requests)}, ${JSON.stringify(result)}`);
     }
 }
 
-{
+await group("mobile", async () => {
     // Mobile: a tap places the weapon, the next one a target
     const { context, page, problems } = await open({
         viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3,
@@ -486,10 +529,10 @@ for (const dropped of ["heightmap", "meta.json"]) {
     check("mobile: tap places a weapon then a target", mobile.weapons === 1 && mobile.targets === 1 && /\d/.test(mobile.popup || ""), JSON.stringify(mobile));
     check("mobile console and requests clean", problems.length === 0, problems.length ? problems.slice(0, 10).join(" | ") : "no errors");
     await context.close();
-}
+});
 
 // What the removed device link saved in a browser is dropped on the next visit
-{
+await group("stale device link storage", async () => {
     const { context, page, problems } = await open(undefined, (context) => context.addInitScript(() => {
         if (sessionStorage.getItem("seeded")) return;
         sessionStorage.setItem("seeded", "1");
@@ -499,8 +542,9 @@ for (const dropped of ["heightmap", "meta.json"]) {
     const left = await page.evaluate(() => ["settings-overlay-link", "overlay-session-code"].filter((key) => localStorage.getItem(key) !== null));
     check("stale device link storage dropped", left.length === 0 && problems.length === 0, left.length ? `left: ${left}` : problems.length ? problems.join(" | ") : "keys removed, console clean");
     await context.close();
-}
+});
 
 await browser.close();
-console.log(failures ? `${failures} browser check(s) failed` : "all browser checks passed");
+if (networkChanges) console.log(`${networkChanges} request(s) were dropped by a change of the host's network (${NETWORK_CHANGED}): a check that lists that error or lost a request to it says nothing about the site, run it again`);
+console.log(failures ? `${failures} of ${checks} browser checks failed` : `all ${checks} browser checks passed`);
 process.exit(failures ? 1 : 0);
