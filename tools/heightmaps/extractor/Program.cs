@@ -13,6 +13,8 @@ var paks = args[0];
 var mode = args[1];
 OodleHelper.Initialize(Path.Combine(AppContext.BaseDirectory, OodleHelper.OodleFileName));
 var provider = new DefaultFileProvider(paks, SearchOption.TopDirectoryOnly, new VersionContainer(EGame.GAME_Squad));
+// Kismet bytecode is parsed for dumpbytecode only: no other mode reads it and it slows every package load
+provider.ReadScriptData = mode == "dumpbytecode";
 provider.Initialize();
 provider.Mount();
 Console.Error.WriteLine($"files: {provider.Files.Count}");
@@ -42,10 +44,12 @@ else if (mode == "mesh")
     var body = mesh.BodySetup?.Load();
     if (body != null) Console.WriteLine(JsonConvert.SerializeObject(body, Formatting.Indented)[..Math.Min(3000, JsonConvert.SerializeObject(body).Length)]);
 }
-else if (mode == "dumpall")
+else if (mode == "dumpall" || mode == "dumpbytecode")
 {
     // dumpall <regex over paths> <outdir>: every matching .uasset/.umap as JSON (all exports) under
-    // <outdir>/<path>.json; used by tools/game_ballistics to read weapon and projectile Blueprints
+    // <outdir>/<path>.json; used by tools/game_ballistics to read weapon and projectile Blueprints.
+    // dumpbytecode: the same with the Kismet bytecode of every function (ScriptBytecode); used by
+    // tools/game_audit to read what a sight widget adds to the pitch of its mount
     var re = new System.Text.RegularExpressions.Regex(args[2], System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     foreach (var path in provider.Files.Keys.Where(k => (k.EndsWith(".uasset") || k.EndsWith(".umap")) && re.IsMatch(k)).Order())
     {
