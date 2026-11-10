@@ -95,6 +95,9 @@ the server. Every other step answers the feed itself (a route of the browser, th
 - A feed ten minutes old at page load: the server is not offered and `/?server=deadline` falls back to the plain page.
 - The server moves to a layer of another map, and server mode is left while that map's list of layers is held back:
   when the list arrives, the page opens none of the server's layers and shows no message.
+- The request for the server's layer fails once: the page still follows and opens the layer at its next read.
+- A page opened on another map with `?server=`, whose own list of layers arrives after the server's layer has loaded:
+  the layer selector keeps the server map's layers.
 
 Each step that waits for the page's next read of the feed gives it 90 s. Exits with 1 on any failure.
 
