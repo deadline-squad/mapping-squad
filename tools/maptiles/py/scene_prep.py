@@ -6,7 +6,7 @@ Reads (container paths, see maptiles.sh):
     /scene/<map>/               the client scene (SquadExtract scene, tools/maprender): visible LOD 0 meshes and placements
     /prep/<map>/                ground.npy, meta.json and the 0.25 m collision raster obj_*.npy of prep.py
     /features/<map>/            server foliage (which trees have a blocking trunk) and landscape splines (top_lines.json)
-    /extract/statics/<map>/     server static mesh collision (names of what the report finds only in the old raster)
+    /extract/statics/<map>/     server static mesh collision (what of the old raster it explains, and the names of what the report finds only in the old raster)
 
 Writes /prep/<map>/:
     top_h<k>.npy     uint16 object height above ground (cm) on the 0.1 * 2**k m grid, the highest cell sample
@@ -14,22 +14,28 @@ Writes /prep/<map>/:
     top_v<k>.npy     uint8 share of the cell covered by objects of 0.3 m and more, 0..255 (anti-aliased edges)
     top_labels.json  roof height labels of the larger buildings
     top_water.json   water planes of the scene (lakes whose planes the server files lack), as water.json
-    top_ground.npy   ground.npy with the voids beyond the landscape filled by the scene's scenery (scenery_ground)
+    top_water_surface.npy  float32 top of the scene's river and pond meshes on the 1 m grid of ground.npy, m above the map's lowest
+                     point, NO_WATER_SURFACE where none (river_surface)
+    top_ground.npy   ground.npy with the scene's scenery where it is the ground: in the voids beyond the landscape, and over the landscape where the server collides with it (scenery_ground)
+    top_ground_base.npy  top_ground smoothed by GROUND_BASE_SIGMA_M, the ground a structure's colour measures its height from
     top_lines.json   the landscape splines (lines.json) with the roads', tracks' and pavements' edges narrowed to the width their meshes show (road_width)
     top_paths.npy    uint8 weight of the tracks painted into the landscape on the 1 m grid of ground.npy (landscape_paths)
     crowns.npz       trees, bushes, palms and rocks of the scene (crowns.scene_crowns), with crowns_stamps.npy and crowns.json
     top_crops.npy    uint8 [rows, cols, 2] cover and height (dm) of the crop fields on the 1 m grid of ground.npy (crowns.crop_fields)
-    raw_{h,c,v}0.npy (only with --keep-raw) the scene raster before the old raster's objects were merged in (--redo-merge starts from it)
+    raw_{h,c,v}0.npy (only with --keep-raw) the scene raster before the old raster's objects were merged in (--redo-merge starts from it),
+                     with raw_raster.json (the sampler that made it)
     top_meta.json    grid, counts, sources and the completeness against the old raster (report)
 
 Level 0 (top_h0, top_c0, top_v0) is rasterized here on the CPU, or beforehand on the GPU by scene_raster_gpu.py (which writes
 top_raster.json); --rasterized starts from that.
 
 The grid of level 0 has cells of CELL_M metres, cell [r, c] covering [c, c + 1) * CELL_M east and [r, r + 1) * CELL_M south of
-the map's minimum corner. Objects that the scene does not show but the old collision raster (prep.py: static mesh collision
-and SquadHeight's Blueprint objects) holds are kept from the old raster: its cells farther than OLD_KEEP_M from any
-scene object, in runs of at least OLD_KEEP_MIN_M2, and not where their top is that of a mesh the scene has as terrain or water
-(scene_objects.surface_groups: background mountains, _Vista levels, rivers), which the server's collision holds as objects.
+the map's minimum corner. Objects that the scene raster does not draw but the static meshes' collision in the old raster (prep.py)
+holds are kept from the old raster: its cells farther than OLD_KEEP_M from any scene object, in runs of at least OLD_KEEP_MIN_M2.
+What the old raster holds besides is no object (old_non_objects): the tops of the meshes the scene has as terrain or water
+(scene_objects.surface_groups: background mountains, _Vista levels, rivers) and of the sheets the game does not show
+(scene_objects.sheet_groups), which the server's collision holds as objects; what only SquadHeight holds; ground cover; the
+cells off the landscape; and the railway tracks, which are drawn from their splines.
 """
 
 import argparse
@@ -59,14 +65,17 @@ VOID_MIN_M2 = 1000
 # SquadHeight's floor lies on the served heightmap's minimum, up to the float rounding of z_min (Kohat: 0.0001 m)
 VOID_FLOOR_M = 0.01
 SURFACE_MATCH_M = 2.0
+SURFACE_FLUSH_M = 0.25
 TERRAIN_RUN_SHARE = 0.5
 SERVICE_SHARE = 0.5
 LEGACY_STEP_M = 0.25
-COVER_MIN = 128
 REPORT_MIN_M2 = 40
 REPORT_ITEMS = 8
 RASTER_CHUNK_CELLS = 1_000_000
-TRIANGLE_CACHE_BYTES = 200 * 2 ** 20
+# The ground a structure's colour measures its height from (render.draw_objects): the ground smoothed by a Gaussian of this
+# sigma (m), so the edge of a jetty or a rock under a deck, or the landscape's 1 m steps, do not show through a flat roof
+GROUND_BASE_SIGMA_M = 6.0
+NO_WATER_SURFACE = -1e9
 
 _state = {}
 
@@ -115,6 +124,21 @@ def rasterize(scene_dir, prep_dir, bounds, z_min, shape, workers):
             if done % max(1, len(tasks) // 10) == 0:
                 log(f"scene objects {done}/{len(tasks)} blocks")
     return total
+
+
+def ground_base(ground):
+    """The ground (1 m grid) a structure's colour measures its height from: smoothed by GROUND_BASE_SIGMA_M (render.draw_objects)."""
+    return ndimage.gaussian_filter(np.asarray(ground, np.float32), GROUND_BASE_SIGMA_M, mode="nearest")
+
+
+def river_surface(water_top, z_min):
+    """The top of the scene's water meshes (surface_top, absolute m) as heights above the map's lowest point, NO_WATER_SURFACE
+    where no mesh lies: the surface render.draw_water puts water under.
+
+    A river is a mesh bent along its spline, and its surface is the mesh's, not the spline's centre line: on Anvil the mesh lies
+    up to 0.5 m above the line (median 0.16 m), so water drawn below the line's height was 12 000 m2 of a river of 131 000 m2.
+    """
+    return np.where(np.isfinite(water_top), water_top - z_min, NO_WATER_SURFACE).astype(np.float32)
 
 
 def copy_raster(prep_dir, source, target, strip=2048):
@@ -171,8 +195,8 @@ def small_runs_removed(mask, min_cells):
     return (sizes >= min_cells)[labels]
 
 
-def service_mask(boxes, bounds, shape):
-    """Bool [rows, cols] on the 1 m grid: inside a box of scene.service_boxes."""
+def box_mask(boxes, bounds, shape):
+    """Bool [rows, cols] on the 1 m grid: inside one of the world boxes [n, 4] (x0, y0, x1, y1 in m)."""
     canvas = Image.new("L", (shape[1], shape[0]), 0)
     draw = ImageDraw.Draw(canvas)
     for x0, y0, x1, y1 in boxes:
@@ -191,6 +215,54 @@ def without_service_runs(keep, service):
     dropped = inside >= SERVICE_SHARE * np.maximum(total, 1)
     dropped[0] = False
     return keep & ~dropped[labels]
+
+
+def collision_footprints(statics_dir, bounds, shape):
+    """(any, ground cover): bool [rows, cols] on the 1 m grid, inside the box of a static mesh placement with collision (the placements
+    prep.py rasterizes), and inside the box of such a placement of ground cover.
+
+    The old raster has two sources, the static meshes' collision and SquadHeight's surface where it stands above the landscape
+    (prep.merge_sdk_objects), so its cells outside the first mask are SquadHeight's alone, and no object the scene lacks. SquadHeight
+    was traced in the SDK, on a map that is not the game build's: what the game has of its objects is in the client scene (the
+    components of Blueprint actors too), and what the scene has nothing near is not in the game (Al Basrah: blocks of a Vista city that
+    the build does not have along the north edge, 3 to 12 m high, and walls in open sand; Black Coast: steps across a river).
+
+    Ground cover (scene_objects.GROUND_COVER_NAME: crops, flowers, weeds) is left out of the scene's objects (crowns.crop_fields
+    draws the crop fields), so nothing of the scene stands near its collision either: Yehorivka has 1 634 maize plants set by hand
+    with the BlockAll profile, each about 1.3 m wide and 2.4 m high, while the plants of the fields themselves have no collision.
+    """
+    every, cover_boxes = [np.zeros((0, 4))], [np.zeros((0, 4))]
+    for mesh, (_, boxes, _) in prep._load_instances(statics_dir, bounds).items():
+        every.append(boxes)
+        if scene.GROUND_COVER_NAME.search(os.path.basename(objects.mesh_name(statics_dir, mesh) or "")):
+            cover_boxes.append(boxes)
+    return box_mask(np.concatenate(every), bounds, shape), box_mask(np.concatenate(cover_boxes), bounds, shape)
+
+
+def off_landscape(cover, shape):
+    """Bool [rows, cols] on the 1 m grid: cells outside the game landscape (cover NO_COVER).
+
+    There ground.npy is SquadHeight's surface, the top of all the server has, so the old raster's height over it is no object's. Next
+    to the landscape it is the fall of the ground between the two: prep.py measures every point of its 0.25 m grid from the ground
+    interpolated between the nodes, and Gorodok's first column, a node on the Vista mesh 15 m above the landscape's first node, holds
+    3.7, 7.4 and 11.2 m at its three points towards it, a wall 1 m wide along the whole west edge.
+    """
+    return fit(np.asarray(cover) == features.NO_COVER, shape)
+
+
+def railway_cells(lines, bounds, shape):
+    """Bool [rows, cols] on the 1 m grid: cells between the edges of a railway's spline segments (``lines``: features.splines).
+
+    The tiles draw a railway from its spline. The scene raster has nothing of the track there: its sleepers lie lower than
+    COVERAGE_MIN_CM and its rails are thinner than scene_objects.THIN_WIDTH_M. The server's collision of the track mesh stands 0.3 to
+    0.45 m high, and the old raster would hold it as structures along the line (Manicouagan: 815 m2 in runs of up to 52 m2).
+    """
+    canvas = Image.new("L", (shape[1], shape[0]), 0)
+    draw = ImageDraw.Draw(canvas)
+    for line in lines:
+        if line["cls"] == "rail":
+            draw.polygon([(x - bounds["min_x"], y - bounds["min_y"]) for x, y in line["left"] + line["right"][::-1]], fill=1, outline=1)
+    return np.asarray(canvas, bool)
 
 
 def legacy_water_surface(planes, bounds, shape, ground, old_height_cm):
@@ -248,8 +320,9 @@ def legacy_cells(leg_h, leg_c, rows, cols):
 def merge_old(prep_dir, new_h1, shape1, service, not_objects, strip=1000):
     """Paint the old raster's objects that the scene lacks into level 0; returns (old mask, kept mask, old-only mask) on the 1 m grid.
 
-    What ``not_objects`` marks is no object: the old raster's lake surfaces (legacy_water_surface) and its terrain and water meshes
-    (legacy_surfaces).
+    What ``not_objects`` marks is no object: the old raster's lake surfaces (legacy_water_surface), its terrain (legacy_terrain), its
+    water meshes (legacy_water) and sheets (legacy_sheets), what no static mesh's collision explains and the ground cover
+    (collision_footprints), the cells off the landscape (off_landscape) and the railway tracks (railway_cells): old_non_objects.
     The old raster holds collision the game does not show (invisible walls around the map, zone boxes): its runs that lie
     in the scene's service volumes (``service``) are not kept. Nor are its rocks: the scene shows every rock mesh, and what
     only the collision has of them is the scenery beyond the map (mountains, background terrain, SCENERY_MIN_SIDE_M and wider).
@@ -372,53 +445,154 @@ def surface_top(objects_of_scene, groups, shape, bounds):
     return top
 
 
-def scenery_ground(ground, cover, land_top, z_min):
-    """(ground [H, W] float32 on the 1 m grid of ground.npy with its voids filled, filled cells).
+def scenery_ground(ground, cover, land_top, z_min, terrain):
+    """(ground [H, W] float32 on the 1 m grid of ground.npy with the scenery that is the ground taken in, void cells filled, cells raised).
 
     Past the game landscape prep.py takes SquadHeight's surface, the server's world. Where the server has nothing (the background
     mountains of Skorpo and Blackcoast are client meshes without collision) that surface is its floor, the lowest point of the
     served heightmap: ground under VOID_FLOOR_M outside the landscape (cover NO_COVER), in runs of VOID_MIN_M2 and more. Below the
     sea level such a void is drawn as sea. The scenery of the client scene (``land_top``, the surface_top of
     scene_objects.surface_groups' land) gives those cells its height; a void that no scenery covers (the open sea) keeps its floor.
+
+    On the landscape the scenery can be the ground too: along a map's edge the landscape runs on below a mesh that the game shows
+    and the server collides with (Gorodok: from 34 m before the east edge the landscape falls away under the Vista mesh, over 2 m
+    below it at the frame, and its last 16 m repeat one height per row, the rows 0.07 to 0.16 m apart, which the hillshade draws as
+    bars; in the west it lies 15 m below, and the served heightmap holds the mesh's height). An area (8-neighbour) where the scenery
+    lies above the landscape takes the scenery's height when the server holds that surface and it continues the ground around it.
+    The server holds it when at least TERRAIN_RUN_SHARE of the area's cells that rise COVERAGE_MIN_CM and more are ``terrain`` (bool
+    on the 1 m grid: the cells of legacy_terrain that a static mesh's collision explains): a mesh the server has no collision for
+    stays scenery over the ground. It continues the ground when at least TERRAIN_RUN_SHARE of the cells along the area's rim, lifted
+    to the scenery, step less than SURFACE_MATCH_M to the ground beside them (rim_steps): a block of a Vista city stands on the
+    ground and is no hill.
     """
     filled = np.array(ground, np.float32)
     void = (np.asarray(cover) == features.NO_COVER) & (filled < VOID_FLOOR_M)
     labels, count = ndimage.label(void)
-    if not count:
-        return filled, 0
-    large = np.zeros(count + 1, bool)
-    large[1:] = ndimage.sum_labels(void, labels, np.arange(1, count + 1)) >= VOID_MIN_M2
-    fill = large[labels] & np.isfinite(land_top)
-    filled[fill] = land_top[fill] - z_min
-    return filled, int(fill.sum())
+    fill = np.zeros(filled.shape, bool)
+    if count:
+        large = np.zeros(count + 1, bool)
+        large[1:] = ndimage.sum_labels(void, labels, np.arange(1, count + 1)) >= VOID_MIN_M2
+        fill = large[labels] & np.isfinite(land_top)
+        filled[fill] = land_top[fill] - z_min
+    scenery = land_top - z_min
+    rise = np.where(void, 0, scenery - filled)
+    labels, count = ndimage.label(rise > 0, structure=np.ones((3, 3)))
+    raised = np.zeros(filled.shape, bool)
+    if count:
+        share = lambda part, of: np.bincount(labels[part], minlength=count + 1) >= TERRAIN_RUN_SHARE * np.maximum(np.bincount(labels[of], minlength=count + 1), 1)
+        tall = rise * 100 >= prep.COVERAGE_MIN_CM
+        rim, step = rim_steps(rise > 0, scenery, filled)
+        ground_area = share(tall & fit(terrain, filled.shape), tall) & share(rim & (step < SURFACE_MATCH_M), rim)
+        ground_area[0] = False
+        raised = ground_area[labels]
+        filled[raised] = scenery[raised]
+    return filled, int(fill.sum()), int(raised.sum())
 
 
-def legacy_surfaces(land_top, water_top, ground, z_min, old_height_cm, shape):
-    """Bool [rows, cols] on the 1 m grid: cells of the old raster that are the server's collision of a terrain or water mesh of the
-    scene (``land_top``, ``water_top``: the meshes' tops, absolute m on the grid of ground.npy), not objects.
+def rim_steps(area, lifted, ground):
+    """(rim, step) [H, W]: the cells of ``area`` (bool) with a neighbour (8) outside it, and the largest step (m) from such a cell at its
+    ``lifted`` height to the ``ground`` of a neighbour outside (0 off the rim). The grid's edge is no neighbour."""
+    rim, step = np.zeros(area.shape, bool), np.zeros(area.shape, np.float32)
+    rows, cols = area.shape
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            if dr or dc:
+                cell = (slice(max(-dr, 0), rows - max(dr, 0)), slice(max(-dc, 0), cols - max(dc, 0)))
+                beside = (slice(max(dr, 0), rows - max(-dr, 0)), slice(max(dc, 0), cols - max(-dc, 0)))
+                edge = area[cell] & ~area[beside]
+                rim[cell] |= edge
+                step[cell] = np.maximum(step[cell], np.where(edge, np.abs(lifted[cell] - ground[beside]), 0))
+    return rim, step
 
-    A cell's top must be within SURFACE_MATCH_M of the mesh's top. For water that is all. A terrain mesh may be a low-poly copy of
-    the landscape lying on the ground (Chora, Skorpo, Goose Bay), where a low wall would match it too: a run of the old raster
-    (8-neighbour) is terrain when at least TERRAIN_RUN_SHARE of its cells match a terrain mesh that rises SURFACE_MATCH_M and
-    more above the ground (a background mountain), and then its cells that match the mesh, down to the mountain's foot.
+
+def legacy_terrain(land_top, ground, z_min, old_height_cm, shape):
+    """Bool [rows, cols] on the 1 m grid: cells of the old raster that are the server's collision of a terrain mesh of the scene
+    (``land_top``: the meshes' tops, absolute m on the grid of ground.npy), not objects.
+
+    A cell's top must be within SURFACE_MATCH_M of the mesh's top. A terrain mesh may be a low-poly copy of the landscape lying on
+    the ground (Chora, Skorpo, Goose Bay), where a low wall would match it too: a run of matching cells (8-neighbour) is terrain when
+    at least TERRAIN_RUN_SHARE of its cells show the mesh, and then all of them, down to the foot of a mountain. A cell shows the
+    mesh when the mesh rises SURFACE_MATCH_M and more above the ground (a background mountain), or when the mesh rises at least
+    COVERAGE_MIN_CM and the cell's top is flush with it, within SURFACE_FLUSH_M: the mesh is the ground there, the surface the
+    server traced, where the landscape under it lies flat (Gorodok's edge, a band along the map's side that rises from 0.3 to 2.3 m).
     """
     old = fit(old_height_cm, shape).astype(np.float32) / 100
     ground_m = fit(ground, shape) + z_min
-    top = ground_m + old
     present = old * 100 >= prep.COVERAGE_MIN_CM
     land_top = fit(land_top, shape)
-    on_terrain = present & (np.abs(top - land_top) < SURFACE_MATCH_M)
-    del top
-    rising = on_terrain & (land_top - ground_m >= SURFACE_MATCH_M)
-    del land_top, ground_m
-    labels, count = ndimage.label(present, structure=np.ones((3, 3)))
+    gap = np.abs(ground_m + old - land_top)
+    rise = land_top - ground_m
+    on_terrain = present & (gap < SURFACE_MATCH_M)
+    shown = on_terrain & ((rise >= SURFACE_MATCH_M) | ((gap < SURFACE_FLUSH_M) & (rise * 100 >= prep.COVERAGE_MIN_CM)))
+    del land_top, ground_m, gap, rise
+    labels, count = ndimage.label(on_terrain, structure=np.ones((3, 3)))
     terrain_run = np.zeros(count + 1, bool)
     if count:
         cells = np.bincount(labels.ravel(), minlength=count + 1)
-        terrain_run = np.bincount(labels.ravel(), weights=rising.ravel(), minlength=count + 1) >= TERRAIN_RUN_SHARE * np.maximum(cells, 1)
+        terrain_run = np.bincount(labels.ravel(), weights=shown.ravel(), minlength=count + 1) >= TERRAIN_RUN_SHARE * np.maximum(cells, 1)
         terrain_run[0] = False
-    water = present & (np.abs(fit(ground, shape) + z_min + old - fit(water_top, shape)) < SURFACE_MATCH_M)
-    return (on_terrain & terrain_run[labels]) | water
+    return on_terrain & terrain_run[labels]
+
+
+def legacy_water(water_top, ground, z_min, old_height_cm, shape):
+    """Bool [rows, cols] on the 1 m grid: cells of the old raster whose top is within SURFACE_MATCH_M of a water mesh's (``water_top``:
+    the tops of scene_objects.surface_groups' water, absolute m on the grid of ground.npy), which the server's collision holds as objects."""
+    old = fit(old_height_cm, shape).astype(np.float32) / 100
+    present = old * 100 >= prep.COVERAGE_MIN_CM
+    return present & (np.abs(fit(ground, shape) + z_min + old - fit(water_top, shape)) < SURFACE_MATCH_M)
+
+
+def lowest_ground(ground, shape):
+    """The ground (m, float32) [rows, cols] under the lowest of the 4 x 4 points of prep.py's 0.25 m grid in each metre (bilinear between
+    the nodes of ``ground``): the ground that the old raster's height of a level surface over the metre is measured from."""
+    nodes = np.pad(np.asarray(ground, np.float32), ((0, 1), (0, 1)), mode="edge")
+    nodes = np.pad(nodes, ((0, max(shape[0] + 1 - nodes.shape[0], 0)), (0, max(shape[1] + 1 - nodes.shape[1], 0))), mode="edge")[:shape[0] + 1, :shape[1] + 1]
+    here, east, south, across = nodes[:-1, :-1], nodes[:-1, 1:], nodes[1:, :-1], nodes[1:, 1:]
+    lowest = here.copy()
+    for south_share in np.arange(4) * LEGACY_STEP_M:
+        for east_share in np.arange(4) * LEGACY_STEP_M:
+            north_row = here * (1 - east_share) + east * east_share
+            south_row = south * (1 - east_share) + across * east_share
+            np.minimum(lowest, north_row * (1 - south_share) + south_row * south_share, out=lowest)
+    return lowest
+
+
+def legacy_sheets(sheet_top, ground, z_min, old_height_cm, shape):
+    """Bool [rows, cols] on the 1 m grid: cells of the old raster that are the server's collision of a flat sheet the game does not show
+    (``sheet_top``: the tops of scene_objects.sheet_groups, absolute m on the grid of ground.npy).
+
+    The old raster holds a sheet as an object that stands at the sheet's height over the ground below it, measured where that ground
+    is lowest in the metre (lowest_ground): a cell is the sheet when its height is that, within SURFACE_FLUSH_M. All 6 622 m2 of Goose
+    Bay's kept ice are within 0.05 m of it, and a crash barrier that stands beside a sheet lying on the ground (Harju) is 0.8 m off.
+    """
+    old = fit(old_height_cm, shape).astype(np.float32) / 100
+    present = old * 100 >= prep.COVERAGE_MIN_CM
+    return present & (np.abs(old - (fit(sheet_top, shape) - z_min - lowest_ground(ground, shape))) < SURFACE_FLUSH_M)
+
+
+def old_non_objects(objects_of_scene, statics_dir, planes, lines, ground, cover, z_min, old_height_cm, bounds, shape):
+    """What the old raster holds that is no object the scene lacks: ({reason: bool [rows, cols] on the 1 m grid}, the tops of the
+    scene's terrain meshes and of its water meshes, absolute m on the grid of ground.npy). merge_old keeps nothing of them; the
+    reasons name the report's rows.
+
+    ``planes``: scene_objects.water_planes; ``lines``: features.splines; ``old_height_cm``: obj_h2.npy.
+    """
+    scene_dir = objects_of_scene.directory
+    land, water = scene.surface_groups(scene_dir)
+    land_top = surface_top(objects_of_scene, land, ground.shape, bounds)
+    water_top = surface_top(objects_of_scene, water, ground.shape, bounds)
+    sheet_top = surface_top(objects_of_scene, scene.sheet_groups(scene_dir), ground.shape, bounds)
+    collided, ground_cover = collision_footprints(statics_dir, bounds, shape)
+    return {
+        "lake_surface": legacy_water_surface(planes, bounds, shape, ground, old_height_cm),
+        "scenery": legacy_terrain(land_top, ground, z_min, old_height_cm, shape),
+        "water_meshes": legacy_water(water_top, ground, z_min, old_height_cm, shape),
+        "sheets": legacy_sheets(sheet_top, ground, z_min, old_height_cm, shape),
+        "without_collision": ~collided,
+        "ground_cover": ground_cover,
+        "off_landscape": off_landscape(cover, shape),
+        "railway": railway_cells(lines, bounds, shape),
+    }, land_top, water_top
 
 
 def write_top_lines(scene_dir, feature_dir, prep_dir):
@@ -453,6 +627,7 @@ def main():
     raster = {"sampler": "cpu"}
     if args.redo_merge:
         copy_raster(prep_dir, "raw", "top")
+        raster = json.load(open(os.path.join(prep_dir, "raw_raster.json")))
         log(slug, "scene raster restored from raw_*.npy")
     elif args.rasterized:
         raster = json.load(open(os.path.join(prep_dir, "top_raster.json")))
@@ -461,26 +636,33 @@ def main():
         log(slug, f"scene objects rasterized on the GPU ({raster['renderer']}), {raster['covered_cells']} covered cells, {raster['seconds']} s")
         if args.keep_raw:
             copy_raster(prep_dir, "top", "raw")
+            json.dump(raster, open(os.path.join(prep_dir, "raw_raster.json"), "w"))
     else:
         covered = rasterize(scene_dir, prep_dir, bounds, z_min, shape, args.workers)
         log(slug, f"scene objects rasterized, {covered} covered cells")
         if args.keep_raw:
             copy_raster(prep_dir, "top", "raw")
+            json.dump(raster, open(os.path.join(prep_dir, "raw_raster.json"), "w"))
     new_h1, _ = pool_metres(prep_dir)
     shape1 = new_h1.shape
-    service = service_mask(scene.service_boxes(scene_dir), bounds, shape1)
+    service = box_mask(scene.service_boxes(scene_dir), bounds, shape1)
     planes = scene.water_planes(scene_dir, z_min)
     json.dump({"planes": planes}, open(os.path.join(prep_dir, "top_water.json"), "w"))
     ground = np.load(os.path.join(prep_dir, "ground.npy"), mmap_mode="r")
     old_h2 = np.load(os.path.join(prep_dir, "obj_h2.npy"))
-    water_surface = legacy_water_surface(planes, bounds, shape1, ground, old_h2)
     cover = np.load(os.path.join(prep_dir, "cover.npy"), mmap_mode="r")
-    land, water = scene.surface_groups(scene_dir)
-    land_top = surface_top(objects_of_scene, land, ground.shape, bounds)
-    filled, scenery_m2 = scenery_ground(ground, cover, land_top, z_min)
+    statics_dir = os.path.join("/extract/statics", slug)
+    lines, _ = features.splines(os.path.join("/features", slug))
+    not_objects, land_top, water_top = old_non_objects(objects_of_scene, statics_dir, planes, lines, ground, cover, z_min, old_h2, bounds, shape1)
+    np.save(os.path.join(prep_dir, "top_water_surface.npy"), river_surface(water_top, z_min))
+    del water_top
+    del lines
+    del old_h2
+    filled, scenery_m2, raised_m2 = scenery_ground(ground, cover, land_top, z_min, not_objects["scenery"] & ~not_objects["without_collision"])
     np.save(os.path.join(prep_dir, "top_ground.npy"), filled)
-    del filled
-    log(slug, f"ground beyond the landscape from the scenery: {scenery_m2} m2")
+    np.save(os.path.join(prep_dir, "top_ground_base.npy"), ground_base(filled))
+    del filled, land_top
+    log(slug, f"ground from the scenery: {scenery_m2} m2 beyond the landscape, {raised_m2} m2 on it")
     paths = landscape_paths.path_weights(scene_dir, bounds, ground.shape)
     np.save(os.path.join(prep_dir, "top_paths.npy"), paths)
     path_m2 = int((paths >= 128).sum())
@@ -488,9 +670,7 @@ def main():
     log(slug, f"tracks painted into the landscape: {path_m2} m2")
     lines = write_top_lines(scene_dir, os.path.join("/features", slug), prep_dir)
     log(slug, f"{lines} road segments narrowed to their visible width")
-    surfaces = legacy_surfaces(land_top, surface_top(objects_of_scene, water, ground.shape, bounds), ground, z_min, old_h2, shape1)
-    del land_top, old_h2
-    old, keep, old_only = merge_old(prep_dir, new_h1, shape1, service, water_surface | surfaces)
+    old, keep, old_only = merge_old(prep_dir, new_h1, shape1, service, np.logical_or.reduce(list(not_objects.values())))
     new = new_h1 >= prep.COVERAGE_MIN_CM
     new_only = new & ~ndimage.binary_dilation(old, iterations=1)
     log(slug, f"old raster objects kept: {int(keep.sum())} m2, in service volumes {int((old & service).sum())} m2")
@@ -514,19 +694,18 @@ def main():
 
     report = {
         "old_m2": int(old.sum()), "new_m2": int(new.sum()), "old_only_m2": int(old_only.sum()), "new_only_m2": int(new_only.sum()),
-        "old_kept_m2": int(keep.sum()), "old_in_service_volumes_m2": int((old & service).sum()), "old_lake_surface_m2": int(water_surface.sum()),
-        "old_scenery_and_water_meshes_m2": int(surfaces.sum()),
+        "old_kept_m2": int(keep.sum()), "old_in_service_volumes_m2": int((old & service).sum()),
+        **{f"old_{reason}_m2": int((old & mask).sum()) for reason, mask in not_objects.items()},
         "classes_m2": {name: int(((c1 == i) & (h1 >= prep.COVERAGE_MIN_CM)).sum()) for i, name in enumerate(features.OBJECT_CLASSES)},
         "labels": label_comparison(labels, old_labels),
     }
     if args.report:
-        statics_dir = os.path.join("/extract/statics", slug)
         report["old_only_largest"] = components_report(old_only, bounds, collision_namer(statics_dir, bounds))
         report["new_only_largest"] = components_report(new_only, bounds, scene_namer(objects_of_scene))
     json.dump({
         "map": slug, "cell_m": scene.CELL_M, "shape": list(shape), "pyramid_levels": PYRAMID_LEVELS, "object_classes": features.OBJECT_CLASSES,
         "foliage_classes": features.FOLIAGE_CLASSES, "counts": {"crowns": int(len(arrays["x"])), "crown_meshes": len(names), "building_labels": len(labels)},
-        "scenery_left_out": scenery, "scenery_ground_m2": scenery_m2, "painted_tracks_m2": path_m2, "crop_fields_m2": crop_m2, "completeness": report, "raster": raster,
+        "scenery_left_out": scenery, "scenery_ground_m2": scenery_m2, "ground_on_scenery_m2": raised_m2, "painted_tracks_m2": path_m2, "crop_fields_m2": crop_m2, "completeness": report, "raster": raster,
         "seconds": round(time.time() - started),
     }, open(os.path.join(prep_dir, "top_meta.json"), "w"), indent=1)
     log(slug, "done", f"{time.time() - started:.0f} s")

@@ -260,13 +260,14 @@ def rasterize(tris, top, x0, y0, step):
         start = stop
 
 
-def placements(directory):
-    """Colliding static mesh placements of a map: ({mesh id: [4x4 world matrices]}, skipped counts)."""
+def placements(directory, skipped_levels=SKIPPED_LEVEL_PARTS):
+    """Colliding static mesh placements of a map outside the levels named by skipped_levels: ({mesh id: [4x4 world matrices]},
+    skipped counts)."""
     by_mesh = {}
     skipped = {"no_collision_component": 0, "level": 0}
     for line in open(os.path.join(directory, "instances.ndjson")):
         item = json.loads(line)
-        if any(part in item["level"] for part in SKIPPED_LEVEL_PARTS):
+        if any(part in item["level"] for part in skipped_levels):
             skipped["level"] += 1
             continue
         if not blocks(item.get("collision")):

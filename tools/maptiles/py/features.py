@@ -68,9 +68,13 @@ _SPLINE_RULES = [
 # Static mesh classes for the object raster (see prep.py), by mesh path
 STRUCTURE, WALL, ROCK_OBJECT, VEGETATION, BRIDGE = 0, 1, 2, 3, 4
 OBJECT_CLASSES = ["structure", "wall", "rock", "vegetation", "bridge"]
+# BRIDGE is every deck: bridges, piers, wharves and quays ("dock", but not its sea walls, stairs, curbs and struts), and the
+# pavement, kerb and road line meshes, which lie on the ground below the objects' height and rise above it only on a deck (drawn
+# as buildings, they made Black Coast's road bridge a dark bar and Sanxian's quay a house 18 m tall). "plant" is no plant in
+# "PowerPlant": 70 meshes of that set (silos, cooling towers, coal stores) were drawn green.
 _OBJECT_RULES = [
-    (BRIDGE, r"bridge"),
-    (VEGETATION, r"hedge|(?<!s)tree|bush|shrub|foliage|reed|plant|palm"),
+    (BRIDGE, r"bridge|wharf(?!_01_piling)|jetty|(^|_)pier(_|$)|(^|_)dock(_\d|_deck|_small_\d|_single|$)|pavement|paveing|sidewalk|edgeline|centerline"),
+    (VEGETATION, r"hedge(?!hog)|(?<!s)tree|bush|shrub|foliage|reed|(?<!power)plant|palm"),
     (WALL, r"wall|fence|barrier|hesco|sandbag|railing|guardrail|barricade|gate"),
     (ROCK_OBJECT, r"rock|cliff|boulder|stone|mountain|landscape_mesh|terrain"),
 ]
@@ -79,6 +83,7 @@ _OBJECT_RULES = [
 _OCEAN_ACTOR = r"BP_Ocean(_|$)"
 _WATER_MESH = r"waterplane|oceanplane|oceanwater|sm_env_river|lake|pond"
 _WATER_MESH_EXCLUDE = r"tank|tower|pump|melon|container|rcon|bottle|well"
+SPLINE_MESH_COMPONENT = "SplineMeshComponent"  # component type of a mesh the engine deforms along a spline
 
 
 def _classify(name, rules, default):
@@ -92,7 +97,8 @@ def _classify(name, rules, default):
 def object_class(mesh_name):
     """Object raster class (STRUCTURE, WALL, ROCK_OBJECT, VEGETATION, BRIDGE) of a static mesh, by its asset name.
 
-    The name and not the folder path: a folder called "Streets" is no tree.
+    The name and not the folder path: a folder called "Streets" is no tree. BRIDGE is the class of decks and paved surfaces
+    (see _OBJECT_RULES).
     """
     return _classify(mesh_name, _OBJECT_RULES, STRUCTURE)
 
@@ -220,10 +226,17 @@ def sea_level(directory):
 
 
 def water_planes(statics_dir):
-    """Static water surfaces (lakes, ponds, river planes) as {polygon [[x, y] * 4], z} in world metres."""
+    """Static water surfaces (lakes, ponds, river planes) as {polygon [[x, y] * 4], z} in world metres.
+
+    A water mesh laid along a spline (a SplineMeshComponent) is no plane: the engine bends and squeezes it to the spline's
+    width, and its own bounds are the undeformed mesh (SM_env_riverfast: 30 x 30 m for a stream 3 m wide, which drew Goose Bay's
+    streams as lakes 40 m wide). The river splines carry that water at its real width (splines, class "river").
+    """
     planes = []
     for line in open(os.path.join(statics_dir, "instances.ndjson")):
         item = json.loads(line)
+        if item.get("type") == SPLINE_MESH_COMPONENT:
+            continue
         info_path = os.path.join(statics_dir, "bodies", f"{item['mesh']}.json")
         if not os.path.exists(info_path):
             continue

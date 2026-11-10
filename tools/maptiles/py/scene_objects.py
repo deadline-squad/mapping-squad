@@ -28,10 +28,11 @@ OBJECT_MIN_CM = 5
 COVERAGE_MIN_M = 0.3
 THIN_WIDTH_M = 0.3
 THIN_MARGIN = 4
-# Service volumes that count: walls (their short side) up to SERVICE_THIN_M, or boxes up to SERVICE_SMALL_M2
+# A placement wider and longer than this (m) is scenery beyond the map, no object (SceneObjects.scenery)
 SCENERY_MIN_SIDE_M = 800.0
 # A sky sphere is scenery too wide for the map, but no ground
 SKY_NAME = re.compile(r"sky", re.IGNORECASE)
+# Service volumes that count: walls (their short side) up to SERVICE_THIN_M, or boxes up to SERVICE_SMALL_M2
 SERVICE_THIN_M = 30.0
 SERVICE_SMALL_M2 = 2500.0
 # tools/maprender/scene_render.py: SKIPPED_LEVEL_PARTS, SKIPPED_BLENDS, DEVELOPER_MATERIAL
@@ -167,7 +168,11 @@ def read_mesh(scene_dir, info):
 def bend_along_spline(vertices, spline, bounds):
     """Positions [n, 3] (cm) of a mesh deformed along its spline (USplineMeshComponent, forward axis from the file).
 
-    The same deformation as tools/maprender/scene_render.py bend_along_spline: cubic Hermite position, smoothstep scale and offset.
+    The engine's slice transform (USplineMeshComponent::CalcSliceTransformAtSplineOffset): cubic Hermite position, smoothstep scale,
+    offset and roll. The roll turns the slice about the spline's direction, after the offset. A mesh whose forward axis is Y has its
+    X axis up until a roll of -90 degrees stands it up, and the landscape splines give it that roll (pipelines, crash barriers,
+    railway tracks, fences): without the roll it is drawn on its side and off its line. tools/maprender/scene_render.py
+    bend_along_spline is this deformation without the roll.
     """
     p = spline["p"]
     vec = lambda v: np.array([v["X"], v["Y"], v["Z"]], np.float64)
@@ -191,7 +196,11 @@ def bend_along_spline(vertices, spline, bounds):
     scale_y = start_scale["Y"] * (1 - blend) + end_scale["Y"] * blend
     offset_x = start_offset["X"] * (1 - blend) + end_offset["X"] * blend
     offset_y = start_offset["Y"] * (1 - blend) + end_offset["Y"] * blend
-    return position + right * (vertices[:, side:side + 1] * scale_x + offset_x) + upward * (vertices[:, up:up + 1] * scale_y + offset_y)
+    roll = p.get("StartRoll", 0.0) * (1 - blend) + p.get("EndRoll", 0.0) * blend
+    rolled_right = np.cos(roll) * right - np.sin(roll) * upward
+    rolled_upward = np.cos(roll) * upward + np.sin(roll) * right
+    return (position + right * offset_x + upward * offset_y
+            + rolled_right * (vertices[:, side:side + 1] * scale_x) + rolled_upward * (vertices[:, up:up + 1] * scale_y))
 
 
 def corners_of(vertices, indices, ranges):
@@ -328,6 +337,32 @@ def surface_groups(scene_dir):
             if vast.any():
                 land.append({**group, "matrices": matrices[vast]})
     return land, water
+
+
+def sheet_groups(scene_dir):
+    """Groups (as surface_groups') of the flat sheets that the game does not show from above: placements of meshes no thicker than
+    OBJECT_MIN_CM whose component is hidden or whose sections are all hidden materials, water meshes and skipped levels aside
+    (surface_groups has those).
+
+    The server's collision holds such a sheet as an object that stands at the sheet's height over the ground below it
+    (scene_prep.legacy_sheets): Goose Bay's ponds and rivers are covered by 18 ``BasicShapes/Plane`` placements with a translucent
+    ice material, 195 000 m2 of them, and 17 are too large for service_boxes.
+    """
+    materials = json.load(open(os.path.join(scene_dir, "materials.json")))
+    sheets, thickness = [], {}
+    for item, path, info in read_instances(scene_dir, shown_only=False):
+        if item["type"] == FOLIAGE_TYPE or item["spline"] is not None or is_water_mesh(path) or any(part in item["level"] for part in SKIPPED_LEVEL_PARTS):
+            continue
+        if not item["hidden"] and visible_ranges(info, tuple(item.get("overrides") or ()), materials):
+            continue
+        if info["id"] not in thickness:
+            vertices, _ = read_mesh(scene_dir, info)
+            thickness[info["id"]] = float(np.ptp(vertices[:, 2])) if len(vertices) else np.inf
+        matrices = component_matrices(item)
+        flat = thickness[info["id"]] * np.linalg.norm(matrices[:, 2, :3], axis=1) <= OBJECT_MIN_CM
+        if flat.any():
+            sheets.append({"mesh": info["id"], "name": path, "cls": 0, "ranges": [(0, info["indices"])], "spline": None, "matrices": matrices[flat]})
+    return sheets
 
 
 def water_planes(scene_dir, z_min):

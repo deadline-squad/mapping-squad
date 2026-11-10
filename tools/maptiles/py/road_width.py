@@ -37,6 +37,7 @@ from scipy import spatial
 
 import objects
 import scene_objects as scene
+from render import smoothstep
 
 OPACITY_CLIP = 0.33
 SOFT_EDGE = 0.2
@@ -124,11 +125,6 @@ def opacity_rules(material_path, materials, textures):
     return [], OPAQUE
 
 
-def smoothstep(e0, e1, x):
-    t = np.clip((x - e0) / (e1 - e0), 0.0, 1.0)
-    return t * t * (3.0 - 2.0 * t)
-
-
 def coordinate_across(vertices, side):
     """(sorted side coordinates, texture coordinate at each) of a section's vertices, None when no UV channel is a function of the side coordinate.
 
@@ -214,7 +210,7 @@ def spline_meshes(scene_dir):
         world = (np.append(middle, 1.0) @ objects.component_world(item["chain"]))[:2] / 100
         overrides = item["overrides"]
         slots = tuple(overrides[i] if i < len(overrides) and overrides[i] else material for i, material in enumerate(info["materials"]))
-        yield {"mesh": path, "materials": slots, "axis": item["spline"]["axis"][-1], "flip": p.get("StartScale", {"Y": 1})["Y"] < 0, "x": float(world[0]), "y": float(world[1])}
+        yield {"mesh": path, "materials": slots, "axis": item["spline"]["axis"][-1], "flip": p.get("StartScale", {"X": 1})["X"] < 0, "x": float(world[0]), "y": float(world[1])}
 
 
 def variant_spans(scene_dir, components):
