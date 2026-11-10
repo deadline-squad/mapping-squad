@@ -400,7 +400,7 @@ await group("strat markers", async () => {
     // The start-up splash still covers the map for a moment after the heights are there: pointer events need it gone
     await page.waitForFunction(() => document.elementFromPoint(800, 500)?.closest("#map"), null, { timeout: 30000 });
     await page.evaluate(() => { window.__App.userSettings.set("keypadUnderCursor", true); });
-    for (const [icon, range] of [["deployable_mortars", 1237], ["deployable_hellcannon", 923]]) {
+    for (const [icon, range] of [["deployable_mortars", 1237], ["deployable_hellcannon", 924]]) {
         const marker = await page.evaluate((icon) => {
             const map = window.__App.minimap;
             map.setView([-map.pixelSize / 2, map.pixelSize / 2], 4, { animate: false });
