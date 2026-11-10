@@ -49,7 +49,9 @@ What the generator cannot do, by hand:
 
 - a weapon Squad Ballistics renamed (its `RENAMED_WEAPONS`) goes into the generator's `RENAMED`, old name first, and its
   rows of `GAME_MOA` and `GAME_EXPLOSION` under the new name: `--update` then keeps the entry's place and `DF_` identifier and
-  lists the old names as `legacyBallistics`; change its display name in `public/locales/*/weapons.json`;
+  lists the old names as `legacyBallistics`; change its display name in `public/locales/*/weapons.json`. When the new name
+  is a view of an entry, `--update` writes the pair into that entry's `legacyBallisticsViews` (old name -> view) and
+  `selectWeapon` reports the view; `tools/browser_check/sb_bridge_races.mjs` tries every name of `RENAMED_WEAPONS` in a browser;
 - a new name needs its row in `GAME_MOA` (the generator stops without it) and, for a round that explodes, in
   `GAME_EXPLOSION`, from the first Blueprint of the weapon's `sources.classes` in Squad Ballistics'
   `tests/data/game_weapons.json`; `gen_squadcalc_weapons.py --verify <resolved.json>` checks the explosions;
