@@ -24,8 +24,9 @@
 #   maptiles.sh relief-setup           Python image of the relief layer (numpy, scipy, Pillow, RVT, pmtiles)
 #   maptiles.sh relief [map ...]       shaded relief PMTiles (MDOW hillshade + anisotropic SVF) into $WORK/relief/<map>.pmtiles;
 #                                      RELIEF_ARGS adds options of py/relief.py (--tint, --extra-zoom N)
-#   maptiles.sh layer-minimaps         the game's per-layer minimap textures (Seed, Skirmish) as webp into
-#                                      $DIST/maptiles/<texture>/0/0_0.webp and $DIST/maptiles/layer-minimaps.json
+#   maptiles.sh layer-minimaps         the game's per-layer minimap textures (Seed, Skirmish; a layer's data asset overrides
+#                                      its level's texture and corners) as webp into $DIST/maptiles/<texture>/0/0_0.webp and
+#                                      $DIST/maptiles/layer-minimaps.json (keyed by layer, with the corners)
 #
 # Without maps every map of ../heightmaps/py/maps.py is processed.
 # Environment (defaults in brackets):
@@ -227,18 +228,24 @@ colour-render)
     ;;
 layer-minimaps)
     out="$WORK/layer-minimaps"
-    mkdir -p "$out/tex" "$DIST/maptiles"
+    rm -rf "${out:?}/layerdata" "${out:?}/tex"
+    mkdir -p "$out" "$DIST/maptiles"
     extractor() {
         # shellcheck disable=SC2086
         nice docker run --rm $USER_FLAGS -v "$WORK:/work" -v "$CLIENT_DIR/SquadGame/Content/Paks:/paks:ro" -w /work/bin \
             "$DOTNET_IMAGE" dotnet SquadExtract.dll /paks "$@"
     }
+    layer_minimaps() {
+        # shellcheck disable=SC2086
+        nice docker run --rm $USER_FLAGS -v "$HERE/py:/py:ro" -v "$out:/layer-minimaps" -v "$DIST/maptiles:/tiles" \
+            -v "$CLIENT_DIR/steamapps:/steamapps:ro" -w /py "$PY_IMAGE" python -W ignore layer_minimaps.py "$@"
+    }
     extractor layerminimaps 'Gameplay_Layers/' > "$out/layers.tsv"
-    extractor texraw '/(Minimap|Masks)/(?!RVT_)(?![^/]*Boundary)[^/]*Minimap[^/]*\.uasset$' /work/layer-minimaps/tex
-    # shellcheck disable=SC2086
-    nice docker run --rm $USER_FLAGS -v "$HERE/py:/py:ro" -v "$out:/layer-minimaps" -v "$DIST/maptiles:/tiles" \
-        -v "$CLIENT_DIR/steamapps:/steamapps:ro" -w /py "$PY_IMAGE" python -W ignore layer_minimaps.py \
-        /layer-minimaps/layers.tsv /layer-minimaps/tex /steamapps/appmanifest_393380.acf /tiles
+    extractor dumpall '/Gameplay_Layer_Data/[^/]+\.uasset$' /work/layer-minimaps/layerdata
+    textures=$(layer_minimaps textures /layer-minimaps/layers.tsv /layer-minimaps/layerdata)
+    extractor texraw "$textures" /work/layer-minimaps/tex
+    layer_minimaps build /layer-minimaps/layers.tsv /layer-minimaps/layerdata /layer-minimaps/tex \
+        /steamapps/appmanifest_393380.acf /tiles
     ;;
 relief-setup)
     docker build -q -t "$RELIEF_IMAGE" -f "$HERE/py/Dockerfile.relief" "$HERE/py"

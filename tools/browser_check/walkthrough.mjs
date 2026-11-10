@@ -323,13 +323,13 @@ async function desktop() {
     await run.pause(1200);
 
     // Map styles
-    await run.caption("Map styles: topographic, terrain, satellite, HD images");
+    await run.caption("Map styles: detailed, relief, satellite, HD images");
     await run.hover("#mapBtnLayers #btn-map-choices");
     await run.pause(600);
-    for (const style of [".btn-topomap", ".btn-terrainmap", ".btn-basemap"]) {
+    for (const style of [".btn-detailed", ".btn-relief", ".btn-basemap"]) {
         await run.click(`#mapLayerMenu ${style}`);
         await run.pause(1500);
-        if (style === ".btn-topomap") await run.shot("topomap");
+        if (style === ".btn-relief") await run.shot("relief");
     }
     await run.click("#mapLayerMenu .btn-hd");
     await run.pause(2000);

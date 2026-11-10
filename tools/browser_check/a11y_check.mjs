@@ -117,7 +117,7 @@ async function checkNames(page, where) {
         unnamed.length ? `${unnamed.length} of ${controls.length} without: ${(await describe(page, unnamed)).slice(0, 12).join(", ")}` : `${controls.length} controls named`);
 }
 
-const TOGGLES = [".btn-detailed", ".btn-topomap", ".btn-terrainmap", ".btn-basemap", ".btn-helpmap", ".btn-coverage", ".btn-hd"];
+const TOGGLES = [".btn-standard-hd", ".btn-detailed", ".btn-relief", ".btn-basemap", ".btn-helpmap", ".btn-coverage", ".btn-hd"];
 
 {
     const { context, page, problems } = await open("en");
@@ -165,15 +165,15 @@ const TOGGLES = [".btn-detailed", ".btn-topomap", ".btn-terrainmap", ".btn-basem
     // The layer buttons appear on hover or keyboard focus of the layers menu
     await page.hover("#btn-map-choices");
     await page.waitForTimeout(400);
-    const layerBefore = await page.getAttribute(".btn-topomap", "aria-pressed");
-    await page.click(".btn-topomap");
+    const layerBefore = await page.getAttribute(".btn-basemap", "aria-pressed");
+    await page.click(".btn-basemap");
     await page.waitForTimeout(800);
     const layerAfter = await page.evaluate(() => ({
-        topo: document.querySelector(".btn-topomap").getAttribute("aria-pressed"),
-        others: ["detailed", "terrainmap", "basemap"].map((name) => document.querySelector(`.btn-${name}`).getAttribute("aria-pressed")),
+        basemap: document.querySelector(".btn-basemap").getAttribute("aria-pressed"),
+        others: ["standard-hd", "detailed", "relief"].map((name) => document.querySelector(`.btn-${name}`).getAttribute("aria-pressed")),
     }));
-    check("pressing a layer button moves aria-pressed", layerAfter.topo === "true" && layerAfter.others.every((value) => value === "false"),
-        `topomap ${layerBefore} -> ${layerAfter.topo}, others ${layerAfter.others.join("/")}`);
+    check("pressing a layer button moves aria-pressed", layerAfter.basemap === "true" && layerAfter.others.every((value) => value === "false"),
+        `basemap ${layerBefore} -> ${layerAfter.basemap}, others ${layerAfter.others.join("/")}`);
 
     // Keyboard only: focusing the layers button reveals the layer buttons, which Tab then reaches
     await page.mouse.move(5, 5);

@@ -3,7 +3,7 @@
 The "Detailed" layer of the Deadline SquadCalc: a topographic map of every map, drawn from the exact
 game data of the Squad dedicated server and client paks, with tiles down to 0.07–0.125 m per pixel (see "Tile frame"). Served as 256 px
 webp tiles from `/maptiles/<map>/<z>/<x>_<y>.webp` with `/maptiles/<map>/meta.json`
-(`src/js/squadMinimap.js` `showDetailedLayer`; a map without tiles shows the upstream topographic map).
+(`src/js/squadMinimap.js` `showDetailedLayer`; a map without tiles shows the upstream basemap).
 
 ## What is drawn, and from which data
 
@@ -146,41 +146,58 @@ After a game patch: `heightmaps.sh extract build deploy`, then `maptiles.sh extr
 
 Most layers of a map use one minimap texture of the whole map. Seed and Skirmish layers ship a texture of
 their own that covers only the part of the map the layer is played on, so it is several times finer than the
-whole-map image (4096 px over the playable strip instead of the whole map). SquadCalc can show it for those
-layers.
+whole-map image (4096 px over the playable strip instead of the whole map). SquadCalc shows it for those layers,
+over the corners the game stretches it between.
+
+The game takes a layer's minimap from two places: its level (`SQWorldSettings`: `MapTexture` between the actors
+`MapTextureCornerZero` and `MapTextureCornerOne`), replaced by the layer's data asset (`Gameplay_Layer_Data/<layer>`,
+class `BP_SQLayer`) where that sets `OveriddenMinimapTexture` (the texture) or `MinimapCornersPosition` with `bIsValid`
+(the corners, min/max in cm, which the game turns into the rectangle it draws). The level alone is not enough: Black
+Coast Seed v1's level names `Black_Coast_Minimap_Seed_v1`, which shows another part of the island (490 to 861 m off),
+where its data asset sets `T_BlackCoast_Seed_v1` over the same corners; the data assets of Narva Skirmish v1, Yehorivka
+Skirmish v1, v1 WP and v2 and Fallujah Skirmish v1 give them a texture of their own where their levels show the map's.
+The layer API of SquadCalc (`mapTexture`, `mapTextureCorners`) gives the level's.
 
 Source: the Squad game client (not the server files) at `$CLIENT_DIR`, default `~/data/squad-client`; its paks
 open without a key. The extractor's `layerminimaps` mode prints one line per `Gameplay_Layers` level: the level,
-its `MapTexture` and the two minimap corners in cm (`layers.tsv`). The `texraw` mode writes the raw mip 0 of the
-minimap textures (`<name>.<PixelFormat>.<w>x<h>.bin`; DXT1 4096x4096, one B8G8R8A8 2048x2048). The map of a layer
-is the first `_` token of its name; the base texture of a map is the one most of its layers use; a texture used
-by a layer of that map but different from the base is a layer minimap. Layers that use the base texture with
-other corners (Yehorivka Skirmish, Sumari, Mestia) are not layer minimaps. With client build 26234431 there are
-15 of them: Seed and Skirmish textures of AlBasrah, BlackCoast, Chora, Fallujah, GooseBay, Gorodok, Manicouagan,
-Mutaha, Skorpo and Tallil.
+its `MapTexture` and the two minimap corners in cm (`layers.tsv`); its `dumpall` mode writes the layer data assets
+as JSON (`layerdata/`); its `texraw` mode the raw mip 0 of the textures the layers need
+(`<package>.<PixelFormat>.<w>x<h>.bin`; DXT1 4096x4096, one B8G8R8A8 2048x2048). `py/layer_minimaps.py` joins
+levels and data assets into the table of what each layer shows. The map of a layer is the first `_` token of its
+name; the base texture of a map is the one most of its layers show; a layer that shows another texture has a layer
+minimap. A layer that shows the base texture over other corners has none: the calculator shows the whole-map image,
+which lies where that texture shows the world (the build prints these layers: Manicouagan RAAS v1 and v2, Skorpo
+Invasion v1, Sumari Insurgency, Seed and Skirmish v1). With client build 26234431 there are 219 levels and 221 data
+assets (83 set a texture, 204 valid corners), and 21 layers with a minimap of their own in 18 textures: Seed and
+Skirmish layers of AlBasrah, BlackCoast, Chora, Fallujah, GooseBay, Gorodok, Manicouagan, Mutaha, Narva, Skorpo,
+Tallil and Yehorivka.
 
 ```sh
 tools/maptiles/maptiles.sh setup           # once, and after a change of the extractor
-tools/maptiles/maptiles.sh layer-minimaps  # about 2.5 min
+tools/maptiles/maptiles.sh layer-minimaps  # about 3 min
 ```
 
 Output, next to the tile folders of the maps:
 
 ```
-$DIST/maptiles/<texture name in lower case>/0/0_0.webp   lossy webp, quality 90, method 4 (1-4.5 MB each)
+$DIST/maptiles/<texture name in lower case>/0/0_0.webp   lossy webp, quality 90, method 4 (1.0 to 5.3 MB each)
 $DIST/maptiles/layer-minimaps.json
 ```
 
 ```json
 {"generated": "<UTC ISO time>", "build": "<client buildid>",
- "textures": {"Mutaha_Minimap_Seed_v1": {"folder": "mutaha_minimap_seed_v1", "size": 4096, "layers": ["Mutaha_Seed_v1"]}}}
+ "layers": {"BlackCoast_Seed_v1": {"texture": "T_BlackCoast_Seed_v1", "folder": "t_blackcoast_seed_v1", "size": 4096,
+                                   "min": [-950.0, -1200.0], "max": [50.0, -200.0]}}}
 ```
 
-`size` is the texture's side in px, `layers` the layers that use it. The corners of each layer are in
-`$WORK/layer-minimaps/layers.tsv`. The folder names contain `_minimap_`, so they cannot collide with the map
-folders, and `maptiles/<texture>/0/0_0.webp` falls under the same long cache rule as the tile folders. Files are
-written under a temporary name and renamed; nothing else under `$DIST/maptiles` is touched. Decoding
-(`py/layer_minimaps.py`: BC1 and B8G8R8A8 to RGB) is covered by `py/test_layer_minimaps.py`:
+Keyed by the layer's raw name: `texture` the texture's object name, `size` its side in px, `min` and `max` the corners
+of the world rectangle it is drawn over, in metres (the game's centimetres over 100, five decimals). The calculator
+reads this format (`src/js/mapImages.js`); one that reads the earlier format keyed by texture finds no `layers` and
+shows no layer minimap, so the manifest and the calculator are deployed together. The folder names are the texture
+names (`T_...` or `..._Minimap_...`), which no map folder has, and `maptiles/<texture>/0/0_0.webp` falls under the
+same long cache rule as the tile folders. Files are written under a temporary name and renamed; nothing else under
+`$DIST/maptiles` is touched. Table, override and decoding (`py/layer_minimaps.py`: BC1 and B8G8R8A8 to RGB) are covered
+by `py/test_layer_minimaps.py`:
 `docker run --rm -v tools/maptiles/py:/py -w /py squadcalc-maptiles-py python -m unittest test_layer_minimaps`.
 
 ## Game colours (style `colour`)
@@ -294,6 +311,16 @@ and `maptiles.sh relief [map ...]` (`RELIEF_ARGS="--tint"` multiplies a hypsomet
 * RVT anisotropic sky-view factor (level 1, direction 315, 16 directions, 25 m), stretched from its 1st percentile to 1;
 * Multiply at 50 % opacity of the SVF over the MDOW hillshade: `MDOW * (0.5 + 0.5 * SVF)`;
 * resampled with Lanczos to the finest zoom (heightmap samples on the frame's nodes), coarser zooms average 2 x 2 pixels.
+
+Placement (measured 2026-11-10; zoom-4 mosaic of the served archives, 0.4 to 1.7 m a pixel, registered in 8 x 8 windows with
+an affine fit): the layer lies in the tile frame, which `build` checks against the heightmap's. Against a plain MDOW hillshade
+it reads 0.2 to 1.8 m south-east at the centre of every map but Skorpo (Jensen +1.80 m east, +0.52 m south; Yehorivka +1.62,
++0.66 m), against the same heightmap shaded with this layer's own formula (`shade_map`, `blend`) within 0.01 to 0.03 m on
+Al Basrah, Fallujah, Goose Bay, Jensen, Logar, Mutaha, Narva and Sumari, 0.11 m on Sanxian and 0.25 m on Skorpo, and against
+the game's bare ground (`prep/<map>/ground.npy`) with the same formula within 0.19 m on the other maps. The offset is the
+drawing: the anisotropic sky-view term (main direction 315 degrees) darkens the slopes facing away from the light and moves
+the edges a hillshade alone would show south-east; the frame is right. On towns the bare ground reads 0.30 to 0.66 m off, as
+the heightmap's buildings shade and the bare ground has none.
 
 The Python image `py/Dockerfile.relief` installs `rvt-py` without its GDAL dependency (`vis.py` needs only numpy and scipy).
 Size: 1.8 to 4 MB for Fallujah, 3 to 11 MB for Chora, depending on the extra zoom.
