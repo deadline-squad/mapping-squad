@@ -130,7 +130,7 @@ def get_json(url, etag=None):
     """(parsed body, ETag) of `url`; the body is None when the server answers that `etag` is still current.
 
     Raises OSError or http.client.HTTPException when there is no answer or an error status, ValueError when the body
-    is not JSON or longer than MAX_BODY_BYTES."""
+    is not JSON, is JSON null (which would read as "still current") or is longer than MAX_BODY_BYTES."""
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     if etag:
         headers["If-None-Match"] = etag
@@ -139,7 +139,10 @@ def get_json(url, etag=None):
             body = response.read(MAX_BODY_BYTES + 1)
             if len(body) > MAX_BODY_BYTES:
                 raise ValueError(f"a body of more than {MAX_BODY_BYTES} bytes")
-            return json.loads(body), response.headers.get("ETag")
+            parsed = json.loads(body)
+            if parsed is None:
+                raise ValueError("a body of JSON null")
+            return parsed, response.headers.get("ETag")
     except urllib.error.HTTPError as error:
         if error.code == 304:
             return None, etag
@@ -180,11 +183,13 @@ def write_feed(path, servers):
 
 def retry_after(value):
     """The seconds a `Retry-After` header asks to wait, given as a number of seconds or as an HTTP date; None when the
-    header is missing or gives neither."""
+    header is missing or gives neither. A number with more digits than MAX_RETRY_AFTER_S is read as infinity: Python
+    refuses to convert a string of thousands of digits, and the caller caps the pause anyway."""
     if value is None:
         return None
-    if re.fullmatch(r"[0-9]+", value.strip()):
-        return int(value)
+    seconds = value.strip()
+    if re.fullmatch(r"[0-9]+", seconds):
+        return int(seconds) if len(seconds) <= len(str(MAX_RETRY_AFTER_S)) else float("inf")
     try:
         date = email.utils.parsedate_to_datetime(value)
     except (TypeError, ValueError):

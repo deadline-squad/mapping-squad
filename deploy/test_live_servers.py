@@ -257,7 +257,7 @@ class Loop(unittest.TestCase):
         self.assertEqual(self.lines, ["AlBasrah_RAAS_v1, teams AFU / RGF", "no layer played"])
 
     def test_site_answer_of_another_shape_leaves_the_feed(self):
-        for body in ([STATUS], {"data": "maintenance"}, {"data": [STATUS]}, {"ok": False}, b"<html>502 Bad Gateway</html>",
+        for body in (None, [STATUS], {"data": "maintenance"}, {"data": [STATUS]}, {"ok": False}, b"<html>502 Bad Gateway</html>",
                      {"data": {**STATUS, "teams": []}}, {"data": {**STATUS, "teams": {"1": "Armed Forces of Ukraine"}}},
                      {"data": {**STATUS, "map": ["AlBasrah_RAAS_v1"]}}, {"data": {**STATUS, "players": "<b>87</b>"}}):
             with self.subTest(body=body):
@@ -337,7 +337,8 @@ class Loop(unittest.TestCase):
     def test_too_many_requests_waits_as_long_as_the_answer_says(self):
         now = datetime.datetime.now(datetime.timezone.utc)
         in_five_minutes = email.utils.format_datetime(now + datetime.timedelta(minutes=5), usegmt=True)
-        for header, pause in (("90", 90), (" 45 ", 45), ("5", 20), ("86400", 3600), (in_five_minutes, 300)):
+        for header, pause in (("90", 90), (" 45 ", 45), ("5", 20), ("86400", 3600), ("9" * 5000, 3600),
+                               (in_five_minutes, 300)):
             with self.subTest(retry_after=header):
                 self.play([self.GOOD, {SITE: status_error(SITE, 429, {"Retry-After": header})}, self.GOOD])
                 self.assertAlmostEqual(self.pauses[1], pause, delta=2)
