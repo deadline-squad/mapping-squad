@@ -84,11 +84,16 @@ with 1 on any failure.
 node layer_minimap_check.mjs <site URL>
 ```
 
-Needs the layer API and the images of `tools/maptiles` (step `layer-minimaps`) under `/maptiles/`. Mutaha Seed v1: its 4096 px
-texture is drawn above the map image at the layer's corners (633.6 m east and 581.5 m south of the image corner, 1300 m
-square), the topographic layer removes it and the basemap brings it back, clearing the layer removes it; Mutaha RAAS v1
-(the map's own texture) shows nothing; Tallil Seed v1 shows its texture; a map change leaves none; only the images of layers
-with a texture of their own are requested; console clean. `SHOT_DIR=<dir>` also saves a screenshot. Exits with 1 on any failure.
+Needs the layer API and the images of `tools/maptiles` (step `layer-minimaps`, with `layer-minimaps.json`) under
+`/maptiles/`. Mutaha Seed v1: its 4096 px texture is drawn above the map image at the layer's corners (633.6 m east and
+581.5 m south of the image corner, 1300 m square), the detailed layer removes it and the basemap brings it back, clearing
+the layer removes it; Mutaha RAAS v1 (the map's own texture) shows nothing; Black Coast Seed v1 shows the texture of its
+layer data asset, not the map's, over that asset's corners (a 1000 m square 1349 m east and 927 m south of the image
+corner); Narva Skirmish v1 over the layer data's corners (1070 m square, 1020 m east and 442 m south); Tallil Seed v1 shows
+its texture; a map change leaves none; only the images of layers with a texture of their own are requested; Skorpo's
+basemap lies over the rectangle its texture shows on the world ((-3611.1, -3291.8) to (3257.7, 3575.8) m) and its HQ corner
+tiles of zoom 4 end there within a pixel, 11.8 px past the image corner in the east; console clean. `SHOT_DIR=<dir>` also
+saves screenshots of the three layers and of Skorpo's east edge in HQ. Exits with 1 on any failure.
 
 ## home_server_check.mjs: the Deadline server in the servers list
 

@@ -302,7 +302,7 @@ await group("desktop checks", async () => {
     const stacking = await page.evaluate(async () => {
         if (window.__App.userSettings.highQualityImages) document.querySelector(".btn-hd").click();
         await new Promise((resolve) => setTimeout(resolve, 1500));
-        document.querySelector("#mapLayerMenu .btn-terrainmap").click();
+        document.querySelector("#mapLayerMenu .btn-basemap").click();
         await new Promise((resolve) => setTimeout(resolve, 2500));
         const z = (element) => Number(getComputedStyle(element).zIndex) || 0;
         const pane = [...document.querySelector(".leaflet-overlay-pane").children];
@@ -617,7 +617,7 @@ await group("circles of the loaded layer", async () => {
 // first change still waited for its meta.json when the page drew the map again), and open() timed out.
 await group("spinner after layer changes", async () => {
     // Tiles of /maptiles/ are held back while `holdTiles` is set (a tile layer that keeps loading); the
-    // upstream terrain map never loads
+    // upstream basemap never loads
     let holdTiles = null;
     const { context, page, problems } = await open(undefined, async (context) => {
         await context.route(/\/maptiles\/[a-z0-9_-]+\/\d+\/\d+_\d+\.webp/, async (route) => {
@@ -625,7 +625,7 @@ await group("spinner after layer changes", async () => {
             // The page may have dropped the request by now (its layer left the map)
             await route.fallback().catch(() => {});
         });
-        await context.route(/\/terrainmap.*\.webp/, (route) => route.abort("failed"));
+        await context.route(/\/basemap\.webp/, (route) => route.abort("failed"));
     });
     const click = (layer) => page.evaluate((layer) => document.querySelector(`#mapLayerMenu .btn-${layer}`).click(), layer);
     // Whether the spinner is gone within 20 s, and the map images then on the map (tile layers and single images)
@@ -658,7 +658,7 @@ await group("spinner after layer changes", async () => {
     }
     check("spinner stops after a tile layer was replaced while it loaded", replaced.stopped && replaced.images === 1, JSON.stringify(replaced));
 
-    await click("terrainmap");
+    await click("basemap");
     const failed = await settled();
     check("spinner stops after a map image that failed to load", failed.stopped && failed.images === 1, JSON.stringify(failed));
 
@@ -672,8 +672,8 @@ await group("spinner after layer changes", async () => {
     check("spinner stops when no tile of the new layer is in view", away.stopped && away.images === 1 && tiles && back.stopped && back.images === 1,
         `map dragged away ${JSON.stringify(away)}, back over the map: tiles shown ${tiles}, ${JSON.stringify(back)}`);
 
-    const unexpected = problems.filter((problem) => !/terrainmap|net::ERR_FAILED/.test(problem));
-    check("layer changes: console and requests clean but for the terrain map that was refused", unexpected.length === 0, unexpected.length ? unexpected.slice(0, 10).join(" | ") : "no other errors");
+    const unexpected = problems.filter((problem) => !/basemap\.webp|net::ERR_FAILED/.test(problem));
+    check("layer changes: console and requests clean but for the basemap that was refused", unexpected.length === 0, unexpected.length ? unexpected.slice(0, 10).join(" | ") : "no other errors");
     await context.close();
 });
 
