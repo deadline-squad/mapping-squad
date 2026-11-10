@@ -37,7 +37,6 @@ REACH_TOLERANCE = 1.0
 KNOWN = {
     ("reach", "UB-32"): "O3: the range circle is the longest shot at any elevation, as in Squad Ballistics; a solution beyond the mount's reach is refused",
     ("reach", "M1064M121"): "O3: the range circle is the longest shot at any elevation, as in Squad Ballistics; a solution beyond the mount's reach is refused",
-    ("landscape", "Skorpo"): "O9: maps.js has the location of the turned landscape actor, its components start 508 x 1524 quads from it; no calculation reads the field",
     ("image corners", "Skorpo"): "the map image was fitted 9.5 m and 10.5 m off; the grid uses the game's corners",
 }
 
