@@ -23,7 +23,6 @@ water, roads and tracks, object shadows, objects (visible meshes of the scene, s
 import argparse
 import json
 import math
-import multiprocessing
 import os
 import re
 import shutil
@@ -34,6 +33,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage, sparse
 
 import features
+import worker_pool
 
 # Container paths (maptiles.sh)
 PREP_DIR = "/prep"
@@ -1490,6 +1490,10 @@ def main():
     args = parser.parse_args()
     slug = args.map
     meta = json.load(open(os.path.join(PREP_DIR, slug, "meta.json")))
+    # scene_prep.py writes top_meta.json last, after the scene's files that the workers load (load)
+    scene_report = os.path.join(PREP_DIR, slug, "top_meta.json")
+    if not os.path.exists(scene_report):
+        raise SystemExit(f"{scene_report} is missing: run maptiles.sh scene {slug} first")
     b = meta["bounds_m"]
     finest = finest_zoom(b["max_x"] - b["min_x"])
     zooms = args.zooms if args.zooms else list(range(finest, -1, -1))
@@ -1504,7 +1508,7 @@ def main():
     tasks = tasks_for(zooms, blocks)
     started = time.time()
     done = 0
-    with multiprocessing.Pool(args.workers, _init, (slug, staging, style)) as pool:
+    with worker_pool.Pool(args.workers, _init, (slug, staging, style)) as pool:
         for i, count in enumerate(pool.imap_unordered(_render, tasks), 1):
             done += count
             if i % max(1, len(tasks) // 20) == 0:

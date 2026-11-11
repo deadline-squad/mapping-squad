@@ -16,7 +16,6 @@ ground matches the basemap's. The result is a style file for render.py --style.
 import argparse
 import json
 import math
-import multiprocessing
 import os
 
 import numpy as np
@@ -24,6 +23,7 @@ from PIL import Image
 
 import features
 import render
+import worker_pool
 
 MIN_PIXELS = 4000
 # Opacity of the canopy colours in the fitted styles: a mostly opaque crown takes its colour from the basemap
@@ -110,7 +110,7 @@ def collect(slug, style, zoom, workers, basemap_path):
     n = math.ceil(2 ** zoom / render.BLOCK_TILES)
     blocks = [(zoom, bx, by) for by in range(n) for bx in range(n)]
     total = {}
-    with multiprocessing.Pool(workers, init, (slug, style, zoom, basemap_path)) as pool:
+    with worker_pool.Pool(workers, init, (slug, style, zoom, basemap_path)) as pool:
         for stats in pool.imap_unordered(task, blocks):
             for name, (count, ours, theirs) in stats.items():
                 n0, o0, t0 = total.get(name, (0, 0, 0))

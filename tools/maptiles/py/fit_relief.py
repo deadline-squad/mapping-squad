@@ -14,7 +14,6 @@ strength and the light direction (LIGHT_FROM) in the style.
 import argparse
 import json
 import math
-import multiprocessing
 import os
 
 import numpy as np
@@ -22,6 +21,7 @@ from scipy import ndimage
 
 import fit_palette
 import render
+import worker_pool
 
 SMALL, LARGE = 2.0, 8.0
 
@@ -112,7 +112,7 @@ def main():
     n = math.ceil(2 ** args.zoom / render.BLOCK_TILES)
     blocks = [(args.zoom, bx, by) for by in range(n) for bx in range(n)]
     total = {"ours": np.zeros(7), "basemap": np.zeros(7), "shadow": np.zeros((16, 2))}
-    with multiprocessing.Pool(args.workers, init, (args.map, style_file, args.zoom, os.path.join(args.basemaps, f"{args.map}.webp"))) as pool:
+    with worker_pool.Pool(args.workers, init, (args.map, style_file, args.zoom, os.path.join(args.basemaps, f"{args.map}.webp"))) as pool:
         for result in pool.imap_unordered(task, blocks):
             if result:
                 for key in total:

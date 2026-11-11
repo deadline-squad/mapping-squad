@@ -26,6 +26,7 @@ from numpy.lib.format import open_memmap
 
 import scene_objects as scene
 import scene_prep
+import worker_pool
 
 GL_DEPTH_CLAMP = 0x864F
 # Cleared "no surface" height, far below any map (read back as -inf)
@@ -198,19 +199,19 @@ def rasterize(scene_dir, prep_dir, workers, log=print):
     del ground
     tasks = scene_prep.blocks_of(shape)
     covered, pending, sampled_s = 0, [], 0.0
-    with multiprocessing.get_context("spawn").Pool(workers, _init_worker, (prep_dir, z_min, bounds)) as pool:
+    with worker_pool.Pool(workers, _init_worker, (prep_dir, z_min, bounds), multiprocessing.get_context("spawn")) as pool:
         for done, block in enumerate(tasks, 1):
             t = time.time()
             samples = scene.block_samples(objects_of_scene, bounds, *block, sampler)
             sampled_s += time.time() - t
             if samples is not None:
                 top, top_class = samples
-                pending.append(pool.apply_async(_finish_block, ((block, top.astype(np.float32), top_class.astype(np.uint8)),)))
-            while len(pending) > 2 * workers or (pending and pending[0].ready()):
-                covered += pending.pop(0).get()
+                pending.append(pool.submit(_finish_block, (block, top.astype(np.float32), top_class.astype(np.uint8))))
+            while len(pending) > 2 * workers or (pending and pending[0].done()):
+                covered += pending.pop(0).result()
             if done % max(1, len(tasks) // 10) == 0:
                 log(f"scene objects {done}/{len(tasks)} blocks (GPU)")
-        covered += sum(result.get() for result in pending)
+        covered += sum(future.result() for future in pending)
     result = {"sampler": "gpu", "renderer": sampler.renderer, "shape": list(shape), "covered_cells": covered, "blocks": len(tasks),
               "gpu_seconds": round(sampled_s, 1), "seconds": round(time.time() - started, 1)}
     json.dump(result, open(os.path.join(prep_dir, "top_raster.json"), "w"), indent=1)
