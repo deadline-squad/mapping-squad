@@ -1,5 +1,6 @@
 """Synthetic scenes with known answers: bridge, thin wall, tunnel roof. Run: python -m unittest discover tests (from tools/volumetric)."""
 
+import json
 import os
 import sys
 import unittest
@@ -113,6 +114,16 @@ class VolumetricTests(unittest.TestCase):
         np.testing.assert_array_equal(out_hole, hole)
         self.assertEqual((header["origin_x"], header["origin_y"], header["cell"]), (-100.431, 50.252, 1.2))
         self.assertAlmostEqual(header["yaw_deg"], -2.006195, places=5)
+
+    def test_terrain_raster_stops_without_the_landscape_extraction(self):
+        meta = {"bounds_m": {"min_x": 0, "min_y": 0, "max_x": 10, "max_y": 10}, "origin_m": [0, 0], "resolution_m": 1.0, "yaw_deg": 0.0}
+        with mock.patch.object(terrain_raster, "LANDSCAPE_ROOT", "/nonexistent"), \
+                mock.patch.object(terrain_raster.lattice, "from_meta", return_value=lattice.Lattice(0, 0, 1.0, 0.0, 11, 11)), \
+                mock.patch("builtins.open", mock.mock_open(read_data=json.dumps(meta))), \
+                mock.patch.object(sys, "argv", ["terrain_raster.py", "tallil", "meta.json", "out.bin"]):
+            with self.assertRaises(SystemExit) as stop:
+                terrain_raster.main()
+        self.assertIn("no landscape", str(stop.exception))
 
 
 if __name__ == "__main__":

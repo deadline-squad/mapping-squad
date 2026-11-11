@@ -130,6 +130,9 @@ def main():
     with open(meta_path) as f:
         grid = lattice.from_meta(json.load(f))
     actors = [(g, h, x0, y0, root) for level in maps.MAPS[slug][1] for g, h, x0, y0, root in terrain.assemble(f"{LANDSCAPE_ROOT}/{level}").values()]
+    if not actors:
+        # Without the extraction every node reads "no landscape" and the file would look valid to the page
+        raise SystemExit(f"{slug}: no landscape under {LANDSCAPE_ROOT} (mount the heightmaps extraction, tools/heightmaps WORK, there)")
     z, hole = sample_grid(actors, grid)
     blob = encode(z, hole, grid)
     with open(out, "wb") as f:
