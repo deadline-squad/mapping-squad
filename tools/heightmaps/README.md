@@ -98,6 +98,89 @@ served copy and checks each result (`py/convert_webp.py`: the WebP decoded again
 `heightmaps.sh switch-webp` then replaces each map's `meta.json`: the switch, last.
 In a browser, `tools/browser_check/heightmap_exact.mjs` compares the WebP and PNG paths of the site's worker.
 
+## Detail where objects stand
+
+On the lattice bare ground is the game's, but between two nodes the page reads the triangle rule's plane: where a wall or
+a roof edge crosses a quad, that plane runs from the roof down to the ground across the whole quad (1 m on most maps), and
+a target there reads a height in between, metres off. Next to the heightmap, `heightmap.detail.bin` (`py/heightmap_detail.py`)
+holds, in the quads where it matters, the nodes of the lattice subdivided by 2 (0.5 m apart on most maps, 0.375 m on Anvil,
+0.6 m on Skorpo, 0.25 m on Chora and Kokan), fused like the heightmap from the same sources (`py/build_detail.py`:
+`build_all.fuse_on` on the subdivided lattice, in bands of whole quad rows). SquadCalc reads such a quad as its 2 x 2
+smaller quads, with the same triangle rule (`heightmapDetail.js`), and every other quad as before.
+
+The file is the gzip of (little endian) the magic `HMD1`, uint32 factor, unit, quad columns, quad rows and quad count; the
+bitset of the quads with detail; then per quad, in the bitset's order, the 5 nodes of its sub-grid that are not its
+corners, row-major, each the zigzag varint of its level minus the level the triangle rule reads there from the quad's
+corners (rounded half up), in units of `unit` levels (`UNIT_M`, 5 cm): a node is at most 2.5 cm off, and one that the
+corners predict is exact. `meta.json` announces it: `detail: {file, encoding, factor, unit, threshold_m, quads, bytes}`.
+
+The size limit: for each map, `heightmap.webp` and the detail together stay within the size of `heightmap.png`, so a
+page that reads the WebP and the detail downloads no more than the PNG alone. A quad has detail when one of its sub-grid
+nodes lies more than `threshold_m` from the triangle rule's read of its corners; `build_detail.py` takes the smallest of
+0.25, 0.5, 1 and 2 m whose file fits, and writes none on a map where none does (an earlier file and its key are removed).
+
+The 25 maps as built on 2026-11-10 and 2026-11-11 (`build_detail.py`, about 3 h with 2 CPUs and 4 GB of memory, an hour of
+it Yehorivka):
+
+| Map | Sub-grid (m) | Threshold (m) | Quads with detail | of all quads | Detail (kB) | PNG - WebP (kB) |
+|---|---|---|---|---|---|---|
+| Al Basrah | 0.5 | 0.25 | 585 976 | 3.66 % | 1 968 | 2 775 |
+| Anvil | 0.375 | 0.25 | 266 411 | 1.60 % | 909 | 3 788 |
+| Black Coast | 0.502 | 0.25 | 222 625 | 1.06 % | 790 | 4 705 |
+| Chora | 0.25 | 0.25 | 458 937 | 0.69 % | 1 356 | 2 740 |
+| Fallujah | 0.5 | 0.5 | 310 512 | 3.44 % | 1 125 | 1 349 |
+| Fools Road | 0.5 | 0.25 | 19 415 | 0.62 % | 69 | 802 |
+| Goose Bay | 0.5 | 0.25 | 387 470 | 2.38 % | 1 322 | 3 748 |
+| Gorodok | 0.5 | 0.25 | 109 330 | 0.66 % | 404 | 2 184 |
+| Harju | 0.5 | 0.25 | 287 925 | 1.77 % | 1 051 | 2 693 |
+| Jensen | 0.5 | 0.25 | 23 169 | 0.14 % | 68 | 3 870 |
+| Kamdesh | 0.5 | 0.25 | 214 649 | 1.32 % | 583 | 2 809 |
+| Kohat | 0.5 | 0.25 | 99 676 | 0.47 % | 327 | 5 214 |
+| Kokan | 0.25 | 0.25 | 117 413 | 0.47 % | 379 | 4 737 |
+| Lashkar | 0.5 | 0.25 | 543 970 | 2.90 % | 1 476 | 4 398 |
+| Logar | 0.4999 | 0.25 | 83 456 | 2.69 % | 282 | 886 |
+| Manicouagan | 0.5 | 0.25 | 395 508 | 2.43 % | 1 260 | 2 897 |
+| Mestia | 0.5 | 0.25 | 165 698 | 2.88 % | 556 | 1 627 |
+| Mutaha | 0.5 | 0.25 | 190 761 | 2.51 % | 571 | 1 591 |
+| Narva | 0.5 | 0.25 | 186 634 | 2.38 % | 630 | 1 654 |
+| Pacific | 0.5 | 0.25 | 5 464 | 0.03 % | 22 | 4 621 |
+| Sanxian | 0.5 | 1 | 226 905 | 1.07 % | 946 | 1 352 |
+| Skorpo | 0.6 | 0.25 | 161 106 | 0.46 % | 715 | 5 489 |
+| Sumari | 0.5 | 0.25 | 77 003 | 4.55 % | 256 | 306 |
+| Tallil | 0.5 | 0.25 | 189 223 | 0.86 % | 644 | 2 595 |
+| Yehorivka | 0.5 | 0.25 | 135 412 | 0.34 % | 470 | 5 480 |
+
+With their details the WebP files take 280.8 MB for the 25 maps (18.2 MB of detail on 1.20 % of the quads), against 336.9 MB
+of PNG; the served WebP files of 2026-10-30, coarsened and without detail, take 183.2 MB. On every map a threshold fits,
+0.25 m on all but Fallujah 0.5 m, Sanxian 1 m.
+
+On the 50 dense windows of the accuracy research (two 200 m windows per map where objects stand closest; truth every 0.25 m:
+the game's landscape and the server's static mesh collision; measured with the research's tools, not committed), on the
+7 489 877 points on objects:
+
+| Read | More than 0.5 m off | More than 2 m off | RMS (cm) |
+|---|---|---|---|
+| The heightmaps served now (corner grid) | 12.01 % | 4.20 % | 117.9 |
+| On the vertices | 11.93 % | 4.09 % | 117.1 |
+| On the vertices, with the detail | 8.40 % | 3.00 % | 112.5 |
+
+The share drops in 49 of the 50 windows; on the other 24 509 714 points of the windows (the ground beside the objects) it is
+4.02 % against 4.10 %, but more than 2 m off 2.64 % against 2.48 % (RMS 88.5 against 83.9 cm): most likely the ground beside
+a thin wall between a quad's corners, which the quad read as ground and whose sub-quads now slope up to the node on the
+wall. What stays is what a sub-grid of half the spacing cannot hold (a wall's edge inside a sub-quad, the coarser thresholds
+above) and the objects SquadHeight has where the server's collision has none ("Which of SquadHeight's objects are taken"). A
+finer sub-grid holds more and does not fit: in the measurement that chose the factor (the server-only fusion on the same
+windows, files estimated from the windows at the heightmap's step), a 0.25 m sub-grid leaves 4.75 % of the object points
+more than 0.5 m off against 7.42 % at 0.5 m (11.63 % without), and takes 126.9 against 29.5 MB for the 25 maps at a 0.25 m
+threshold, Al Basrah's alone 10.4 MB against the 2.8 MB its PNG leaves.
+
+The volume layer (`tools/volumetric`: 0.5 m columns of 0.25 m voxels, served already) is the other fix: the target dialog
+offers the surfaces of the column under the target. On the same points its roof choice, the top of the column, is more than
+0.5 m off at 12.56 % (RMS 157.8 cm), and the heightmap's height clamped into the column's top voxel at 7.77 % (7.78 % with
+the detail, RMS 151.7 cm); but on the ground beside the objects the clamped height is more than 0.5 m off at 11.05 % of the
+points against 4.02 % without the clamp (RMS 304.8 against 88.5 cm): a column at a wall's foot holds the wall. So a target's
+height is the heightmap's with its detail, and the dialog's voxel surfaces stay a choice.
+
 ## Sources and fusion
 
 | Layer | Source | Precision |
@@ -234,15 +317,16 @@ needs the game client): `$SCENES/<map>` says which of SquadHeight's objects the 
 ```sh
 tools/heightmaps/heightmaps.sh setup     # CUE4Parse at the pinned commit + cue4parse.patch, extractor, Python image
 tools/heightmaps/heightmaps.sh extract   # landscapes and static meshes of every map (about 1 h)
-tools/heightmaps/heightmaps.sh build     # fused heightmaps into $OUT (about 1–2 h); "build skorpo" for one map
+tools/heightmaps/heightmaps.sh build     # fused heightmaps into $OUT (about 1–2 h, their details about 3 h more); "build skorpo" for one map
 tools/heightmaps/heightmaps.sh deploy    # replace the built files in the served SquadCalc, previous copy kept as heightmaps.bak.<date>
 ```
 
 Paths are set with `SQUAD_DIR`, `SQUADHEIGHT`, `WORK`, `SCENES`, `CLIENT_DIR`, `OUT` and `DIST` (see the script header).
 After a game patch: update the server with SteamCMD and the client scenes (`tools/maprender/maprender.sh scene`), then
 `extract`, `build`, `deploy`; a new map goes into `py/maps.py` (its SquadHeight name and landscape levels).
-`deploy` replaces in each served map folder only what `build` wrote for it (`heightmap.png`, `heightmap.webp` and the keys of
-`meta.json`); the volume layer of `tools/volumetric` (`volume.vcol`, `terrain.bin` and the `volume` key of `meta.json`) stays, and so do
+`deploy` replaces in each served map folder only what `build` wrote for it (`heightmap.png`, `heightmap.webp`, the
+`heightmap.detail.bin` where it made one, and the keys of `meta.json`; a map built without a detail loses the served one);
+the volume layer of `tools/volumetric` (`volume.vcol`, `terrain.bin` and the `volume` key of `meta.json`) stays, and so do
 the maps `$OUT` does not hold. A build whose grid moved (`origin_m`, `resolution_m` or `yaw_deg` of `meta.json`) needs its
 `terrain.bin` rebuilt on the new grid after `deploy` (`tools/volumetric` README). A map of `$OUT` that lacks one of its
 three files stops it before anything is touched.
@@ -308,6 +392,7 @@ Files:
   water actors, for `tools/maptiles`). `cue4parse.patch` keeps the cooked
   landscape collision that CUE4Parse skips.
 * `py/heightmap_webp.py`, `py/convert_webp.py` — the WebP form above;
+* `py/heightmap_detail.py`, `py/build_detail.py` — the detail where objects stand above (`py/test_heightmap_detail.py`);
 * `py/landscape.py` — cooked Chaos heightfield reader and landscape assembly; `py/lattice.py` — the grid on the
   landscape's vertices and the page's read on it (`py/test_lattice.py`);
   `py/objects.py` — static mesh collision rasterizer; `py/evidence.py` — the placements of the server and the

@@ -12,7 +12,8 @@ nodes of the quad around the point within half the heightmap's step of the terra
 every directory. A heightmap on the vertices has its quantisation step (half of it) as its only error there.
 Errors over the vertices and over the points between them, printed as RMS / p99 / max. With --points-out, POINTS of those
 vertices and POINTS of those points are added to a JSON file {"<map>": [[x, y, z], ...]} (world metres, z the game's
-collision) for tools/browser_check/heightmap_native.mjs.
+collision) for tools/browser_check/heightmap_native.mjs, less the points between that lie in a quad with detail
+(heightmap_detail.py) of a heightmap: the page reads such a quad on its sub-grid, which holds the objects there.
 """
 
 import argparse
@@ -24,6 +25,7 @@ import numpy as np
 from PIL import Image
 
 import build_heightmap
+import heightmap_detail
 import heightmap_webp
 import landscape
 import lattice
@@ -142,6 +144,9 @@ def main(extract_root, slug, heightmap_dirs, points_out=None):
 
     if points_out:
         between = rng.choice(len(rx), min(POINTS, len(rx)), replace=False)
+        for directory, (_, meta, _) in zip(heightmap_dirs, built):
+            detail = heightmap_detail.load(os.path.join(directory, slug), meta)
+            between = between[~heightmap_detail.in_quads(lattice.from_meta(meta), detail, rx[between], ry[between])]
         px, py, pz = (np.concatenate([chosen[:, k], w[between]]) for k, w in zip((1, 2, 3), (rx, ry, rz)))
         points = {}
         if os.path.exists(points_out):
