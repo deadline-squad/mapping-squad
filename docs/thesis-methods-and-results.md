@@ -22,6 +22,9 @@ takes from each layer's data asset, Skorpo's rectangle, the basemap on the game'
 topographic maps removed, the relief layer's offset settled) is new (SC 45.50.0), and the last row of section 2.3 points to it; a
 row in section 15. Its registration tool is committed and rerun (`tools/maptiles/py/register_images.py`,
 `tools/browser_check/hq_sharpness.mjs`), so its figures and the last row of section 2.3 are VERIFIED; a row in section 13.
+Updated 2026-11-11: section 2 rests on the heightmaps on the landscape's own vertices (2.1: the corner grid against the
+lattice at 283.8 M vertices; 2.2: the server-log audit on both grids; 2.4: the placement totals on the lattice), and section 3
+has the detail where objects stand and its measurement on the research's 50 windows (SC 45.51.0); a row in section 15.
 
 ## 0. How to read this report
 
@@ -166,19 +169,57 @@ the compass with `trunc(sqrt(d² + h²) / 50) x 50`.
 
 
 Source and method: the cooked Chaos heightfields of the landscape levels, placed with the landscape actor's transform
-(16-bit per tile, about 0.3 mm; grid 1-1.2 m), fused by maximum with the collision of the placed static meshes and, where
-it rises 0.5 m above the game terrain and a placement of the game explains it (section 2.4), with the SDK surface of SquadHeight
-1.3.0 (1.6 cm). 16-bit PNG and lossless WebP
-on SquadCalc's grid, 1 m (0.5 m on Chora and Kokan) (`H-README`, "Sources and fusion", "Grid size").
+(16-bit per tile, 0.3-6.4 mm a step; vertices 0.5-1.2 m apart), fused by maximum with the collision of the placed static
+meshes and, where it rises 0.5 m above the game terrain and a placement of the game explains it (section 2.4), with the SDK
+surface of SquadHeight 1.3.0 (1.6 cm). 16-bit PNG and lossless WebP of the same levels whose samples are the landscape's own
+vertices (heightmaps built from 2026-11-10; before, a sample every metre from the minimap's corner, 0.5 m on Chora and
+Kokan, and a WebP rounded to 1 cm) (`H-README`, "Sources and fusion", "Grid", "WebP form").
 
-### 2.1 Interpolation rule
+### 2.1 Interpolation rule and grid
 
 The game splits each quad into two triangles along the diagonal from (x, y) to (x+1, y+1). On points where the other
 diagonal would differ by more than 5 mm, this diagonal is the closer in 79 of 89 (17 of 20 above 2 cm) (`H-README`,
-"Interpolation: the game's triangles", `py/compare_interpolation.py`): VERIFIED. On the maps whose vertices lie on the 1 m
-grid, bilinear against triangle reads RMS 0.3-2.2 cm (up to 0.2-1.1 m on the steepest quads) and triangle 0.0-0.1 cm:
-VERIFIED. On maps off the 1 m grid the grid itself is a resample and the read is a small part of an RMS of 0.5-3 cm:
-VERIFIED.
+"Interpolation: the game's triangles", `py/compare_interpolation.py`): VERIFIED. On a grid whose nodes are the game's
+vertices, bilinear against triangle reads RMS 0.3-2.2 cm (up to 0.2-1.1 m on the steepest quads) and triangle 0.0-0.1 cm,
+measured on the 12 maps whose vertices were on the corner grid: VERIFIED.
+
+The corner grid was a resample of the vertices on 18 maps: they lie 0.4 cm (Kokan) to 49 cm (Jensen) off its samples, or at
+another spacing (Anvil 0.75 m, Black Coast 1.0039 m, Logar 0.9999 m, Skorpo 1.2 m and turned by -2.006195 degrees). From
+2026-11-10 the heightmap's samples are the vertices on every map (`meta.json` `origin_m`, `resolution_m`, `yaw_deg`;
+`AGL:tools/heightmaps/py/lattice.py`), and SquadCalc 45.51.0 reads them along the landscape's own axes. Error of the page's
+read against the game's collision on bare ground (`H-README`, "Grid"; `py/compare_native_vertices.py`: every landscape vertex
+inside the bounds and up to 200 000 random points between them where both heightmaps hold the bare landscape), the served
+heightmaps on the corner grid against the heightmaps on the vertices, cm:
+
+| Map | Vertex spacing (m) | Vertices | Corner grid p99 / max (cm) | Lattice p99 / max (cm) | Points between | Corner grid p99 / max (cm) | Lattice p99 / max (cm) |
+|---|---|---|---|---|---|---|---|
+| Al Basrah | 1 | 10.8 M | 0.54 / 2.95 | 0.05 / 0.06 | 136 k | 0.47 / 1.03 | 0.05 / 0.05 |
+| Anvil | 0.75 | 13.2 M | 17.56 / 238.30 | 0.09 / 0.10 | 159 k | 11.50 / 84.76 | 0.08 / 0.09 |
+| Black Coast | 1.00394 | 11.5 M | 11.32 / 344.12 | 0.16 / 0.16 | 110 k | 6.63 / 33.48 | 0.14 / 0.16 |
+| Chora | 0.5 | 19.8 M | 0.38 / 0.39 | 0.38 / 0.39 | 60 k | 0.37 / 0.38 | 0.37 / 0.39 |
+| Fallujah | 1 | 7.0 M | 0.50 / 37.21 | 0.06 / 37.53 | 154 k | 0.46 / 0.51 | 0.05 / 0.06 |
+| Fools Road | 1 | 2.6 M | 8.90 / 156.06 | 0.08 / 0.08 | 167 k | 5.27 / 68.02 | 0.07 / 0.08 |
+| Goose Bay | 1 | 10.4 M | 8.97 / 72.82 | 0.12 / 0.13 | 129 k | 5.28 / 21.54 | 0.11 / 0.12 |
+| Gorodok | 1 | 13.8 M | 0.57 / 3.75 | 0.07 / 0.08 | 167 k | 0.48 / 1.18 | 0.06 / 0.07 |
+| Harju | 1 | 11.5 M | 0.58 / 6.37 | 0.09 / 0.10 | 143 k | 0.46 / 1.21 | 0.08 / 0.09 |
+| Jensen | 1 | 14.4 M | 4.33 / 37.87 | 0.07 / 0.07 | 179 k | 2.60 / 11.42 | 0.07 / 0.07 |
+| Kamdesh | 1 | 11.5 M | 0.50 / 0.51 | 0.15 / 0.16 | 141 k | 0.43 / 0.51 | 0.14 / 0.15 |
+| Kohat | 1 | 9.2 M | 1.46 / 189.42 | 0.29 / 0.30 | 86 k | 0.92 / 153.37 | 0.27 / 0.29 |
+| Kokan | 0.5 | 23.0 M | 0.49 / 1.18 | 0.07 / 0.08 | 184 k | 0.44 / 0.57 | 0.06 / 0.07 |
+| Lashkar | 1 | 13.1 M | 0.50 / 0.51 | 0.13 / 0.13 | 139 k | 0.44 / 0.51 | 0.11 / 0.13 |
+| Logar | 0.9999 | 2.5 M | 17.69 / 64.95 | 0.10 / 0.10 | 160 k | 10.16 / 46.12 | 0.09 / 0.10 |
+| Manicouagan | 1 | 10.2 M | 7.96 / 69.74 | 0.16 / 0.16 | 126 k | 4.67 / 21.83 | 0.14 / 0.16 |
+| Mestia | 1 | 3.0 M | 0.69 / 12.08 | 0.19 / 0.20 | 105 k | 0.51 / 3.13 | 0.17 / 0.19 |
+| Mutaha | 1 | 6.0 M | 0.63 / 3.44 | 0.05 / 0.05 | 160 k | 0.51 / 1.74 | 0.05 / 0.05 |
+| Narva | 1 | 6.1 M | 0.50 / 0.51 | 0.08 / 0.09 | 156 k | 0.45 / 0.51 | 0.07 / 0.08 |
+| Pacific | 1 | 13.5 M | 0.50 / 0.51 | 0.12 / 0.13 | 166 k | 0.43 / 0.51 | 0.11 / 0.12 |
+| Sanxian | 1 | 4.7 M | 0.50 / 0.51 | 0.09 / 0.10 | 45 k | 0.46 / 0.51 | 0.09 / 0.10 |
+| Skorpo | 1.2 | 21.2 M | 11.31 / 131.67 | 0.80 / 0.82 | 130 k | 6.40 / 36.12 | 0.72 / 0.81 |
+| Sumari | 1 | 1.0 M | 0.57 / 1.42 | 0.11 / 0.11 | 120 k | 0.48 / 0.94 | 0.10 / 0.11 |
+| Tallil | 1 | 16.3 M | 4.14 / 37.09 | 0.06 / 0.07 | 149 k | 2.41 / 12.59 | 0.05 / 0.06 |
+| Yehorivka | 1 | 27.4 M | 0.92 / 7.11 | 0.19 / 0.20 | 137 k | 0.62 / 2.36 | 0.17 / 0.19 |
+
+Reading: on the vertices the page's read is within 0.82 cm of the game's collision at each of the 283.8 M landscape vertices and 3.4 M points between them on every map (Skorpo, whose 16-bit step is 1.6 cm; 0.05-0.39 cm on the others), against up to 3.44 m on the corner grid (Black Coast; Anvil 2.38 m, Kohat 1.89 m, Fools Road 1.56 m, Skorpo 1.32 m), except at one seam of Fallujah: two of its six streaming proxies disagree at 30 shared vertices along x = -510 m by up to 37.5 cm, the game's collision steps there, and a grid with one height per vertex is off on one side by up to that much (the 37.53 cm in the table; `H-README`, "Grid"). VERIFIED.
 
 ### 2.2 Accuracy against the server's own logs
 
@@ -199,6 +240,32 @@ reference. The raw log lines are not in the repositories (they contain players' 
 game terrain against SquadHeight on open ground, median difference 0.0 mm on every map, RMS 0.5-14 cm; against the
 landscape's own vertices on a 0.5 m grid RMS 0.000 (Chora) and 0.017 cm (Kokan) against 8.91 and 0.89 cm for 1 m
 (VERIFIED).
+
+The same audit on the heightmaps on the landscape's vertices (section 2.1; the 25 maps built on 2026-11-10, not yet served),
+12 maps, on the points where the game's landscape itself is within 2 cm of the log and neither heightmap has an object at
+the point (`grid_object` of `py/audit_ground_truth.py`), triangle read, cm:
+
+| Map | n | Corner grid within 2 cm | p95 | max | Vertices within 2 cm | p95 | max |
+|---|---|---|---|---|---|---|---|
+| Fallujah | 76 | 95 % | 2.9 | 33.9 | 95 % | 2.9 | 33.9 |
+| Goose Bay | 148 | 94 % | 2.1 | 10.6 | 99 % | 1.2 | 10.7 |
+| Yehorivka | 152 | 99 % | 1.2 | 11.5 | 99 % | 1.3 | 11.5 |
+| Black Coast | 120 | 95 % | 1.9 | 3.5 | 100 % | 0.9 | 1.9 |
+| Al Basrah | 47 | 100 % | 0.5 | 1.6 | 100 % | 0.5 | 1.5 |
+| Harju | 66 | 97 % | 1.0 | 6.3 | 97 % | 1.0 | 6.3 |
+| Jensen | 20 | 100 % | 0.8 | 1.1 | 100 % | 0.1 | 0.3 |
+| Kokan | 9 | 100 % | 0.0 | 0.0 | 100 % | 0.0 | 0.0 |
+| Manicouagan | 12 | 100 % | 0.3 | 0.4 | 100 % | 0.1 | 0.1 |
+| Narva | 9 | 100 % | 0.1 | 0.1 | 100 % | 0.1 | 0.1 |
+| Skorpo | 13 | 92 % | 3.2 | 6.2 | 100 % | 0.5 | 0.6 |
+| Tallil | 17 | 88 % | 2.4 | 3.4 | 100 % | 0.3 | 0.4 |
+| 12 maps | 689 | 96.2 % | 1.7 | 33.9 | 98.7 % | 1.1 | 33.9 |
+
+Reading: on the vertices **98.7 % of these ground points are within 2 cm** (corner grid 96.2 %), the 95th percentile is
+1.1 cm (1.7 cm). The points beyond 2 cm are the same on both grids and read the same height on both: small objects between
+the nodes (a kerb, a step; up to 33.9 cm on Fallujah), not the grid. On all points the audit classes as ground (`ok` and
+`sub-cell`, as in the table above) the triangle read is within 2 cm on 92 % of Fallujah (107 points), 96 % of Goose Bay (162),
+97 % of Yehorivka (167) and 95 % of Black Coast (165) (`H-README`, "Audit against the game server"): VERIFIED.
 
 ### 2.3 Map grid and minimap corners (audit of 2026-11-05)
 
@@ -233,12 +300,12 @@ water of such a vast mesh under SquadHeight's surface (`H-README`, "Which of Squ
 
 | Finding | Value | Source | Label |
 |---|---|---|---|
-| Points where SquadHeight stands 0.5 m and more above the terrain, 25 maps | 28 515 530; a placement explains 27 949 202 (20 946 035 only one of the client: 18 713 366 the water and mountains of a mesh wider than 800 m, the rest foliage and Blueprint components; 25 566 only one of the server) | `H-README` | VERIFIED |
-| Points that no placement explains | 566 328; 554 201 of them lie on the server's own static collision at the same height and do not change (Gorodok 405 962, Narva 148 238) | `H-README` | VERIFIED |
+| Points where SquadHeight stands 0.5 m and more above the terrain, 25 maps | 28 515 530 on the corner grid; a placement explains 27 949 202 (20 946 035 only one of the client: 18 713 366 the water and mountains of a mesh wider than 800 m, the rest foliage and Blueprint components; 25 566 only one of the server). On the landscape's vertices (section 2.1) 28 621 312, of which 28 052 108 are explained | `H-README` | VERIFIED |
+| Points that no placement explains | 566 328 on the corner grid (569 204 on the vertices); 554 201 of them lie on the server's own static collision at the same height and do not change (Gorodok 405 962, Narva 148 238) | `H-README` | VERIFIED |
 | Points lowered | 12 127 points, 11 480 m², on 6 maps: Al Basrah 11 226 (up to 22.48 m, median 6.17 m: the background city of the `_Vista` level along the map's edge and walls in open sand), Chora 792 on its 0.5 m grid (198 m², up to 8.44 m), Kokan 71 (17.8 m², up to 9.41 m), Skorpo 16 (a tree crown 30.7 m above the terrain that no tree of the game reaches), Anvil 17 (up to 0.72 m), Gorodok 5 (up to 1.84 m); the other 19 maps do not change | `H-README` | VERIFIED |
 | The client's landscape at those points | equal to the server's (largest difference 0.00 m) and nowhere within 0.5 m of SquadHeight's surface: none of it is terrain of the game | `H-README` | VERIFIED |
 | `build` of the six maps against the served heightmaps | differs exactly at the points above, by the measured lowering to 1 cm, and elsewhere only at 12 764 points of Gorodok, one 16-bit level (1.4 mm) lower, where the server's collision holds SquadHeight's surface to the millimetre | `H-README` | VERIFIED |
-| Served heightmaps | generated 2026-10-30 and 2026-10-31, with every object of SquadHeight, until the six maps are rebuilt and deployed (`heightmaps.sh deploy` keeps each map's volume layer) | `H-README` | PENDING |
+| Served heightmaps | generated 2026-10-30 and 2026-10-31, with every object of SquadHeight and on the corner grid; the 25 maps were rebuilt on 2026-11-10 with the placement rule and on the landscape's vertices (section 2.1) into `~/data/squad-heightmaps-final`, not yet deployed (`heightmaps.sh deploy` keeps each map's volume layer; the rebuilt `terrain.bin` goes with it) | `H-README` | PENDING (deploy, owner) |
 
 ### 2.5 Map pictures on the world (2026-11-10)
 
@@ -279,11 +346,20 @@ capsules, convex hulls) sampled at each grid point (`H-README`, "Sources and fus
 |---|---|---|---|
 | Game objects against SquadHeight on Skorpo | recall 98.9 %, precision 99.5 %, heights within 0.5 m on 99.75 % of shared object cells (median 5 mm); 99.99 % of all cells within 0.5 m | `H-README`, `py/compare_objects.py` | VERIFIED |
 | Error of the 1 m grid on object cells, dense 1 km window of Fallujah, against the 0.25 m grid as reference | RMS 0.931 m (bilinear read), 0.951 m (triangle read, 2 % worse); equal on terrain | `H-README`, `py/compare_resolution.py` | VERIFIED |
+| Target height on objects, the accuracy research's 50 dense windows (two 200 m windows per map; truth every 0.25 m: the landscape and the server's collision), 7 489 877 points on objects | more than 0.5 m off: served heightmaps (corner grid) 12.01 %, on the vertices 11.93 %, with the detail where objects stand 8.40 % (more than 2 m: 4.20, 4.09 and 3.00 %; RMS 117.9, 117.1 and 112.5 cm); lower in 49 of the 50 windows; the other 24 509 714 points of the windows 4.10 and 4.02 % (more than 2 m: 2.48 and 2.64 %; RMS 83.9 and 88.5 cm) | `H-README`, "Detail where objects stand"; the research's window tools (not committed) | VERIFIED |
+| The volume layer's surfaces on the same points | the roof choice (top of the voxel column) 12.56 % more than 0.5 m off; the heightmap clamped into the column's top voxel 7.77 % (7.78 % with the detail, RMS 151.7 cm against 112.5), and on the ground beside the objects 11.05 % against 4.02 % without the clamp | same | VERIFIED |
+| Detail where objects stand (SC 45.51.0) | `heightmap.detail.bin`: the lattice subdivided by 2 on 1.20 % of the quads, threshold 0.25 m (Fallujah 0.5 m, Sanxian 1 m), 18.2 MB for the 25 maps; WebP and detail 280.8 MB within the 336.9 MB of the PNG. A 0.25 m sub-grid would leave 4.75 % of the object points more than 0.5 m off against 7.42 % at 0.5 m (estimate on the server-only fusion) but take 126.9 against 29.5 MB at the heightmap's step | `H-README`; `SC:src/js/heightmapDetail.js`, `SC:tests/squadHeightmaps.test.mjs`; `AGL:tools/heightmaps/py/test_heightmap_detail.py` | VERIFIED |
 | SquadCalc's old 8-bit heightmap of Skorpo against SquadHeight | error up to 1.05 m (2.09 m steps) | `H-README`, `py/compare_squadcalc.py` | VERIFIED |
 
 **Reading of the RMS 0.93-0.95 m:** it is the resolution error of the 1 m grid on object cells (roofs, walls, trees) with
 the 0.25 m grid as reference, not an error against the game. It is the reason for the voxel layer. A reference of 0.25 m
 is itself a sample of the same triangles: INFERRED to be adequate because the exact tracer (section 6) is independent of it.
+
+**Reading of the detail:** on the points on objects of the 50 windows it takes the share more than 0.5 m off from 12.01 to
+8.40 % within the size the PNG had (section 2.1 keeps bare ground exact), while on the ground beside the objects the share
+more than 2 m off rises from 2.48 to 2.64 %; the rest is what half the spacing cannot hold and the objects SquadHeight has
+where the server's collision has none. The voxel surfaces are no better default: clamped into the voxel column, the ground
+beside the objects goes wrong. They stay the target dialog's choice.
 
 ## 4. Voxel layer (`VCOL1`)
 
@@ -841,6 +917,7 @@ image, as in `tools/heightmaps/heightmaps.sh`. Game data: the dedicated server, 
 | SquadHeight's objects only where the game has them (2026-11-10) | SquadHeight was traced on the SDK's version of each map: 12 127 points of 6 maps held objects that neither the server nor the client scene has (Al Basrah's background city up to 22.5 m); `build` takes the game's surfaces there, PENDING in the served heightmaps | section 2.4; `H-README` |
 | Spline roll in Standard HD, road sides and collision without a mesh in the Detailed tiles (2026-11-10) | Standard HD drew rolled spline meshes on their side (20 maps); road widths took the unrolled side axis (no tile changes); the old raster kept collision that the scene does not show (4 531 m² on 13 maps: Manicouagan's dam over the reservoir, Kamdesh's background mountains) | section 16.6 |
 | Map pictures on the world (2026-11-10) | the client's pixels registered every picture on the world: Black Coast Seed v1 showed another part of the island (490.5 to 862 m), five Skirmish layers the whole-map picture where the game shows its own, Skorpo's basemap lay 19.5 m short in the east, the terrain and topographic maps' relief up to 43 m off; the relief layer's south-east offset is its shading, not its frame | section 2.5; SC 45.50.0 |
+| Heights on the landscape's vertices, the WebP at the PNG's step, the detail where objects stand, no 8-bit fallback (2026-11-11) | the accuracy research found the heightmap's grid off the vertices on 18 maps (Skorpo turned, Anvil 0.75 m), the WebP rounded to 1 cm, the 1 m grid metres off next to objects and Black Coast's 8-bit fallback 5.7 m off at the median; the 25 maps are rebuilt on the vertices with a detail of half the spacing where objects stand, and SquadCalc 45.51.0 reads them without a fallback | sections 2.1, 2.2, 2.4 and 3; `H-README`, "Grid", "Detail where objects stand"; SC 45.51.0 |
 
 ## 16. Detailed tactical map (the "Detailed" layer, build of 2026-11-09, reviewed 2026-11-10)
 
