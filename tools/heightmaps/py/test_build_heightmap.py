@@ -1,4 +1,4 @@
-"""Tests of the grid arithmetic and the output of build_heightmap.py and maps.cell_m: python -m unittest test_build_heightmap"""
+"""Tests of build_heightmap.py: python -m unittest test_build_heightmap"""
 
 import json
 import os
@@ -10,77 +10,132 @@ from PIL import Image
 
 import build_heightmap
 import heightmap_webp
-import maps
+import landscape
+import lattice
+from test_lattice import actor, twisted
 
-META = {"resolution_m": 1.0, "bounds_m": {"min_x": 10.0, "max_x": 14.0, "min_y": -3.0, "max_y": 1.0}}
-
-
-class GridShape(unittest.TestCase):
-    def test_both_corners_are_samples(self):
-        self.assertEqual(build_heightmap.grid_shape(META, 1.0), (5, 5))
-        self.assertEqual(build_heightmap.grid_shape(META, 0.5), (9, 9))
-
-    def test_non_square_bounds_give_rows_by_cols(self):
-        meta = {**META, "bounds_m": {"min_x": 0.0, "max_x": 6.0, "min_y": 0.0, "max_y": 2.0}}
-        self.assertEqual(build_heightmap.grid_shape(meta, 0.5), (5, 13))
+BOUNDS = {"min_x": 0.0, "max_x": 8.0, "min_y": 0.0, "max_y": 8.0}
+SQUADHEIGHT = {"resolution_m": 1.0, "bounds_m": BOUNDS}
 
 
-class UpsampleSurface(unittest.TestCase):
+def sloping(location_cm=(-170.0, -150.0, 0.0)):
+    """A 14 x 14 landscape of 1 m quads, z = 0.5 x + 0.25 y (m) about its first vertex: planar, so its triangles are exact
+    anywhere. At the default location its vertices are at x = -1.7 + i, y = -1.5 + j, and the map's grid covering BOUNDS at
+    x = -0.7 .. 8.3, y = -0.5 .. 8.5 (10 x 10 nodes)."""
+    j, i = np.mgrid[0:14, 0:14].astype(np.float64)
+    return actor((0.5 * i + 0.25 * j) * 128, location_cm)
+
+
+def squadheight_of(actors):
+    """SquadHeight's surface of bare ground: the game's terrain at its samples (a 1 m grid from BOUNDS' min corner)."""
+    ys, xs = np.mgrid[0:9, 0:9].astype(np.float64)
+    return build_heightmap.landscape_at(actors, xs, ys)
+
+
+def read_build(out):
+    """(meta, PNG levels) of a heightmap written to ``out``."""
+    with open(os.path.join(out, "meta.json")) as f:
+        meta = json.load(f)
+    with Image.open(os.path.join(out, "heightmap.png")) as image:
+        return meta, np.asarray(image)
+
+
+class MapLattice(unittest.TestCase):
+    def test_the_grid_is_the_landscapes_vertices_over_the_minimap(self):
+        grid = build_heightmap.map_lattice([sloping()], BOUNDS)
+        np.testing.assert_allclose(grid[:4], (-0.7, -0.5, 1.0, 0.0), atol=1e-9)
+        self.assertEqual((grid.width, grid.height), (10, 10))
+
+    def test_every_node_of_a_turned_map_is_a_vertex(self):
+        # Skorpo: 1.2 m quads turned by -2.006195 degrees
+        heights = twisted(14, 14)
+        land = actor(heights, (-311.0, -527.0, 1500.0), -2.006195, 120.0, (1, 2))
+        grid = build_heightmap.map_lattice([land], {"min_x": 0.0, "max_x": 10.0, "min_y": 0.0, "max_y": 10.0})
+        terrain = build_heightmap.game_terrain([land], grid)
+        xs, ys = lattice.node_rows(grid, 0, grid.height)
+        cols, rows = lattice.to_grid(lattice.Lattice(*lattice.landscape_lattice([land]), 0, 0), xs, ys)
+        np.testing.assert_allclose(cols, np.rint(cols), atol=1e-6)
+        np.testing.assert_allclose(rows, np.rint(rows), atol=1e-6)
+        vertex = 15.0 + heights[np.rint(rows).astype(int), np.rint(cols).astype(int)] / 128
+        self.assertFalse(np.isnan(terrain).any())
+        np.testing.assert_allclose(terrain, vertex, atol=1e-9)
+
+
+class SurfaceOnLattice(unittest.TestCase):
     def setUp(self):
-        self.shape = build_heightmap.grid_shape(META, 0.5)
-        # A 45 degree slope rising towards +x: terrain = 0.5 m per fine column
-        self.terrain = np.tile(np.arange(self.shape[1]) * 0.5, (self.shape[0], 1))
-        self.surface = self.terrain[::2, ::2].copy()
+        self.actors = [sloping()]
+        self.grid = build_heightmap.map_lattice(self.actors, BOUNDS)
+        self.terrain = build_heightmap.game_terrain(self.actors, self.grid)
+        self.surface = squadheight_of(self.actors)
 
-    def test_cell_equal_to_squadheight_returns_the_surface(self):
-        surface = np.arange(25.0).reshape(5, 5)
-        self.assertIs(build_heightmap.upsample_surface(surface, surface, META, 1.0), surface)
+    def on_lattice(self, actors=None, terrain=None):
+        actors = self.actors if actors is None else actors
+        terrain = self.terrain if terrain is None else terrain
+        return build_heightmap.surface_on_lattice(self.surface, SQUADHEIGHT, actors, self.grid, terrain)
 
-    def test_cell_that_does_not_divide_is_refused(self):
-        with self.assertRaises(ValueError):
-            build_heightmap.upsample_surface(self.surface, self.terrain, META, 0.3)
+    def test_bare_ground_stays_the_games_terrain(self):
+        np.testing.assert_allclose(self.on_lattice(), self.terrain, atol=1e-12)
 
-    def test_samples_are_kept_and_ground_stays_the_terrain(self):
-        fused = build_heightmap.upsample_surface(self.surface, self.terrain, META, 0.5)
-        self.assertEqual(fused.shape, self.shape)
-        np.testing.assert_allclose(fused, self.terrain)
-        np.testing.assert_allclose(fused[::2, ::2], self.surface)
+    def test_a_building_keeps_its_height_above_a_sloping_ground(self):
+        self.surface[4, 4] += 4.0
+        lifted = self.on_lattice() - self.terrain
+        # Node (x 4.3, y 3.5) is the only one whose nearest sample is (4, 4); y 3.5 is halfway and takes the larger coordinate.
+        # Its own terrain is 0.4 m below the sample's, which the sample's absolute height would add as a bump
+        expected = np.zeros(lifted.shape)
+        expected[4, 5] = 4.0
+        np.testing.assert_allclose(lifted, expected, atol=1e-12)
 
-    def test_building_keeps_its_height_above_a_sloping_ground(self):
-        self.surface[2, 2] += 4.0
-        fused = build_heightmap.upsample_surface(self.surface, self.terrain, META, 0.5)
-        np.testing.assert_allclose(fused[4, 4], self.terrain[4, 4] + 4.0)
-        # Halfway cells take the sample with the larger coordinate: the building at (2, 2) covers fine rows and
-        # columns 3 and 4, each lifted by its own terrain's height, not by the neighbour sample's absolute height
-        for row, col in ((3, 3), (3, 4), (4, 3)):
-            self.assertAlmostEqual(fused[row, col] - self.terrain[row, col], 4.0)
-        self.assertAlmostEqual(fused[5, 5] - self.terrain[5, 5], 0.0)
+    def test_beyond_the_minimap_a_node_is_its_own_terrain(self):
+        # Column x = -0.7 is more than half a SquadHeight cell outside its grid: SquadHeight has nothing there
+        self.surface[:, 0] += 4.0
+        lifted = self.on_lattice() - self.terrain
+        np.testing.assert_allclose(lifted[:, 0], 0.0, atol=1e-12)
+        np.testing.assert_allclose(lifted[:, 1], 4.0, atol=1e-12)
 
-    def test_cells_without_landscape_follow_the_squadheight_triangles(self):
-        terrain = np.full(self.shape, np.nan)
-        # Without landscape the slope between two samples is crossed linearly, not in a step
-        fused = build_heightmap.upsample_surface(self.surface, terrain, META, 0.5)
-        np.testing.assert_allclose(fused, self.terrain)
+    def test_nodes_without_landscape_read_squadheight_along_the_games_triangles(self):
+        self.surface = np.zeros((9, 9))
+        self.surface[1, 1] = 1.0
+        out = self.on_lattice(actors=[], terrain=np.full(self.terrain.shape, np.nan))
+        # Nodes (x 0.3, y 0.5), (x 1.3, y 0.5) and (x 1.3, y 1.5) are below the diagonals of quads (0, 0), (0, 1) and (1, 1)
+        # (column part 0.3 < row part 0.5); the -0.7 column reads SquadHeight's edge
+        self.assertAlmostEqual(out[1, 1], 0.3)
+        self.assertAlmostEqual(out[1, 2], 0.5 - 0.3)
+        self.assertAlmostEqual(out[2, 2], 1.0 - 0.5)
+        self.assertAlmostEqual(out[2, 0], 0.0)
 
-    def test_triangle_split_follows_the_row_col_diagonal(self):
-        terrain = np.full(self.shape, np.nan)
-        surface = np.zeros((5, 5))
-        surface[1, 1] = 1.0
-        fused = build_heightmap.upsample_surface(surface, terrain, META, 0.5)
-        # Quad (0, 0) has the peak at its (row + 1, col + 1) corner: min(east, south); quad (0, 1) has it off the diagonal
-        self.assertAlmostEqual(fused[1, 1], 0.5)
-        self.assertAlmostEqual(fused[1, 3], 0.0)
-        self.assertAlmostEqual(fused[2, 2], 1.0)
 
-    def test_covered_cell_next_to_an_uncovered_sample_reads_the_squadheight_grid(self):
-        terrain = self.terrain.copy()
-        terrain[:, 5:] = np.nan
-        surface = self.surface.copy()
-        surface[:, 3:] = 100.0
-        fused = build_heightmap.upsample_surface(surface, terrain, META, 0.5)
-        # Fine column 5 is uncovered, columns 0 to 4 keep their terrain
-        np.testing.assert_allclose(fused[:, :5], terrain[:, :5])
-        self.assertTrue(np.all(fused[:, 6:] == 100.0))
+class Build(unittest.TestCase):
+    def test_the_heightmap_read_like_the_page_is_the_games_collision_on_bare_ground(self):
+        # Landscape vertices 0.43 m and 0.25 m off the minimap's corner (Goose Bay), every quad twisted
+        heights = twisted(14, 14, seed=5)
+        land = actor(heights, (-143.0, -125.0, 0.0))
+        grid = build_heightmap.map_lattice([land], BOUNDS)
+        terrain = build_heightmap.game_terrain([land], grid)
+        surface = build_heightmap.surface_on_lattice(squadheight_of([land]), SQUADHEIGHT, [land], grid, terrain)
+        fused, stats = build_heightmap.fuse(terrain, surface)
+        with tempfile.TemporaryDirectory() as out:
+            build_heightmap.write(out, "Test", fused, grid, SQUADHEIGHT, stats, "1")
+            meta, png = read_build(out)
+        levels = png.astype(np.float64)
+        heightmap = meta["z_min_m"] + levels * meta["z_step_m"]
+        rng = np.random.default_rng(11)
+        xs, ys = rng.uniform(0, 8, 20000), rng.uniform(0, 8, 20000)
+        game = landscape.sample_world(land, xs * 100, ys * 100, "triangle") / 100
+        error = np.abs(lattice.read(heightmap, lattice.from_meta(meta), xs, ys) - game)
+        self.assertLess(error.max(), meta["z_step_m"] / 2 + 1e-4)
+
+    def test_png_and_webp_hold_the_same_levels_and_step(self):
+        grid = lattice.Lattice(-0.43, -0.25, 1.0, 0.0, 10, 10)
+        fused = np.random.default_rng(2).uniform(0.0, 30.0, (10, 10))
+        with tempfile.TemporaryDirectory() as out:
+            build_heightmap.write(out, "Test", fused, grid, SQUADHEIGHT, {}, "1")
+            meta, png = read_build(out)
+            webp = heightmap_webp.decode(os.path.join(out, heightmap_webp.FILE))
+        np.testing.assert_array_equal(webp, png)
+        self.assertEqual(meta["webp"]["z_step_m"], meta["z_step_m"])
+        self.assertEqual(meta["webp"]["levels_sum"], heightmap_webp.levels_sum(png))
+        self.assertEqual(lattice.from_meta(meta), grid)
+        self.assertEqual(meta["bounds_m"], BOUNDS)
 
 
 class Fuse(unittest.TestCase):
@@ -138,34 +193,6 @@ class Fuse(unittest.TestCase):
         self.terrain[9, 9] = np.nan
         rising = build_heightmap.above_terrain(self.terrain, self.surface)
         self.assertEqual((bool(rising[0, 0]), bool(rising[0, 1]), bool(rising[9, 9]), int(rising.sum())), (False, True, False, 17))
-
-
-class Write(unittest.TestCase):
-    def test_png_and_webp_hold_the_same_levels_and_step(self):
-        # A range of 13 m: the PNG's step is 1 mm (its floor), the WebP keeps it (it was coarsened to 1 cm)
-        fused = np.add.outer(np.linspace(0.0, 13.0, 9), np.linspace(0.0, 0.0071, 9)).astype(np.float64)
-        with tempfile.TemporaryDirectory() as out:
-            build_heightmap.write(out, "Test", fused, {**META, "bounds_m": {"min_x": 0.0, "max_x": 8.0, "min_y": 0.0, "max_y": 8.0}}, {}, 1)
-            with open(os.path.join(out, "meta.json")) as f:
-                meta = json.load(f)
-            with Image.open(os.path.join(out, "heightmap.png")) as image:
-                png = np.asarray(image)
-            webp = heightmap_webp.decode(os.path.join(out, heightmap_webp.FILE))
-        np.testing.assert_array_equal(webp, png)
-        self.assertEqual(meta["webp"]["z_step_m"], meta["z_step_m"])
-        self.assertEqual(meta["webp"]["levels_sum"], heightmap_webp.levels_sum(png))
-        self.assertLess(np.abs(meta["z_min_m"] + png * meta["z_step_m"] - fused).max(), meta["z_step_m"] / 2 + 1e-4)
-
-
-class CellSize(unittest.TestCase):
-    def test_native_half_metre_maps_and_the_default(self):
-        self.assertEqual(maps.cell_m("chora"), 0.5)
-        self.assertEqual(maps.cell_m("kokan"), 0.5)
-        self.assertEqual(maps.cell_m("fallujah"), 1.0)
-
-    def test_every_cell_divides_squadheights_metre(self):
-        for slug in maps.MAPS:
-            self.assertAlmostEqual(1.0 / maps.cell_m(slug), round(1.0 / maps.cell_m(slug)))
 
 
 if __name__ == "__main__":

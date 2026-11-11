@@ -18,8 +18,10 @@ OBJECT_M = 0.5
 
 def main(squadheight_dir, statics_dir, *levels):
     meta, surface = build_heightmap.load_squadheight(squadheight_dir)
-    terrain = build_heightmap.game_terrain(levels, meta, surface.shape)
-    top, stats = objects.object_surface(statics_dir, meta["bounds_m"], meta["resolution_m"], surface.shape)
+    # On SquadHeight's own grid, sample by sample
+    grid = build_heightmap.squadheight_lattice(meta, surface)
+    terrain = build_heightmap.game_terrain(build_heightmap.landscape_actors(levels), grid)
+    top, stats = objects.object_surface(statics_dir, grid)
     ours = np.fmax(terrain, top)
     covered = ~np.isnan(terrain)
     sdk_obj = covered & (surface - terrain > OBJECT_M)

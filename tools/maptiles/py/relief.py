@@ -4,7 +4,9 @@ A high-fidelity shaded relief of the precise heightmap (tools/heightmaps), in th
 (256 px WebP tiles, Leaflet CRS.Simple, the map square spanning 256 * 2^z px at zoom z, row 0 = minimum Y; see
 README.md "Tile frame"), written as one PMTiles v3 archive (https://github.com/protomaps/PMTiles) of WebP tiles.
 
-Shading, computed on the heightmap's own grid in float64 and tile-independent:
+Shading, computed in float64 and tile-independent on the grid of the minimap's corners at the heightmap's spacing
+(lattice.minimap_step: 0.5 m on Chora and Kokan, else 1 m; the heightmap's samples are the landscape's vertices, read at
+the grid's points the way SquadCalc reads them, lattice.on_grid):
 
 1. Horn gradients p (east) and q (north) of the 3 x 3 window, topometrics.gradients:
        p = ((z3 + 2 z6 + z9) - (z1 + 2 z4 + z7)) / (8 cell),   q = ((z1 + 2 z2 + z3) - (z7 + 2 z8 + z9)) / (8 cell)
@@ -41,6 +43,7 @@ from PIL import Image
 from pmtiles.tile import Compression, TileType, zxy_to_tileid
 from pmtiles.writer import Writer
 
+import lattice
 import topometrics
 
 Image.MAX_IMAGE_PIXELS = None
@@ -180,11 +183,12 @@ def build(heightmaps_dir, maptiles_dir, out_dir, name, with_tint=False, extra_zo
     """Render one map's relief archive to out_dir/<name><suffix>.pmtiles; returns a report dict."""
     started = time.time()
     z, meta = topometrics.load_heightmap(os.path.join(heightmaps_dir, name))
+    cell = lattice.minimap_step(meta)
+    z = lattice.on_grid(z, lattice.from_meta(meta), meta["bounds_m"], cell)
     with open(os.path.join(maptiles_dir, name, "meta.json")) as handle:
         tile_meta = json.load(handle)
     if tile_meta["bounds_m"] != meta["bounds_m"]:
         raise ValueError(f"{name}: the maptiles frame {tile_meta['bounds_m']} differs from the heightmap's {meta['bounds_m']}")
-    cell = meta["resolution_m"]
     rows, cols = z.shape
     size_m = meta["bounds_m"]["max_x"] - meta["bounds_m"]["min_x"]
     max_zoom = finest_zoom(max(rows, cols) - 1, extra_zoom)

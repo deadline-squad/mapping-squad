@@ -16,11 +16,12 @@ Four comparisons per map, each on the building-dense windows of the map:
 
 1. Tiles vs the precise heightmap SquadCalc serves (/heightmaps/<map>/, tools/heightmaps), from the server's collision: buildings
    in the finest tiles (the edges of their picture, whatever the style) against the heightmap's objects (over 2 m above the bare
-   ground), in the windows with the most buildings, the heightmap placed with SquadCalc's grid convention (whole metres from corner0,
-   squadHeightmaps.js getHeight). The offset is the peak of their cross-correlation, refined to
-   sub-pixel by a parabola, in pixels of the finest zoom; windows without a clear peak are reported
-   but not counted. Pass: the median over at least two windows under 1 px on both axes. Its windows are 1 m samples, so on
-   the finest zooms (0.07 m per pixel) a correct map can read a pixel off: a gate only where no HD layer exists.
+   ground), in the windows with the most buildings, the heightmap read at the points of the prepared ground's 1 m grid the way
+   SquadCalc reads it (served_on_ground; squadHeightmaps.js getHeight), each pixel taking the nearest point. The offset is the
+   peak of their cross-correlation, refined to sub-pixel by a parabola, in pixels of the finest zoom; windows without a clear
+   peak are reported but not counted. Pass: the median over at least two windows under 1 px on both axes. Its windows are
+   1 m samples, so on the finest zooms (0.07 m per pixel) a correct map can read a pixel off: a gate only where no HD layer
+   exists.
 2. Height reference: the prepared ground against the served heightmap where they agree within 5 cm
    (open ground; the share is reported): the median difference must be under 1 cm, so contour labels read
    the same heights as SquadCalc's readouts.
@@ -41,6 +42,7 @@ from PIL import Image
 from scipy import ndimage
 
 import compare_crops
+import lattice
 
 UPSTREAM = "https://squadcalc.app/api/img/maps/{map}/basemap_hq/5_{x}_{y}.webp"
 WINDOW_TILES = 4
@@ -96,18 +98,21 @@ def peak_offset(a, b, search=SEARCH):
     return float(dx), float(dy), peak
 
 
-def on_ground_grid(hm, ground):
-    """The served heightmap on the 1 m grid of the prepared ground.
+def served_on_ground(folder, ground):
+    """The served heightmap of ``folder`` (m above its z_min_m) at the points of the prepared ground's 1 m grid.
 
-    A few maps are served at 0.5 m (Chora, Kokan): their grid is the ground's with every metre split,
-    (n - 1) * step + 1 samples a side, so every step-th sample lies on a ground sample.
+    The heightmap's samples are the landscape's vertices (tools/heightmaps lattice.py: 0.5 m to 1.2 m apart, off the
+    minimap's corner, turned on Skorpo); it is read at the ground's points the way SquadCalc reads it (lattice.on_grid).
     """
-    if hm.shape == ground.shape:
-        return hm
-    step = (hm.shape[0] - 1) // (ground.shape[0] - 1)
-    if step < 2 or any((g - 1) * step + 1 != h for g, h in zip(ground.shape, hm.shape)):
-        raise ValueError(f"heightmap {hm.shape} does not refine the ground grid {ground.shape}")
-    return hm[::step, ::step]
+    with open(os.path.join(folder, "meta.json")) as handle:
+        meta = json.load(handle)
+    with Image.open(os.path.join(folder, "heightmap.png")) as image:
+        heights = np.asarray(image).astype(np.float32) * np.float32(meta["z_step_m"])
+    b = meta["bounds_m"]
+    step = (b["max_x"] - b["min_x"]) / (ground.shape[1] - 1)
+    if lattice.minimap_shape(b, step) != ground.shape:
+        raise ValueError(f"heightmap bounds {b} do not span the ground grid {ground.shape}")
+    return lattice.on_grid(heights, lattice.from_meta(meta), b, step)
 
 
 def hd_window_centres(labels, bounds):
@@ -161,15 +166,13 @@ def check(slug):
     prep = os.path.join("/prep", slug)
     tiles = os.path.join("/tiles", slug)
     meta = json.load(open(os.path.join(tiles, "meta.json")))
-    hm_meta = json.load(open(os.path.join("/heightmaps", slug, "meta.json")))
-    hm = np.asarray(Image.open(os.path.join("/heightmaps", slug, "heightmap.png"))).astype(np.float64) * hm_meta["z_step_m"]
     b = meta["bounds_m"]
     size_x, size_y = b["max_x"] - b["min_x"], b["max_y"] - b["min_y"]
     z = meta["maxNativeZoom"]
     full = 256 * 2 ** z
     px_x, px_y = size_x / full, size_y / full
     ground = np.load(os.path.join(prep, "ground.npy"))
-    hm = on_ground_grid(hm, ground)
+    hm = served_on_ground(os.path.join("/heightmaps", slug), ground)
     # Objects of the served heightmap: where it rises 2 m above the bare ground
     bumps = (hm - ground > 2.0).astype(np.float32)
     report = {"map": slug, "zoom": z, "m_per_px": round(px_x, 4), "windows": []}

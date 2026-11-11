@@ -1,13 +1,12 @@
 """Build a SquadCalc heightmap by fusing the game's landscape with SquadHeight's surface.
 
-Sources, all in world space on the heightmap's grid (minimap bounds, `cell` metres per sample, 1 m unless
-maps.CELL_M says otherwise, row = world Y min->max, col = world X min->max, the same grid as SquadCalc's
-heightmap.png; samples sit on the bounds' min corner and every `cell` from it, the max corner included):
-    terrain T: landscape collision heightfields from the game paks (landscape.py), exact for
-               the installed game build;
-    surface S: SquadHeight's top-most trace of the Squad SDK collision (terrain + buildings,
-               rocks, bridges), 1.6 cm steps, always on a 1 m grid: on a finer heightmap each cell
-               takes the nearest SquadHeight sample's height above the terrain (upsample_surface).
+Sources, all in world space on the heightmap's grid: the nodes of the game's landscape vertices that cover the minimap bounds
+(lattice.py; row and col along the landscape's own axes, which are world Y and X on every map but Skorpo, turned by -2.006 deg):
+    terrain T: landscape collision heightfields from the game paks (landscape.py), exact for the installed game build: every
+               node is a vertex of the landscape, so the page's triangle read is the game's collision on bare ground;
+    surface S: SquadHeight's top-most trace of the Squad SDK collision (terrain + buildings, rocks, bridges), 1.6 cm steps,
+               on a 1 m grid from the minimap's corner: each node takes the height above the terrain of the nearest
+               SquadHeight sample on its own terrain (surface_on_lattice).
 
     objects O: top of the static meshes' collision from the game paks (objects.py), optional.
 
@@ -20,9 +19,9 @@ landscape: the highest of S and O.
 Output, in <out>/<map>/:
     heightmap.png  16-bit grayscale, height above the map's lowest point = value * z_step_m
     heightmap.webp the same levels as lossless WebP, see heightmap_webp.py
-    meta.json      z_step_m, z_min_m, grid, the agreement statistics of the two sources, and the
-                   WebP's checksum ("webp") with the build time ("generated": the page
-                   requests the files with ?v=<generated>, so a rebuild must change it)
+    meta.json      the grid (origin_m, resolution_m, yaw_deg, width, height: lattice.meta_entry), z_step_m, z_min_m, the
+                   minimap bounds, the agreement statistics of the two sources, and the WebP's checksum ("webp") with the
+                   build time ("generated": the page requests the files with ?v=<generated>, so a rebuild must change it)
 """
 
 import argparse
@@ -35,11 +34,11 @@ from PIL import Image
 
 import heightmap_webp
 import landscape
+import lattice
 
 Image.MAX_IMAGE_PIXELS = None
 OBJECT_MIN_M = 0.5
 NEAR_M = 1.0
-STRIP_CELLS = 2_000_000
 
 
 def load_squadheight(directory):
@@ -50,61 +49,68 @@ def load_squadheight(directory):
     return meta, png * per_unit + meta["z_offset_m"]
 
 
-def grid_shape(meta, cell):
-    """(rows, cols) of the grid of `cell` metres from the bounds' min corner to its max corner, both included."""
+def squadheight_lattice(meta, surface):
+    """The Lattice of SquadHeight's grid: a sample every resolution_m from the bounds' min corner, along world X and Y."""
     b = meta["bounds_m"]
-    return (round((b["max_y"] - b["min_y"]) / cell) + 1, round((b["max_x"] - b["min_x"]) / cell) + 1)
+    return lattice.Lattice(float(b["min_x"]), float(b["min_y"]), float(meta["resolution_m"]), 0.0, surface.shape[1], surface.shape[0])
 
 
-def upsample_surface(surface, terrain, meta, cell):
-    """SquadHeight's surface on the grid of `cell` metres, given the game's `terrain` on that grid.
-
-    Where the landscape covers the cell, each cell takes the height above the terrain (surface - terrain at the
-    SquadHeight sample) of the nearest SquadHeight sample, on top of its own terrain: a building keeps its height
-    above the ground, and the slope between two samples does not turn into a bump (nearest-sample absolute heights
-    would rise by up to the slope times half a SquadHeight cell). Cells without landscape (or whose sample has
-    none) read the SquadHeight grid the way the page reads a 1 m heightmap, along the game's triangles
-    (landscape.triangle_surface): there SquadHeight is the only ground, and a mountain side must not step.
-    A cell on a SquadHeight sample keeps it exactly; one halfway between two takes the one with the larger
-    coordinate in the first case. `cell` must divide SquadHeight's resolution.
-    """
-    ratio = round(meta["resolution_m"] / cell)
-    if abs(ratio * cell - meta["resolution_m"]) > 1e-9:
-        raise ValueError(f"cell {cell} m does not divide SquadHeight's {meta['resolution_m']} m")
-    if ratio == 1:
-        return surface
-    nearest = lambda count, size: np.minimum((np.arange(count) + ratio // 2) // ratio, size - 1)
-    rows, cols = np.ix_(nearest(terrain.shape[0], surface.shape[0]), nearest(terrain.shape[1], surface.shape[1]))
-    above = (surface - terrain[::ratio, ::ratio])[rows, cols]
-    fused = np.where(np.isnan(terrain) | np.isnan(above), np.nan, terrain + above)
-    cols_at = np.arange(terrain.shape[1]) / ratio
-    rows_per_strip = max(1, STRIP_CELLS // terrain.shape[1])
-    for first in range(0, terrain.shape[0], rows_per_strip):
-        strip = fused[first:first + rows_per_strip]
-        gx, gy = np.meshgrid(cols_at, np.arange(first, first + strip.shape[0]) / ratio)
-        strip[:] = np.where(np.isnan(strip), landscape.triangle_surface(surface, gx, gy), strip)
-    return fused
+def map_lattice(actors, bounds):
+    """The heightmap's grid of a map: the lattice of its landscape actors over the minimap ``bounds``."""
+    return lattice.covering(*lattice.landscape_lattice(actors), bounds)
 
 
-def game_terrain(level_dirs, meta, shape, cell=None):
-    """Terrain in metres on the grid of `cell` metres (SquadHeight's by default), NaN where no landscape covers a cell.
+def landscape_actors(level_dirs):
+    """The landscape actors (landscape.assemble values) of a map's landscape levels, in the order of the levels."""
+    return [actor for level in level_dirs for actor in landscape.assemble(level, transpose=False).values()]
 
-    Sampled in strips of rows: a 0.5 m grid of a 4 km map holds 66 million cells.
-    """
-    b = meta["bounds_m"]
-    step = cell or meta["resolution_m"]
-    xs = (b["min_x"] + np.arange(shape[1]) * step) * 100
-    ys = (b["min_y"] + np.arange(shape[0]) * step) * 100
-    terrain = np.full(shape, np.nan)
-    actors = [actor for level in level_dirs for actor in landscape.assemble(level, transpose=False).values()]
-    rows_per_strip = max(1, STRIP_CELLS // shape[1])
-    for first in range(0, shape[0], rows_per_strip):
-        gx, gy = np.meshgrid(xs, ys[first:first + rows_per_strip])
-        strip = terrain[first:first + rows_per_strip]
-        for actor in actors:
-            z = landscape.sample_world(actor, gx, gy) / 100
-            strip[:] = np.where(np.isnan(strip), z, strip)
+
+def landscape_at(actors, xs, ys):
+    """The game's landscape collision (m) at world points (m), NaN where no landscape covers them; the first actor
+    covering a point wins. Read with the game's triangles (landscape.triangle_surface), exact at the vertices."""
+    z = np.full(xs.shape, np.nan)
+    for actor in actors:
+        z = np.where(np.isnan(z), landscape.sample_world(actor, xs * 100, ys * 100, "triangle") / 100, z)
+    return z
+
+
+def game_terrain(actors, grid):
+    """Terrain in metres (float32) at the nodes of the Lattice ``grid``, NaN where no landscape covers a node; on the map's
+    own lattice every node is a landscape vertex. Sampled in strips of rows: a 4 km map at 0.5 m holds 66 million nodes, and
+    float32 (0.1 mm at 1 km) keeps a map's arrays in a few GB."""
+    terrain = np.empty((grid.height, grid.width), np.float32)
+    for first, count in lattice.strips(grid):
+        xs, ys = lattice.node_rows(grid, first, count)
+        terrain[first:first + count] = landscape_at(actors, xs, ys)
     return terrain
+
+
+def surface_on_lattice(surface, sh_meta, actors, grid, terrain):
+    """SquadHeight's surface at the nodes of ``grid``, given the game's ``terrain`` at them.
+
+    Where the landscape covers the node and the nearest SquadHeight sample, the node takes that sample's height above the
+    game's terrain at the sample, on top of its own terrain: a building keeps its height above the ground, and the slope
+    between a node and the sample does not turn into a bump (nearest-sample absolute heights would rise by up to the slope
+    times half a SquadHeight cell). Nodes without landscape (or whose sample has none) read the SquadHeight grid the way
+    the page reads a heightmap, along the game's triangles: there SquadHeight is the only ground, and a mountain side must
+    not step. A node on a sample keeps it exactly; one halfway between two takes the one with the larger coordinate.
+    Beyond the minimap (more than half a SquadHeight cell outside its grid: the grid's last nodes, and on Skorpo the corners
+    of the turned lattice) SquadHeight has nothing: a node there is its own terrain, else the nearest edge of SquadHeight's grid.
+    """
+    sh = squadheight_lattice(sh_meta, surface)
+    out = np.empty((grid.height, grid.width), np.float32)
+    for first, count in lattice.strips(grid):
+        xs, ys = lattice.node_rows(grid, first, count)
+        cols, rows = lattice.to_grid(sh, xs, ys)
+        beyond = (cols < -0.5) | (cols > sh.width - 0.5) | (rows < -0.5) | (rows > sh.height - 0.5)
+        col = np.clip(np.floor(cols + 0.5).astype(np.int64), 0, sh.width - 1)
+        row = np.clip(np.floor(rows + 0.5).astype(np.int64), 0, sh.height - 1)
+        sx, sy = lattice.to_world(sh, col.astype(np.float64), row.astype(np.float64))
+        above = np.where(beyond, 0.0, surface[row, col] - landscape_at(actors, sx, sy))
+        own = terrain[first:first + count] + above
+        edge_x, edge_y = lattice.to_world(sh, np.clip(cols, 0, sh.width - 1), np.clip(rows, 0, sh.height - 1))
+        out[first:first + count] = np.where(np.isnan(own), lattice.read(surface, sh, edge_x, edge_y), own)
+    return out
 
 
 def above_terrain(terrain, surface):
@@ -156,7 +162,9 @@ def fuse(terrain, surface, objects=None, explained=None, below=None):
     return fused, stats
 
 
-def write(out_dir, name, fused, meta, stats, build, cell=None):
+def write(out_dir, name, fused, grid, meta, stats, build):
+    """Write heightmap.png, heightmap.webp (the same levels) and meta.json of ``fused`` [grid.height, grid.width]; ``meta`` is
+    SquadHeight's (its bounds are the minimap's, the area the page covers)."""
     os.makedirs(out_dir, exist_ok=True)
     z_min = float(np.nanmin(fused))
     z_max = float(np.nanmax(fused))
@@ -165,7 +173,7 @@ def write(out_dir, name, fused, meta, stats, build, cell=None):
     Image.fromarray(values).save(os.path.join(out_dir, "heightmap.png"), optimize=True)
     webp_path = os.path.join(out_dir, heightmap_webp.FILE)
     heightmap_webp.encode(values, webp_path)
-    json.dump({
+    entry = {
         "map": name,
         "format": heightmap_webp.FORMAT,
         "generated": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -174,11 +182,10 @@ def write(out_dir, name, fused, meta, stats, build, cell=None):
         "z_step_m": z_step,
         "z_min_m": round(z_min, 4),
         "z_max_m": round(z_max, 4),
-        "width": int(values.shape[1]),
-        "height": int(values.shape[0]),
-        "resolution_m": cell or meta["resolution_m"],
+        **lattice.meta_entry(grid),
         "bounds_m": meta["bounds_m"],
-        "orientation": "row = world Y min->max, col = world X min->max",
+        "orientation": "the landscape's vertices: node (col, row) at origin_m + col * resolution_m * (cos yaw, sin yaw) "
+                       "+ row * resolution_m * (-sin yaw, cos yaw), yaw = yaw_deg, world X east, Y south",
         "sources": {
             "terrain": f"Squad dedicated server build {build}, landscape collision",
             "objects": f"Squad dedicated server build {build}, static mesh collision"
@@ -190,7 +197,9 @@ def write(out_dir, name, fused, meta, stats, build, cell=None):
         },
         "object_min_m": OBJECT_MIN_M,
         "stats": stats,
-    }, open(os.path.join(out_dir, "meta.json"), "w"), indent=1)
+    }
+    with open(os.path.join(out_dir, "meta.json"), "w") as f:
+        json.dump(entry, f, indent=1)
 
 
 def main():
@@ -199,15 +208,15 @@ def main():
     parser.add_argument("squadheight_dir")
     parser.add_argument("out_dir")
     parser.add_argument("build")
-    parser.add_argument("--cell", type=float, help="heightmap cell size in metres (SquadHeight's resolution by default)")
     parser.add_argument("levels", nargs="+", help="directories written by SquadExtract for the map's landscape levels")
     args = parser.parse_args()
     meta, surface = load_squadheight(args.squadheight_dir)
-    cell = args.cell or meta["resolution_m"]
-    terrain = game_terrain(args.levels, meta, grid_shape(meta, cell), cell)
-    surface = upsample_surface(surface, terrain, meta, cell)
+    actors = landscape_actors(args.levels)
+    grid = map_lattice(actors, meta["bounds_m"])
+    terrain = game_terrain(actors, grid)
+    surface = surface_on_lattice(surface, meta, actors, grid, terrain)
     fused, stats = fuse(terrain, surface)
-    write(args.out_dir, args.name, fused, meta, stats, args.build, cell)
+    write(args.out_dir, args.name, fused, grid, meta, stats, args.build)
     print(args.name, json.dumps(stats))
 
 

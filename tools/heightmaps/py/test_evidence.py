@@ -1,6 +1,6 @@
 """Tests of evidence.py, the placements of the game that explain SquadHeight's objects: python -m unittest test_evidence
 
-The grids have a point every metre from (0, 0); a block of SquadHeight's surface stands 8 m above flat ground at 10 m on the
+The grids have a node every metre from (0, 0) along world X and Y; a block of SquadHeight's surface stands 8 m above flat ground at 10 m on the
 points 10..14 east and south.
 """
 
@@ -14,8 +14,9 @@ import unittest
 import numpy as np
 
 import evidence
+import lattice
 
-BOUNDS = {"min_x": 0.0, "min_y": 0.0, "max_x": 39.0, "max_y": 39.0}
+GRID = lattice.Lattice(0.0, 0.0, 1.0, 0.0, 40, 40)
 IDENTITY = {"r": {"Pitch": 0.0, "Yaw": 0.0, "Roll": 0.0}, "s": {"X": 1.0, "Y": 1.0, "Z": 1.0}}
 
 
@@ -30,8 +31,8 @@ class Explained(unittest.TestCase):
         self.surface[10:15, 10:15] = 18.0
         self.wanted = self.surface > 10.0
 
-    def explained(self, *boxes, step=1.0, surfaces=()):
-        return evidence.explained(self.surface, self.wanted, np.array(boxes, np.float64).reshape(-1, 6), BOUNDS, step, surfaces)
+    def explained(self, *boxes, grid=GRID, surfaces=()):
+        return evidence.explained(self.surface, self.wanted, np.array(boxes, np.float64).reshape(-1, 6), grid, surfaces)
 
     @staticmethod
     def sheet(height, x0=-71000.0, y0=-71000.0, x1=71000.0, y1=71000.0, slope=0.0):
@@ -85,10 +86,10 @@ class Explained(unittest.TestCase):
 
     def test_under_an_unexplained_block_the_vast_meshes_below_it_are_found(self):
         # Al Basrah: a block of the SDK's map standing in the river, the ocean plane 6 m under its top, a sky sphere far above
-        below = evidence.surface_below(self.surface, self.wanted, [self.sheet(12.0), self.sheet(11.0), self.sheet(5000.0)], BOUNDS, 1.0)
+        below = evidence.surface_below(self.surface, self.wanted, [self.sheet(12.0), self.sheet(11.0), self.sheet(5000.0)], GRID)
         np.testing.assert_allclose(below[10:15, 10:15], 12.0, atol=1e-9)
         self.assertTrue(np.isneginf(below[~self.wanted]).all())
-        self.assertTrue(np.isneginf(evidence.surface_below(self.surface, self.wanted, [self.sheet(18.5)], BOUNDS, 1.0)).all())
+        self.assertTrue(np.isneginf(evidence.surface_below(self.surface, self.wanted, [self.sheet(18.5)], GRID)).all())
 
     def test_boxes_and_meshes_add_up(self):
         self.surface[30:35, 0:40] = 12.0
@@ -99,10 +100,23 @@ class Explained(unittest.TestCase):
         explained = self.explained((0, 0, 0, 39, 39, 30))
         np.testing.assert_array_equal(explained, self.wanted)
 
-    def test_a_finer_grid_is_addressed_by_its_step(self):
+    def test_a_finer_grid_is_addressed_by_its_resolution(self):
         # The same array read as a 0.5 m grid: the block stands at 5..7 m
-        self.assertTrue(self.explained((5, 5, 10, 7, 7, 18), step=0.5).all(where=self.wanted))
-        self.assertFalse(self.explained((12, 12, 10, 16, 16, 18), step=0.5).any())
+        fine = GRID._replace(resolution=0.5)
+        self.assertTrue(self.explained((5, 5, 10, 7, 7, 18), grid=fine).all(where=self.wanted))
+        self.assertFalse(self.explained((12, 12, 10, 16, 16, 18), grid=fine).any())
+
+    def test_a_turned_grid_is_explained_where_its_nodes_lie_in_the_world(self):
+        # Skorpo: the nodes of a lattice turned by 30 degrees about (-5, 3); a box explains those inside it (MARGIN_M around)
+        turned = lattice.Lattice(-5.0, 3.0, 1.0, 30.0, 40, 40)
+        self.wanted[:] = True
+        self.surface[:] = 18.0
+        x, y = lattice.node_rows(turned, 0, 40)
+        inside = (x >= 9 - evidence.MARGIN_M) & (x <= 15 + evidence.MARGIN_M) & (y >= 9 - evidence.MARGIN_M) & (y <= 15 + evidence.MARGIN_M)
+        np.testing.assert_array_equal(self.explained((9, 9, 10, 15, 15, 18), grid=turned), inside)
+        tris = self.sheet(18.0, 9.0, 9.0, 15.0, 15.0)
+        under = evidence.explained(self.surface, self.wanted, np.zeros((0, 6)), turned, [tris])
+        np.testing.assert_array_equal(under, (x >= 9) & (x <= 15) & (y >= 9) & (y <= 15))
 
     def test_no_boxes_explain_nothing(self):
         self.assertFalse(self.explained().any())

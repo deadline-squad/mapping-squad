@@ -254,13 +254,17 @@ The SquadCalc page (`src/js/volumeWorker.js`, setting *Object volumes in the lin
 served heightmaps directory, announced by a `volume` entry in the map's `meta.json`:
 
 ```sh
-# landscape-only heights on the served heightmap's grid (terrain.bin, TER1), then both files and the meta.json entry
+# landscape-only heights on the served heightmap's grid (terrain.bin, TER2), then both files and the meta.json entry
 python py/terrain_raster.py <slug> <served meta.json without the volume entry> <slug>/terrain.bin   # in the py image, as build_map.sh
 cp -a ~/apps/squadcalc/dist/heightmaps/<slug>/meta.json ~/apps/squadcalc/dist/heightmaps/<slug>/meta.json.bak.<date>-volume
 python py/publish_volume.py <slug> <slug>/<slug>.vcol <slug>/terrain.bin ~/apps/squadcalc/dist/heightmaps
 ```
 
-The served `meta.json`, not the older one under `~/data/squad-heightmaps`, gives the grid (Kokan and Chora are 0.5 m there).
+The served `meta.json`, not the older one under `~/data/squad-heightmaps`, gives the grid: since the heightmaps of SquadCalc
+45.51.0 the landscape's own vertices (`origin_m`, `resolution_m`, `yaw_deg`, `tools/heightmaps` README "Grid"), which TER2's
+header carries (origin, spacing, yaw); `volume.vcol` and the regions depend only on `bounds_m`. A heightmap rebuilt on a new
+grid gets its `terrain.bin` rebuilt the same way. The page still reads the TER1 files of the earlier grid (origin = the
+bounds' corner, no yaw).
 All 25 maps were published this way on 2026-11-05 (the exact conservative builds): `volume.vcol` 0.1 to 48.6 MB and `terrain.bin` 0.4 to 13.0 MB
 per map, the table is in SquadCalc `engine/README.md`, "Files served for each map". The meta.json of each map was copied to
 `meta.json.bak.20261105-volumes2` first, the replaced lattice-built files were moved out of the served directory to

@@ -6,10 +6,11 @@ The truth is the landscape's triangle surface (landscape.triangle_surface) at ra
 map's landscape. Every candidate is a grid of that surface sampled on the heightmap's bounds, read back
 with an interpolation; "node" is how its heights were taken from the landscape and "read" how a page
 interpolates between them:
-    node bilinear, read bilinear  the heightmaps as built so far, read as SquadCalc did
+    node bilinear, read bilinear  the first heightmaps (a grid from the bounds' corner), read as SquadCalc did then
     node triangle, read triangle  the game surface on the 1 m grid, read along the game's diagonal
     ... and the same on a 0.5 m grid.
-Errors are in metres over terrain only (no objects), printed as max / p99 / RMS.
+Errors are in metres over terrain only (no objects), printed as max / p99 / RMS. The heightmaps are now built on the
+landscape's own vertices (lattice.py), where the triangle read is the game's surface; compare_native_vertices.py measures them.
 """
 
 import json

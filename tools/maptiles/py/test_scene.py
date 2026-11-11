@@ -13,12 +13,14 @@ import unittest
 from unittest import mock
 
 import numpy as np
+from PIL import Image
 from scipy import ndimage
 
 import check_alignment
 import crowns
 import features
 import landscape_paths
+import lattice
 import outline_accuracy
 import prep
 import render
@@ -1615,19 +1617,49 @@ class HdWindows(unittest.TestCase):
 
 
 class HeightmapGridTest(unittest.TestCase):
-    def test_a_half_metre_heightmap_is_sampled_on_the_ground_metres(self):
-        ground = np.arange(16, dtype=np.float64).reshape(4, 4)
-        fine = np.full((7, 7), -1.0)
-        fine[::2, ::2] = ground
-        self.assertTrue(np.array_equal(check_alignment.on_ground_grid(fine, ground), ground))
+    """The served heightmap lies on the landscape's vertices (tools/heightmaps lattice.py); the checks read it at the ground's points."""
 
-    def test_a_heightmap_on_the_ground_grid_is_kept(self):
-        ground = np.ones((5, 5))
-        self.assertIs(check_alignment.on_ground_grid(ground, ground), ground)
+    BOUNDS = {"min_x": 0.0, "max_x": 10.0, "min_y": 0.0, "max_y": 10.0}
 
-    def test_a_grid_that_does_not_refine_the_ground_is_refused(self):
+    def served(self, grid):
+        """A served folder of the plane z = 0.3 x + 0.2 y + 10 m on ``grid``, 1 cm steps, and the plane at the 1 m ground points."""
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder)
+        x, y = lattice.node_rows(grid, 0, grid.height)
+        levels = np.rint((0.3 * x + 0.2 * y + 10.0) / 0.01).astype(np.uint16)
+        Image.fromarray(levels).save(os.path.join(folder, "heightmap.png"))
+        with open(os.path.join(folder, "meta.json"), "w") as handle:
+            json.dump({"z_step_m": 0.01, "bounds_m": self.BOUNDS, **lattice.meta_entry(grid)}, handle)
+        gy, gx = np.mgrid[0:11, 0:11].astype(np.float64)
+        return folder, np.zeros((11, 11)), 0.3 * gx + 0.2 * gy + 10.0
+
+    def test_a_heightmap_on_the_landscapes_vertices_is_read_at_the_ground_points(self):
+        # Goose Bay: vertices 0.43 and 0.25 m off the corner; Chora: 0.5 m; Skorpo: 1.2 m and turned
+        for grid in (lattice.covering(-0.43, -0.25, 1.0, 0.0, self.BOUNDS), lattice.covering(0.0, 0.0, 0.5, 0.0, self.BOUNDS),
+                     lattice.covering(-3.3, 2.1, 1.2, -2.006195, self.BOUNDS)):
+            folder, ground, plane = self.served(grid)
+            np.testing.assert_allclose(check_alignment.served_on_ground(folder, ground), plane, atol=0.006, err_msg=str(grid))
+
+    def test_a_ground_grid_of_other_bounds_is_refused(self):
+        folder, _, _ = self.served(lattice.covering(0.0, 0.0, 1.0, 0.0, self.BOUNDS))
         with self.assertRaises(ValueError):
-            check_alignment.on_ground_grid(np.ones((8, 8)), np.ones((4, 4)))
+            check_alignment.served_on_ground(folder, np.zeros((12, 11)))
+
+
+class BareTerrainTest(unittest.TestCase):
+    def test_the_ground_is_the_games_collision_at_the_ground_points(self):
+        # A landscape of 0.75 m quads (Anvil) with twisted quads: the ground points fall inside quads, where the game's two
+        # triangles and bilinear interpolation differ
+        level = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, level)
+        heights = np.random.default_rng(4).uniform(-50.0, 50.0, (16, 16)) * 128
+        actor = (heights, 0, 0, ((-75.0, -75.0, 0.0), 0.0, (75.0, 75.0, 100.0)), 0.0)
+        bounds = {"min_x": 0.0, "max_x": 9.0, "min_y": 0.0, "max_y": 9.0}
+        with mock.patch.object(prep.landscape, "assemble", return_value={"Landscape": actor}):
+            ground = prep.bare_terrain([level], bounds, (10, 10))
+        gy, gx = np.mgrid[0:10, 0:10].astype(np.float64)
+        game = prep.landscape.sample_world(actor, gx * 100, gy * 100, "triangle") / 100
+        np.testing.assert_allclose(ground, game, atol=1e-4)
 
 
 class OutlineEvaluator(unittest.TestCase):

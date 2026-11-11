@@ -3,8 +3,8 @@
 Usage: prep.py <map> [--workers N]
 
 Reads (container paths, see maptiles.sh):
-    /heightmaps/<map>/meta.json      the served precise heightmap: bounds, grid and the z_min_m that
-                                     SquadCalc's height readouts are relative to (tools/heightmaps)
+    /heightmaps/<map>/meta.json      the served precise heightmap: bounds and the z_min_m that SquadCalc's
+                                     height readouts are relative to (tools/heightmaps)
     /squadheight/<Name>/             SquadHeight's surface (terrain outside the game landscape, and the
                                      SDK objects the game's static meshes miss, e.g. Blueprint buildings)
     /extract/landscapes/             landscape collision (SquadExtract extractall)
@@ -13,8 +13,8 @@ Reads (container paths, see maptiles.sh):
 
 Writes /prep/<map>/:
     meta.json        grid, z_min_m, sea level, object pyramid levels, classification reports
-    ground.npy       float32 [H, W] bare ground (game landscape, else SquadHeight) on the 1 m grid of the
-                     heightmap, in metres above z_min_m, i.e. the same scale as SquadCalc's readouts
+    ground.npy       float32 [H, W] bare ground (game landscape, else SquadHeight) on the 1 m minimap grid, in
+                     metres above z_min_m, i.e. the same scale as SquadCalc's readouts
     cover.npy        uint8 [H, W] landscape physical material (features.PHYSICAL_MATERIALS), 255 none
     obj_h<k>.npy     uint16 object height above ground (cm) on the 0.25 * 2**k m grid, the maximum
     obj_c<k>.npy     uint8 class (features.OBJECT_CLASSES) of the highest object in the cell
@@ -24,7 +24,9 @@ Writes /prep/<map>/:
     water.json       static water planes; the sea level is in meta.json
     labels.json      roof height labels of the larger buildings
 
-Grids: the 1 m grid is the heightmap's (point [r, c] at world X = min_x + c, Y = min_y + r metres);
+Grids: the 1 m grid is SquadHeight's, from the minimap's corner (point [r, c] at world X = min_x + c, Y = min_y + r metres;
+the served heightmap lies on the landscape's own vertices instead, tools/heightmaps lattice.py). Its ground is the game's
+landscape collision at those points, read on the game's triangles from the landscape's vertices: what SquadCalc reads there;
 level 0 of the object pyramid has 4 points per metre (point [r, c] at min + c / 4, min + r / 4); a
 level k cell aggregates the 2**k x 2**k level 0 points from [r * 2**k, c * 2**k].
 """
@@ -44,6 +46,7 @@ from scipy import ndimage
 import build_heightmap
 import features
 import landscape
+import lattice
 import objects
 from maps import MAPS
 
@@ -312,8 +315,9 @@ def building_labels(h, c, bounds, centre_m=0.375):
 def bare_terrain(level_dirs, bounds, shape, strip=512):
     """Game landscape height (m, float32) on the 1 m grid, NaN outside the landscape.
 
-    The same sampling as build_heightmap.game_terrain (the first landscape level covering a point
-    wins), in row strips so the largest maps fit in memory next to the other jobs on the host.
+    The game's collision at the points: the landscape's vertices read on its triangles (landscape.triangle_surface), the
+    first landscape level covering a point winning as in build_heightmap.landscape_at, in row strips so the largest maps
+    fit in memory next to the other jobs on the host.
     """
     actors = [actor for level in level_dirs for actor in landscape.assemble(level, transpose=False).values()]
     terrain = np.full(shape, np.nan, np.float32)
@@ -323,7 +327,7 @@ def bare_terrain(level_dirs, bounds, shape, strip=512):
         gx, gy = np.meshgrid(xs, ys)
         part = terrain[top:top + len(ys)]
         for actor in actors:
-            z = landscape.sample_world(actor, gx, gy) / 100
+            z = landscape.sample_world(actor, gx, gy, "triangle") / 100
             part[:] = np.where(np.isnan(part), z, part)
     return terrain
 
@@ -343,8 +347,8 @@ def main():
     started = time.time()
 
     sh_meta, surface = build_heightmap.load_squadheight(os.path.join("/squadheight", squadheight_name))
-    if sh_meta["bounds_m"] != bounds or surface.shape != (hm_meta["height"], hm_meta["width"]):
-        raise SystemExit(f"{slug}: SquadHeight grid differs from the served heightmap")
+    if sh_meta["bounds_m"] != bounds or surface.shape != lattice.minimap_shape(bounds, 1.0):
+        raise SystemExit(f"{slug}: SquadHeight's grid is not the 1 m grid of the served heightmap's bounds")
     level_dirs = [os.path.join("/extract/landscapes", level) for level in levels]
     terrain = bare_terrain(level_dirs, bounds, surface.shape)
     ground = np.where(np.isnan(terrain), surface, terrain) - z_min
@@ -352,6 +356,7 @@ def main():
     np.save(ground_path, ground.astype(np.float32))
     log(slug, "ground", ground.shape, f"{float(np.nanmin(ground)):.2f}..{float(np.nanmax(ground)):.2f} m")
 
+    ground_shape = surface.shape
     np.save(os.path.join(out_dir, "cover.npy"), features.cover(level_dirs, bounds, surface.shape))
     log(slug, "cover")
 
@@ -383,7 +388,7 @@ def main():
     json.dump({
         "map": slug,
         "bounds_m": bounds,
-        "shape": [hm_meta["height"], hm_meta["width"]],
+        "shape": list(ground_shape),
         "object_shape": list(shape_q),
         "object_step_m": OBJECT_STEP_M,
         "pyramid_levels": PYRAMID_LEVELS,
