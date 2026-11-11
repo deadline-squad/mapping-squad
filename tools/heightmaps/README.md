@@ -11,22 +11,21 @@ agreement statistics.
 
 ## WebP form
 
-Next to each PNG is a `heightmap.webp` of the same grid: lossless WebP, an RGB image with the high byte
-of the 16-bit level in red and the low byte in green (`py/heightmap_webp.py`). The browser decodes it
-natively, and it is 33 to 53 % smaller than the PNG (326 MB for the 25 maps become 171 MB) because its
-step is coarsened to 1 cm, except where the PNG's is already coarser (Skorpo: its 1064 m range does not
-fit 16 bits at 1 cm) and Chora (re-quantising it makes the file bigger). `meta.json` announces it:
+Next to each PNG is a `heightmap.webp` of the same levels: lossless WebP, an RGB image with the high byte of the 16-bit
+level in red and the low byte in green (`py/heightmap_webp.py`). The browser decodes it natively, in about half the time
+of the PNG in JavaScript. It holds the PNG's step; heightmaps built before 2026-11-10 coarsened it to 1 cm (except on
+Skorpo and Chora), up to 0.5 cm off on bare ground.
+At the PNG's step the WebP is 68 to 85 % of the PNG (262.6 against 336.9 MB for the 25 maps built on 2026-11-10;
+the served ones of 2026-10-30, coarsened, take 183.2 MB). `meta.json` announces it:
 
 * `format: "webp-rg16"`, `generated` (UTC build time: the page requests the files with `?v=<generated>`, so a
   rebuild must change it) and `webp: {file, encoding, z_step_m, levels_sum}`; `levels_sum` is the sum of all
   levels modulo 2^32, which the page checks after decoding, so a browser that alters canvas pixels uses the
   PNG instead of showing wrong heights;
-* `z_step_m` stays the PNG's step: a SquadCalc bundle that only knows the PNG (an older one in a cached
-  page) keeps working. The PNG stays until the owner drops it.
+* `z_step_m` is the PNG's step, and the WebP's own `z_step_m` the same.
 
-`heightmaps.sh build` writes both files. For heightmaps built before, `heightmaps.sh webp` converts them from
-the served copy and checks each result (`py/convert_webp.py`: the WebP decoded again equals the levels it was
-made from; the same step must match the PNG in every pixel, a coarsened one must be within half of the new step),
+`heightmaps.sh build` writes both files. For heightmaps built before, `heightmaps.sh webp` converts them from the
+served copy and checks each result (`py/convert_webp.py`: the WebP decoded again equals the PNG in every pixel),
 `heightmaps.sh deploy-webp` copies the WebP files next to the PNGs (nothing changes for a page), and
 `heightmaps.sh switch-webp` then replaces each map's `meta.json`: the switch, last.
 In a browser, `tools/browser_check/heightmap_exact.mjs` compares the WebP and PNG paths of the site's worker.

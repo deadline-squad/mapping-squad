@@ -1,10 +1,15 @@
-"""Tests of the grid arithmetic of build_heightmap.py and maps.cell_m: python -m unittest test_build_heightmap"""
+"""Tests of the grid arithmetic and the output of build_heightmap.py and maps.cell_m: python -m unittest test_build_heightmap"""
 
+import json
+import os
+import tempfile
 import unittest
 
 import numpy as np
+from PIL import Image
 
 import build_heightmap
+import heightmap_webp
 import maps
 
 META = {"resolution_m": 1.0, "bounds_m": {"min_x": 10.0, "max_x": 14.0, "min_y": -3.0, "max_y": 1.0}}
@@ -133,6 +138,23 @@ class Fuse(unittest.TestCase):
         self.terrain[9, 9] = np.nan
         rising = build_heightmap.above_terrain(self.terrain, self.surface)
         self.assertEqual((bool(rising[0, 0]), bool(rising[0, 1]), bool(rising[9, 9]), int(rising.sum())), (False, True, False, 17))
+
+
+class Write(unittest.TestCase):
+    def test_png_and_webp_hold_the_same_levels_and_step(self):
+        # A range of 13 m: the PNG's step is 1 mm (its floor), the WebP keeps it (it was coarsened to 1 cm)
+        fused = np.add.outer(np.linspace(0.0, 13.0, 9), np.linspace(0.0, 0.0071, 9)).astype(np.float64)
+        with tempfile.TemporaryDirectory() as out:
+            build_heightmap.write(out, "Test", fused, {**META, "bounds_m": {"min_x": 0.0, "max_x": 8.0, "min_y": 0.0, "max_y": 8.0}}, {}, 1)
+            with open(os.path.join(out, "meta.json")) as f:
+                meta = json.load(f)
+            with Image.open(os.path.join(out, "heightmap.png")) as image:
+                png = np.asarray(image)
+            webp = heightmap_webp.decode(os.path.join(out, heightmap_webp.FILE))
+        np.testing.assert_array_equal(webp, png)
+        self.assertEqual(meta["webp"]["z_step_m"], meta["z_step_m"])
+        self.assertEqual(meta["webp"]["levels_sum"], heightmap_webp.levels_sum(png))
+        self.assertLess(np.abs(meta["z_min_m"] + png * meta["z_step_m"] - fused).max(), meta["z_step_m"] / 2 + 1e-4)
 
 
 class CellSize(unittest.TestCase):
