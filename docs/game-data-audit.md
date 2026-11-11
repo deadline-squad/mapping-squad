@@ -27,7 +27,7 @@ Nothing was measured in a running game and no game server was contacted; the ups
 
 | Section | Checked | Not checked, and why | Evidence |
 |---|---|---|---|
-| 1. `maps.js`, 25 maps | 125 / 175 fields: `game` corners 25, image corners 25, landscape origin 25, size 25, scale 25 | `heightmap.BWlevels` (25) and `heightmapPNG.scale` (25) describe upstream's 8-bit heightmap image (the fallback when the precise heightmap cannot be loaded), not the game; checking them needs that image compared with the game's heights for each map (done for Skorpo only, `tools/heightmaps/py/compare_squadcalc.py`) | tool: `game_audit.sh check` |
+| 1. `maps.js`, 25 maps | 125 / 125 fields: `game` corners 25, image corners 25, landscape origin 25, size 25, scale 25 | - (`heightmap.BWlevels` and `heightmapPNG.scale`, which described upstream's 8-bit heightmap image, are gone with that image in SquadCalc 45.51.0, section 1.2) | tool: `game_audit.sh check` |
 | 2. `weapons.js`, weapons aimed by elevation | 10 / 10 hand-kept weapons (Mortar, UB-32, HellCannon, Tech.Mortar, Tech.UB-32, BM-21Grad, M1064M121, Mk19, BTR4-AGS, AGS-17), 135 / 135 inputs: 90 flight and blast rows, 10 elevation ranges, 11 minimum distances, 10 maximum ranges, 10 launch points, 3 scale offsets, 1 hold model | 10 Workshop mod weapons (MO120RTF1, type_63, PZL07, M109, M777, T62.DUMP.TRUCK, HIMARS, TOS-1A, Ural-HellCannon, MTLB_FAB500): not in the game build. The 125 `DF_` entries generated from Squad Ballistics: out of scope, the existing check was rerun on them (section 2.6) | tool: the 90 flight and blast rows and the AGS-17's limits (`provenance.py`), 8 elevation ranges (`mounts.py`), 9 minimum distances and 9 maximum ranges of those 8 weapons (`calculator.mjs`, `check_calculator.py`), 4 launch points (`provenance.py` from Squad Ballistics' snapshot). One-off: 3 launch points (Mortar, UB-32, HellCannon). No game value to compare: the Mk19 entry (O2), the launch height and barrel offset of the BTR4-AGS (O1) and of the AGS-17 (O4), the scale offsets |
 | 3. Layers of the Deadline pool | 64 / 64 exist in the API; 64 / 64 compared in depth (asked: at least 10) | - | tool: `game_audit.sh api` |
 | 4. Constants | 6 / 10 fully, 1 partly: FOB construction and exclusion radius, the two marker circles, protection zones, structure-damage tables; gravity for the layers only | soldier height 1.8 m and health 100 (native C++ defaults, not in the paks); the 300 m circle of the UAV marker (no such radius in the UAV Blueprints read); the grid's 300 m (native, earlier audit, not read again); the engine config's gravity (not readable with the extractor, section 4) | tool, except the gravity keys of the layers and the UAV Blueprints (one-off) |
@@ -136,44 +136,46 @@ vertex of the components in metres (the actor's location plus the offset of its 
 with the actor), size = vertices, scale = metres per vertex and per height unit. Fallujah is the rectangle its six
 streaming proxies cover.
 
-No calculation of the calculator reads these fields: heights come from `/heightmaps/<map>/` (built from the same
-landscapes by `tools/heightmaps`, bounds = the image corners), and `origin` / `size` / `scale` only feed the helper
-`npm run mapinfo`, which takes `origin` as the place of the heightmap's first pixel against the minimap corner. They
-were wrong on seven maps and are corrected (D5), with a test in the calculator that holds the game's table
-(`tests/maps.test.mjs`). `maps.js` keeps the origin in whole metres, so EQUAL means within 1 m.
+No calculation of the calculator reads these fields: heights come from `/heightmaps/<map>/`, built by `tools/heightmaps`
+on the vertices of the same landscapes (`meta.json` `origin_m`, `resolution_m`, `yaw_deg`) and covering the image corners.
+The fields describe the landscape that grid is built on. They were wrong on seven maps and are corrected (D5), with a test
+in the calculator that holds the game's table (`tests/maps.test.mjs`). Since SquadCalc 45.51.0 `maps.js` keeps the origin
+to the millimetre (it was rounded to whole metres, 0.57 m and 0.75 m off on Goose Bay), and EQUAL means within 0.5 mm
+(`check_calculator.py`, `ORIGIN_TOLERANCE`). The helper `npm run mapinfo`, which used them to cut upstream's 8-bit
+heightmap image, went with that image.
 
-| Map | maps.js `heightmap` origin / size / scale (45.40.0) | Game: first vertex (m) / size (vertices) / scale | Actor (level / name, first component in quads from the actor) | Verdict |
+| Map | maps.js `heightmap` origin / size / scale (45.51.0) | Game: first vertex (m) / size (vertices) / scale | Actor (level / name, first component in quads from the actor) | Verdict |
 |---|---|---|---|---|
-| AlBasrah | [-2040, -2040] / [4081, 4081] / [1, 1, 1] | [-2040.01, -2040.00] / [4081, 4081] / [1.0, 1.0, 1.0] | `L_070_Landscape_AlBasrah_01` / `Landscape_0`, [0, 0] | EQUAL |
-| Anvil | [-2040, -2040] / [4081, 4081] / [0.75, 0.75, 0.45] | [-2040.00, -2040.00] / [4081, 4081] / [0.75, 0.75, 0.45] | `Anvil_GEO` / `Landscape_1`, [0, 0] | EQUAL |
-| BlackCoast | [-2040, -2142] / [4065, 4065] / [1.003937, 1.003937, 0.8] | [-2040.01, -2142.50] / [4065, 4065] / [1.0039, 1.0039, 0.8] | `Black_Coast_Geo` / `Landscape_1`, [0, 0] | EQUAL |
-| Chora | [-2464, -1902] / [8129, 4827] / [0.5, 0.5, 4] | [-2464.00, -1902.00] / [8129, 4827] / [0.5, 0.5, 4.0] | `Chora` / `Landscape_0`, [0, 1524] | EQUAL since 45.38.0 (D5; was origin [-2464, -2664]) |
-| Fallujah | [-2040, -2040] / [4081, 4081] / [1, 1, 1] | [-2040.00, -2040.00] / [4081, 4081] / [1.0, 1.0, 1.0] | `L_070_Landscape_Fallujah_00` / `LandscapeStreamingProxy`, [-1530, 0] and 5 more proxies | EQUAL |
-| FoolsRoad | [-1598, -1866] / [2806, 2806] / [1, 1, 3.2] | [-1598.10, -1866.30] / [2806, 2806] / [1.0, 1.0, 3.2] | `Fools_Road_Landscape_and_Geo` / `Landscape_0`, [1020, 765] | EQUAL |
-| GooseBay | [-2032, -2032] / [4065, 4065] / [1, 1, 0.4] | [-2032.57, -2032.75] / [4065, 4065] / [1.0, 1.0, 0.4] | `Goose_Bay` / `Landscape_1`, [0, 0] | EQUAL |
-| Gorodok | [-2032, -2032] / [4065, 4065] / [1, 1, 10] | [-2031.99, -2032.00] / [4065, 4065] / [1.0, 1.0, 10.0] | `L_070_Landscape_Gorodok` / `Landscape_1`, [0, 0] | EQUAL |
-| Harju | [-2016, -2016] / [4033, 4033] / [1, 1, 1] | [-2015.99, -2016.01] / [4033, 4033] / [1.0, 1.0, 1.0] | `Harju_Landscape` / `Landscape_1`, [0, 0] | EQUAL since 45.38.0 (D5; was size [4032, 4032]) |
-| Jensen | [-2040, -2040] / [4081, 4081] / [1, 1, 1] | [-2040.51, -2040.14] / [4081, 4081] / [1.0, 1.0, 1.0] | `Jensens_Range_Geo` / `Landscape_0`, [0, 0] | EQUAL |
-| Kamdesh | [-2016, -2016] / [4033, 4033] / [1, 1, 1.35] | [-2016.00, -2016.00] / [4033, 4033] / [1.0, 1.0, 1.35] | `Kamdesh_Highlands` / `Landscape_0`, [0, 0] | EQUAL |
-| Kohat | [-2016, -2016] / [4065, 4065] / [1, 1, 0.75] | [-2016.02, -2016.00] / [4065, 4065] / [1.0, 1.0, 0.75] | `Kohat_landscape` / `Landscape_0`, [0, 0] | EQUAL |
-| Kokan | [-1333, -1714] / [6097, 7367] / [0.5, 0.5, 1] | [-1333.00, -1714.00] / [6097, 7367] / [0.5, 0.5, 1.0] | `Kokan_Valley_Landscape` / `Landscape_0`, [-508, -1270] | EQUAL since 45.38.0 (D5; was origin [-1334, -1715]) |
-| Lashkar | [-2167, -2167] / [4336, 4336] / [1, 1, 1.5] | [-2167.00, -2167.00] / [4336, 4336] / [1.0, 1.0, 1.5] | `Lashkar_GEO` / `Landscape_0`, [0, 0] | EQUAL |
-| Logar | [-1386, -1260] / [2773, 1891] / [1, 1, 0.5] | [-1386.04, -1260.06] / [2773, 1891] / [0.9999, 0.9999, 0.4999] | `Logar_Valley_landscape` / `Landscape3`, [630, 756] | EQUAL |
-| Manicouagan | [-2032, -2032] / [4065, 4065] / [1, 1, 3] | [-2032.22, -2032.10] / [4065, 4065] / [1.0, 1.0, 3.0] | `Manicouagan_geo` / `Landscape_0`, [0, 0] | EQUAL |
-| Mestia | [-1545, -1162] / [3061, 2551] / [1, 1, 1.2] | [-1545.00, -1161.95] / [3061, 2551] / [1.0, 1.0, 1.2] | `Mestia_Geo` / `Landscape_0`, [765, 765] | EQUAL since 45.38.0 (D5; was origin [-1545, -1260]) |
-| Mutaha | [-1785, -1785] / [4081, 4081] / [1, 1, 0.3] | [-1785.02, -1785.00] / [4081, 4081] / [1.0, 1.0, 0.3] | `L_070_Mutaha_Landscape` / `Landscape_1`, [2040, 2040] | EQUAL |
-| Narva | [-2032, -2032] / [4065, 4065] / [1, 1, 1] | [-2032.00, -2032.00] / [4065, 4065] / [1.0, 1.0, 1.0] | `L_070_Landscape_Narva` / `Landscape_1`, [0, 0] | EQUAL since 45.38.0 (D5; was origin [-2016, -2016], size [4033, 4033]) |
-| Pacific | [-2016, -2016] / [4033, 4033] / [1, 1, 0.28] | [-2016.00, -2016.00] / [4033, 4033] / [1.0, 1.0, 0.28] | `PacificProvingGrounds_Geo` / `Landscape_0`, [0, 0] | EQUAL |
-| Sanxian | [-2040, -2040] / [4081, 4081] / [1, 1, 1] | [-2040.00, -2040.00] / [4081, 4081] / [1.0, 1.0, 1.0] | `L_070_Landscape_Sanxian_01` / `Landscape_0`, [0, 0] | EQUAL |
-| Skorpo | [-4138, -2142] / [7113, 5081] / [1.2, 1.2, 3.5] | [-4138.02, -2141.58] / [7113, 5081] / [1.2, 1.2, 3.5] | `Skorpo_Baselayer` / `Uskedal`, [508, 1524], yaw -2.006 deg | EQUAL since 45.44.0 (O9; was origin [-4811, -3947]) |
-| Sumari | [-682, -372] / [1427, 1055] / [1, 1, 0.75] | [-682.01, -371.99] / [1427, 1055] / [1.0, 1.0, 0.75] | `Sumari_master` / `Landscape_0`, [310, 620] | EQUAL since 45.38.0 (D5; was origin [-683, -373]) |
-| Tallil | [-2286, -2286] / [4573, 4573] / [1, 1, 1.25] | [-2285.91, -2285.77] / [4573, 4573] / [1.0, 1.0, 1.25] | `Tallil_Outskirts` / `Landscape_1`, [-254, -254] | EQUAL since 45.38.0 (D5; was origin [-2287, -2287]) |
-| Yehorivka | [-3302, -3302] / [6351, 6351] / [1, 1, 4] | [-3301.97, -3302.00] / [6351, 6351] / [1.0, 1.0, 4.0] | `L_070_Landscape_Yehorivka` / `Landscape_0`, [762, 762] | EQUAL |
+| AlBasrah | [-2040.01, -2040] / [4081, 4081] / [1, 1, 1] | [-2040.010, -2040.000] / [4081, 4081] / [1.0, 1.0, 1.0] | `L_070_Landscape_AlBasrah_01` / `Landscape_0`, [0, 0] | EQUAL |
+| Anvil | [-2040, -2040] / [4081, 4081] / [0.75, 0.75, 0.45] | [-2040.000, -2040.000] / [4081, 4081] / [0.75, 0.75, 0.45] | `Anvil_GEO` / `Landscape_1`, [0, 0] | EQUAL |
+| BlackCoast | [-2040.006, -2142.504] / [4065, 4065] / [1.003937, 1.003937, 0.8] | [-2040.006, -2142.504] / [4065, 4065] / [1.0039, 1.0039, 0.8] | `Black_Coast_Geo` / `Landscape_1`, [0, 0] | EQUAL |
+| Chora | [-2464, -1902] / [8129, 4827] / [0.5, 0.5, 4] | [-2464.000, -1902.000] / [8129, 4827] / [0.5, 0.5, 4.0] | `Chora` / `Landscape_0`, [0, 1524] | EQUAL since 45.38.0 (D5; was origin [-2464, -2664]) |
+| Fallujah | [-2040, -2040] / [4081, 4081] / [1, 1, 1] | [-2040.000, -2040.000] / [4081, 4081] / [1.0, 1.0, 1.0] | `L_070_Landscape_Fallujah_00` / `LandscapeStreamingProxy`, [-1530, 0] and 5 more proxies | EQUAL |
+| FoolsRoad | [-1598.095, -1866.3] / [2806, 2806] / [1, 1, 3.2] | [-1598.095, -1866.300] / [2806, 2806] / [1.0, 1.0, 3.2] | `Fools_Road_Landscape_and_Geo` / `Landscape_0`, [1020, 765] | EQUAL |
+| GooseBay | [-2032.569, -2032.748] / [4065, 4065] / [1, 1, 0.4] | [-2032.569, -2032.748] / [4065, 4065] / [1.0, 1.0, 0.4] | `Goose_Bay` / `Landscape_1`, [0, 0] | EQUAL |
+| Gorodok | [-2031.992, -2032] / [4065, 4065] / [1, 1, 10] | [-2031.992, -2032.000] / [4065, 4065] / [1.0, 1.0, 10.0] | `L_070_Landscape_Gorodok` / `Landscape_1`, [0, 0] | EQUAL |
+| Harju | [-2015.994, -2016.008] / [4033, 4033] / [1, 1, 1] | [-2015.994, -2016.008] / [4033, 4033] / [1.0, 1.0, 1.0] | `Harju_Landscape` / `Landscape_1`, [0, 0] | EQUAL since 45.38.0 (D5; was size [4032, 4032]) |
+| Jensen | [-2040.514, -2040.141] / [4081, 4081] / [1, 1, 1] | [-2040.514, -2040.141] / [4081, 4081] / [1.0, 1.0, 1.0] | `Jensens_Range_Geo` / `Landscape_0`, [0, 0] | EQUAL |
+| Kamdesh | [-2016, -2016] / [4033, 4033] / [1, 1, 1.35] | [-2016.000, -2016.000] / [4033, 4033] / [1.0, 1.0, 1.35] | `Kamdesh_Highlands` / `Landscape_0`, [0, 0] | EQUAL |
+| Kohat | [-2016.023, -2016] / [4065, 4065] / [1, 1, 0.75] | [-2016.023, -2016.000] / [4065, 4065] / [1.0, 1.0, 0.75] | `Kohat_landscape` / `Landscape_0`, [0, 0] | EQUAL |
+| Kokan | [-1332.996, -1714] / [6097, 7367] / [0.5, 0.5, 1] | [-1332.996, -1714.000] / [6097, 7367] / [0.5, 0.5, 1.0] | `Kokan_Valley_Landscape` / `Landscape_0`, [-508, -1270] | EQUAL since 45.38.0 (D5; was origin [-1334, -1715]) |
+| Lashkar | [-2167, -2167] / [4336, 4336] / [1, 1, 1.5] | [-2167.000, -2167.000] / [4336, 4336] / [1.0, 1.0, 1.5] | `Lashkar_GEO` / `Landscape_0`, [0, 0] | EQUAL |
+| Logar | [-1386.043, -1260.056] / [2773, 1891] / [1, 1, 0.5] | [-1386.043, -1260.056] / [2773, 1891] / [0.9999, 0.9999, 0.4999] | `Logar_Valley_landscape` / `Landscape3`, [630, 756] | EQUAL |
+| Manicouagan | [-2032.216, -2032.099] / [4065, 4065] / [1, 1, 3] | [-2032.216, -2032.099] / [4065, 4065] / [1.0, 1.0, 3.0] | `Manicouagan_geo` / `Landscape_0`, [0, 0] | EQUAL |
+| Mestia | [-1545, -1161.955] / [3061, 2551] / [1, 1, 1.2] | [-1545.000, -1161.955] / [3061, 2551] / [1.0, 1.0, 1.2] | `Mestia_Geo` / `Landscape_0`, [765, 765] | EQUAL since 45.38.0 (D5; was origin [-1545, -1260]) |
+| Mutaha | [-1785.02, -1785] / [4081, 4081] / [1, 1, 0.3] | [-1785.020, -1785.000] / [4081, 4081] / [1.0, 1.0, 0.3] | `L_070_Mutaha_Landscape` / `Landscape_1`, [2040, 2040] | EQUAL |
+| Narva | [-2032, -2032] / [4065, 4065] / [1, 1, 1] | [-2032.000, -2032.000] / [4065, 4065] / [1.0, 1.0, 1.0] | `L_070_Landscape_Narva` / `Landscape_1`, [0, 0] | EQUAL since 45.38.0 (D5; was origin [-2016, -2016], size [4033, 4033]) |
+| Pacific | [-2016, -2016] / [4033, 4033] / [1, 1, 0.28] | [-2016.000, -2016.000] / [4033, 4033] / [1.0, 1.0, 0.28] | `PacificProvingGrounds_Geo` / `Landscape_0`, [0, 0] | EQUAL |
+| Sanxian | [-2040, -2040] / [4081, 4081] / [1, 1, 1] | [-2040.000, -2040.000] / [4081, 4081] / [1.0, 1.0, 1.0] | `L_070_Landscape_Sanxian_01` / `Landscape_0`, [0, 0] | EQUAL |
+| Skorpo | [-4138.024, -2141.579] / [7113, 5081] / [1.2, 1.2, 3.5] | [-4138.024, -2141.579] / [7113, 5081] / [1.2, 1.2, 3.5] | `Skorpo_Baselayer` / `Uskedal`, [508, 1524], yaw -2.006 deg | EQUAL since 45.44.0 (O9; was origin [-4811, -3947]) |
+| Sumari | [-682.008, -371.994] / [1427, 1055] / [1, 1, 0.75] | [-682.008, -371.994] / [1427, 1055] / [1.0, 1.0, 0.75] | `Sumari_master` / `Landscape_0`, [310, 620] | EQUAL since 45.38.0 (D5; was origin [-683, -373]) |
+| Tallil | [-2285.907, -2285.768] / [4573, 4573] / [1, 1, 1.25] | [-2285.907, -2285.768] / [4573, 4573] / [1.0, 1.0, 1.25] | `Tallil_Outskirts` / `Landscape_1`, [-254, -254] | EQUAL since 45.38.0 (D5; was origin [-2287, -2287]) |
+| Yehorivka | [-3301.97, -3302] / [6351, 6351] / [1, 1, 4] | [-3301.970, -3302.000] / [6351, 6351] / [1.0, 1.0, 4.0] | `L_070_Landscape_Yehorivka` / `Landscape_0`, [762, 762] | EQUAL |
 
 Skorpo (O9): its actor is the only one that is turned, and its components begin 508 x 1524 quads (610 m, 1829 m) from
 it. `maps.js` has the actor's location as `origin` and the extent of the components as `size`, so the two fields do not
 describe one rectangle. The audit called this row equal by taking the actor's location for a turned landscape; by the
-rule of the other 24 rows it is not. SquadCalc 45.44.0 takes the first vertex, as for the other maps. `heightmap.BWlevels` and `heightmapPNG.scale` were not checked (see Coverage).
+rule of the other 24 rows it is not. SquadCalc 45.44.0 takes the first vertex, as for the other maps.
 
 ## 2. Weapons (`src/data/weapons.js`)
 

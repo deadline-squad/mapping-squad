@@ -19,7 +19,7 @@ def weapon(name, limits, angle_type, min_distance, low_stop, high_stop, offset=0
     return {"name": name, "minElevation": limits, "angleOffset": offset, "angleType": angle_type, "shells": [shell]}
 
 
-def game_map(name, origin=(-2040.0, -2040.0), size=(4081, 4081), scale=(1.0, 1.0, 1.0), radius=400, corners=((-2000.0, -2000.0), (2000.0, 2000.0)), game=None):
+def game_map(name, origin=(-2040.01, -2040.0), size=(4081, 4081), scale=(1.0, 1.0, 1.0), radius=400, corners=((-2000.0, -2000.0), (2000.0, 2000.0)), game=None):
     low, high = (list(corner) for corner in corners)
     return {"name": name, "radiusExclusion": radius, "heightmap": {"origin": list(origin), "size": list(size), "scale": list(scale)},
             "minimap": {"corner0": low, "corner1": high, "game": game or {"min": low, "max": high}}}
@@ -80,8 +80,10 @@ class Ranges(unittest.TestCase):
 class Landscapes(unittest.TestCase):
     GAME = {"AlBasrah": {"origin_m": [-2040.01, -2040.0], "size_vertices": [4081, 4081], "scale_m": [1.0, 1.0, 1.0]}}
 
-    def test_an_origin_in_whole_metres_within_a_metre_passes(self):
+    def test_an_origin_to_the_millimetre_passes_and_one_a_centimetre_off_is_reported(self):
         self.assertEqual(check.landscape_differences([game_map("AlBasrah")], self.GAME), [])
+        (difference,) = check.landscape_differences([game_map("AlBasrah", origin=(-2040.0, -2040.0))], self.GAME)
+        self.assertIn("origin [-2040.0, -2040.0]", difference[2])
 
     def test_origin_size_and_scale_are_each_reported(self):
         (difference,) = check.landscape_differences([game_map("AlBasrah", origin=(-2040, -2802), size=(4080, 4081), scale=(1, 1, 1.2))], self.GAME)
