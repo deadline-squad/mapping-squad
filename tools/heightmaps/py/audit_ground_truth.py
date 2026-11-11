@@ -37,6 +37,8 @@ import sys
 import numpy as np
 from PIL import Image
 
+import lattice
+
 Image.MAX_IMAGE_PIXELS = None
 
 LINE = re.compile(r"^(\w+) ([\w:]+) (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)$")
@@ -83,26 +85,29 @@ def parse_points(lines, slug, squadheight_name):
 
 
 class HeightGrid:
-    """A served heightmap: levels * step + minimum on a grid from the bounds' min corner, row = world Y."""
+    """A served heightmap: levels * step + minimum on the nodes of a lattice.Lattice (meta.json origin_m, resolution_m, yaw_deg)."""
 
-    def __init__(self, heights, min_x, min_y, resolution):
+    def __init__(self, heights, grid):
         self.heights = heights
-        self.min_x = min_x
-        self.min_y = min_y
-        self.resolution = resolution
+        self.grid = grid
 
     @classmethod
     def load(cls, directory):
         """Read ``heightmap.png`` and ``meta.json`` from a map's directory."""
-        meta = json.load(open(os.path.join(directory, "meta.json")))
-        levels = np.asarray(Image.open(os.path.join(directory, "heightmap.png"))).astype(np.float64)
-        bounds = meta["bounds_m"]
-        return cls(levels * meta["z_step_m"] + meta["z_min_m"], bounds["min_x"], bounds["min_y"], meta["resolution_m"])
+        with open(os.path.join(directory, "meta.json")) as f:
+            meta = json.load(f)
+        with Image.open(os.path.join(directory, "heightmap.png")) as image:
+            levels = np.asarray(image).astype(np.float64)
+        return cls(levels * meta["z_step_m"] + meta["z_min_m"], lattice.from_meta(meta))
+
+    def corner(self, row, col):
+        """World metres (x, y) of node (row, col)."""
+        x, y = lattice.to_world(self.grid, np.array(float(col)), np.array(float(row)))
+        return float(x), float(y)
 
     def cell(self, x, y):
         """(row, column, row fraction, column fraction) of world metres, or None outside the grid."""
-        col = (x - self.min_x) / self.resolution
-        row = (y - self.min_y) / self.resolution
+        col, row = (float(v) for v in lattice.to_grid(self.grid, np.array(x), np.array(y)))
         rows, cols = self.heights.shape
         if not (0 <= col < cols - 1 and 0 <= row < rows - 1):
             return None
@@ -177,7 +182,7 @@ def audit(grid, points, actors=None, objects_dir=None, tolerance=0.15):
                 r, c = found[0], found[1]
                 for dr in (0, 1):
                     for dc in (0, 1):
-                        corner = at(grid.min_x + (c + dc) * grid.resolution, grid.min_y + (r + dr) * grid.resolution)
+                        corner = at(*grid.corner(r + dr, c + dc))
                         if grid.heights[r + dr, c + dc] - corner >= OBJECT_MIN_M:
                             row["grid_object"] = True
         rows.append(row)

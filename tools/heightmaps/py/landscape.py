@@ -124,8 +124,8 @@ def triangle_surface(grid, gx, gy):
 def sample_world(actor_grid, xs_cm, ys_cm, method="bilinear"):
     """World Z in cm at world points (arrays in cm), NaN outside the landscape.
 
-    `method` is "bilinear" (how the heightmaps were built so far) or "triangle" (the game's own
-    collision surface, see triangle_surface).
+    `method` is "bilinear" (how the heightmaps were built before their grid was the landscape's vertices) or "triangle"
+    (the game's own collision surface, see triangle_surface).
     """
     grid, x0, y0, (loc, yaw, scale), _ = actor_grid
     dx = xs_cm - loc[0]

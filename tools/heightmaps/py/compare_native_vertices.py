@@ -1,16 +1,19 @@
-"""Error of a heightmap grid against the game landscape's own vertices, for maps whose landscape is finer than 1 m.
+"""Error of built heightmaps against the game landscape's own vertices and its collision between them.
 
 Usage: compare_native_vertices.py <extract root> <map> <heightmaps dir> [<heightmaps dir> ...] [--points-out points.json]
 
-The truth is the raw height of every vertex of the map's landscape (landscape collision heightfield, placed with
-the actor's transform) inside the minimap bounds. Each candidate is read at the vertex's world position with the
-rule of SquadCalc's getHeight (the game's triangles, landscape.triangle_surface):
-    terrain grids   the pipeline's terrain on a grid of 1 m and of the map's maps.cell_m (build_heightmap.game_terrain);
-    heightmap dirs  built heightmaps (heightmap.webp, else heightmap.png, with meta.json): terrain and objects fused,
-                    so only the vertices where the finest given heightmap shows the landscape (within TERRAIN_TOLERANCE_M
-                    of the vertex: no building, rock or wall there) are counted, the same set for every directory.
-                    The finest heightmap sits on the vertices, so its own error there is its quantisation step.
-Errors in metres over the same vertices, printed as RMS / p99 / max. With --points-out, 2000 random vertices on terrain are added to a JSON file {"<map>": [[x, y, z], ...]} (world metres) for tools/browser_check/heightmap_native.mjs.
+The truth is the raw height of every vertex of the map's landscape (landscape collision heightfield, placed with the actor's
+transform) inside the minimap bounds, and between the vertices the game's collision (landscape.triangle_surface) at
+CANDIDATES random points of the bounds. Each heightmap directory (heightmap.webp, else heightmap.png, with meta.json) is read
+there with the rule of SquadCalc's getHeight (the game's triangles, lattice.read) on its own grid (lattice.from_meta:
+meta.json's origin_m, resolution_m and yaw_deg, or the bounds' min corner for a heightmap built before them). Terrain and
+objects are fused, so only the points where every given heightmap holds the bare landscape are counted (bare_mask: the four
+nodes of the quad around the point within half the heightmap's step of the terrain its build put there), the same points for
+every directory. A heightmap on the vertices has its quantisation step (half of it) as its only error there.
+Errors over the vertices and over the points between them, printed as RMS / p99 / max. With --points-out, POINTS of those
+vertices and POINTS of those points are added to a JSON file {"<map>": [[x, y, z], ...]} (world metres, z the game's
+collision) for tools/browser_check/heightmap_native.mjs, less the points between that lie in a quad with detail
+(heightmap_detail.py) of a heightmap: the page reads such a quad on its sub-grid, which holds the objects there.
 """
 
 import argparse
@@ -22,50 +25,54 @@ import numpy as np
 from PIL import Image
 
 import build_heightmap
-import compare_interpolation
+import heightmap_detail
 import heightmap_webp
 import landscape
+import lattice
 import maps
 
 CHUNK = 2_000_000
-TERRAIN_TOLERANCE_M = 0.02
+POINTS = 1000
+CANDIDATES = 200_000
 
 
-def vertices(level_dirs, bounds):
-    """World (x, y, z) in metres of every landscape vertex inside the bounds, as float64 arrays (first actor wins)."""
-    xs, ys, zs = [], [], []
+def vertex_chunks(level_dirs, bounds):
+    """World (x, y, z) in metres (float64 arrays) of the landscape vertices inside the bounds, in chunks of rows of about
+    CHUNK vertices. Every actor's own vertices: one that two streaming proxies share comes once for each."""
     for level in level_dirs:
         for grid, x0, y0, (loc, yaw, scale), _ in landscape.assemble(level, transpose=False).values():
             rows, cols = grid.shape
-            gy, gx = np.mgrid[0:rows, 0:cols]
-            lx, ly = (gx + x0) * scale[0], (gy + y0) * scale[1]
             c, s = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
-            x = (loc[0] + c * lx - s * ly) / 100
-            y = (loc[1] + s * lx + c * ly) / 100
-            keep = (~np.isnan(grid)) & (x >= bounds["min_x"]) & (x <= bounds["max_x"]) & (y >= bounds["min_y"]) & (y <= bounds["max_y"])
-            xs.append(x[keep])
-            ys.append(y[keep])
-            zs.append(((loc[2] + scale[2] * grid / 128) / 100)[keep])
-    return np.concatenate(xs), np.concatenate(ys), np.concatenate(zs)
+            per = max(1, CHUNK // cols)
+            for first in range(0, rows, per):
+                part = grid[first:first + per]
+                gy, gx = np.mgrid[first:first + len(part), 0:cols]
+                lx, ly = (gx + x0) * scale[0], (gy + y0) * scale[1]
+                x = (loc[0] + c * lx - s * ly) / 100
+                y = (loc[1] + s * lx + c * ly) / 100
+                keep = (~np.isnan(part)) & (x >= bounds["min_x"]) & (x <= bounds["max_x"]) & (y >= bounds["min_y"]) & (y <= bounds["max_y"])
+                yield x[keep], y[keep], ((loc[2] + scale[2] * part / 128) / 100)[keep]
 
 
-def read_chunked(grid, bounds, step, xs, ys):
-    """Heights of `grid` at world points with the triangle rule, in chunks."""
+def read_chunked(heights, grid, xs, ys):
+    """Heights of ``heights`` on ``grid`` at world points with the page's rule, in chunks."""
     out = np.empty(len(xs))
     for first in range(0, len(xs), CHUNK):
         part = slice(first, first + CHUNK)
-        out[part] = compare_interpolation.read(grid, bounds, step, xs[part], ys[part], "triangle")
+        out[part] = lattice.read(heights, grid, xs[part], ys[part])
     return out
 
 
 def load_heightmap(directory):
-    """(heights in metres [rows, cols], meta) of a built heightmap folder."""
-    meta = json.load(open(os.path.join(directory, "meta.json")))
-    if "webp" in meta and os.path.exists(os.path.join(directory, "heightmap.webp")):
-        levels, step = heightmap_webp.decode(os.path.join(directory, "heightmap.webp")), meta["webp"]["z_step_m"]
+    """(heights in metres [rows, cols], meta, step) of a built heightmap folder."""
+    with open(os.path.join(directory, "meta.json")) as f:
+        meta = json.load(f)
+    if "webp" in meta and os.path.exists(os.path.join(directory, heightmap_webp.FILE)):
+        levels, step = heightmap_webp.decode(os.path.join(directory, heightmap_webp.FILE)), meta["webp"]["z_step_m"]
     else:
-        levels, step = np.asarray(Image.open(os.path.join(directory, "heightmap.png"))), meta["z_step_m"]
-    return levels.astype(np.float64) * step + meta["z_min_m"], meta
+        with Image.open(os.path.join(directory, "heightmap.png")) as image:
+            levels, step = np.asarray(image), meta["z_step_m"]
+    return levels.astype(np.float64) * step + meta["z_min_m"], meta, step
 
 
 def summary(error):
@@ -73,42 +80,82 @@ def summary(error):
     return f"rms {np.sqrt((error ** 2).mean()) * 100:8.3f} cm  p99 {np.percentile(error, 99) * 100:8.3f} cm  max {error.max() * 100:9.2f} cm"
 
 
+def built_terrain(actors, meta, xs, ys):
+    """The terrain the build of a heightmap put at world points: the game's triangles on the landscape's vertices
+    (meta.json with origin_m), the landscape read bilinearly at the samples of a heightmap built before them."""
+    if "origin_m" in meta:
+        return build_heightmap.landscape_at(actors, xs, ys)
+    z = np.full(xs.shape, np.nan)
+    for actor in actors:
+        z = np.where(np.isnan(z), landscape.sample_world(actor, xs * 100, ys * 100, "bilinear") / 100, z)
+    return z
+
+
+def bare_mask(actors, built, xs, ys):
+    """Bool per world point: the quad around it holds the bare landscape in every heightmap of ``built`` (load_heightmap
+    results), its four nodes within half the heightmap's step of the terrain its build put there. In chunks."""
+    bare = np.ones(xs.shape, bool)
+    for heights, meta, step in built:
+        grid = lattice.from_meta(meta)
+        for first in range(0, len(xs), CHUNK):
+            part = slice(first, first + CHUNK)
+            cols, rows = lattice.to_grid(grid, xs[part], ys[part])
+            c0 = np.clip(np.floor(cols), 0, grid.width - 2).astype(np.int64)
+            r0 = np.clip(np.floor(rows), 0, grid.height - 2).astype(np.int64)
+            for dc, dr in ((0, 0), (1, 0), (0, 1), (1, 1)):
+                nx, ny = lattice.to_world(grid, (c0 + dc).astype(np.float64), (r0 + dr).astype(np.float64))
+                bare[part] &= np.abs(heights[r0 + dr, c0 + dc] - built_terrain(actors, meta, nx, ny)) <= step / 2 + 1e-4
+    return bare
+
+
 def main(extract_root, slug, heightmap_dirs, points_out=None):
-    levels = maps.MAPS[slug][1]
-    level_dirs = [os.path.join(extract_root, "landscapes", level) for level in levels]
+    level_dirs = [os.path.join(extract_root, "landscapes", level) for level in maps.MAPS[slug][1]]
     built = [load_heightmap(os.path.join(d, slug)) for d in heightmap_dirs]
     bounds = built[0][1]["bounds_m"]
-    xs, ys, zs = vertices(level_dirs, bounds)
-    print(f"{slug}: {len(xs)} landscape vertices inside the bounds")
+    actors = build_heightmap.landscape_actors(level_dirs)
+    rng = np.random.default_rng(3)
+    keys = np.random.default_rng(4)
 
-    candidates = {}
-    for cell in sorted({1.0, maps.cell_m(slug)}, reverse=True):
-        meta = {"bounds_m": bounds, "resolution_m": cell}
-        terrain = build_heightmap.game_terrain(level_dirs, meta, build_heightmap.grid_shape(meta, cell), cell)
-        candidates[f"terrain grid {cell} m"] = read_chunked(terrain, bounds, cell, xs, ys)
-        del terrain
-    reads = {}
-    for directory, (grid, meta) in zip(heightmap_dirs, built):
-        reads[directory] = read_chunked(grid, bounds, meta["resolution_m"], xs, ys)
-        candidates[f"heightmap {directory} ({meta['resolution_m']} m)"] = reads[directory]
+    # Per heightmap the errors (float32) at the vertices where every heightmap holds the bare landscape; for --points-out the
+    # POINTS of them with the smallest random keys
+    errors = [[] for _ in built]
+    total = 0
+    chosen = np.zeros((0, 4))
+    for xs, ys, zs in vertex_chunks(level_dirs, bounds):
+        total += len(xs)
+        bare = bare_mask(actors, built, xs, ys)
+        for k, (heights, meta, _) in enumerate(built):
+            errors[k].append((read_chunked(heights, lattice.from_meta(meta), xs[bare], ys[bare]) - zs[bare]).astype(np.float32))
+        candidates = np.concatenate([chosen, np.stack([keys.random(int(bare.sum())), xs[bare], ys[bare], zs[bare]], 1)])
+        chosen = candidates[np.argsort(candidates[:, 0], kind="stable")[:POINTS]]
+    errors = [np.concatenate(e) for e in errors]
+    print(f"{slug}: {total} landscape vertices inside the bounds")
 
-    finest = min(range(len(built)), key=lambda i: built[i][1]["resolution_m"])
-    on_terrain = np.abs(reads[heightmap_dirs[finest]] - zs) <= TERRAIN_TOLERANCE_M
-    for name, estimate in candidates.items():
-        error = estimate - zs
-        if name.startswith("heightmap"):
-            print(f"  {name:48s} {on_terrain.sum()} vertices on terrain: {summary(error[on_terrain])}", flush=True)
-        else:
-            print(f"  {name:48s} {int((~np.isnan(error)).sum())} vertices read: {summary(error)}", flush=True)
+    rx = rng.uniform(bounds["min_x"], bounds["max_x"], CANDIDATES)
+    ry = rng.uniform(bounds["min_y"], bounds["max_y"], CANDIDATES)
+    rz = build_heightmap.landscape_at(actors, rx, ry)
+    keep = ~np.isnan(rz) & bare_mask(actors, built, rx, ry)
+    rx, ry, rz = rx[keep], ry[keep], rz[keep]
+    for directory, (heights, meta, _), error in zip(heightmap_dirs, built, errors):
+        grid = lattice.from_meta(meta)
+        print(f"  {directory} ({meta['resolution_m']} m) {len(error)} vertices on terrain: {summary(error)}", flush=True)
+        between = lattice.read(heights, grid, rx, ry) - rz
+        print(f"  {directory} ({meta['resolution_m']} m) {len(rx)} points inside quads: {summary(between)}", flush=True)
 
     if points_out:
-        # Vertices the heightmap holds to its quantisation (half a step): the page must read them back to the same
-        step = built[finest][1].get("webp", {}).get("z_step_m", built[finest][1]["z_step_m"])
-        exact = np.abs(reads[heightmap_dirs[finest]] - zs) <= step / 2 + 1e-4
-        chosen = np.random.default_rng(3).choice(np.flatnonzero(exact), 2000, replace=False)
-        points = json.load(open(points_out)) if os.path.exists(points_out) else {}
-        points[slug] = [[round(float(xs[i]), 3), round(float(ys[i]), 3), round(float(zs[i]), 5)] for i in chosen]
-        json.dump(points, open(points_out, "w"))
+        between = rng.choice(len(rx), min(POINTS, len(rx)), replace=False)
+        for directory, (_, meta, _) in zip(heightmap_dirs, built):
+            detail = heightmap_detail.load(os.path.join(directory, slug), meta)
+            between = between[~heightmap_detail.in_quads(lattice.from_meta(meta), detail, rx[between], ry[between])]
+        px, py, pz = (np.concatenate([chosen[:, k], w[between]]) for k, w in zip((1, 2, 3), (rx, ry, rz)))
+        points = {}
+        if os.path.exists(points_out):
+            with open(points_out) as f:
+                points = json.load(f)
+        points[slug] = [[round(float(x), 4), round(float(y), 4), round(float(z), 5)] for x, y, z in zip(px, py, pz)]
+        with open(points_out, "w") as f:
+            json.dump(points, f)
+        print(f"  {len(chosen)} vertices and {len(between)} points inside quads written to {points_out}")
 
 
 if __name__ == "__main__":

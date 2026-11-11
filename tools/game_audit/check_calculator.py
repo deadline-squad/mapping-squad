@@ -25,8 +25,10 @@ import sys
 LIMIT_TOLERANCE = 0.005
 # Metres: minimum distances are kept to 0.1 m
 MIN_DISTANCE_TOLERANCE = 0.05
-# Metres: maps.js keeps the landscape origin and the image corners in whole metres
+# Metres: maps.js keeps the image corners in whole metres
 WHOLE_METRE = 1.0
+# Metres: and the landscape's first vertex to the millimetre (the heightmap's samples are the landscape's vertices)
+ORIGIN_TOLERANCE = 0.0005
 SCALE_TOLERANCE = 1e-3
 # Metres: maps.js keeps the game's corners to the centimetre
 CORNER_TOLERANCE = 0.005
@@ -93,7 +95,7 @@ def circle_differences(circles):
 
 
 def landscape_differences(maps, landscapes):
-    """Maps whose ``SDK_data.heightmap`` is not the game's landscape: origin in whole metres, size, scale."""
+    """Maps whose ``SDK_data.heightmap`` is not the game's landscape: origin to the millimetre, size, scale."""
     differences = []
     for entry in maps:
         used, game = entry["heightmap"], landscapes.get(entry["name"])
@@ -101,7 +103,7 @@ def landscape_differences(maps, landscapes):
             differences.append(("landscape", entry["name"], "no landscape in the game data"))
             continue
         problems = []
-        if any(abs(used["origin"][axis] - game["origin_m"][axis]) >= WHOLE_METRE for axis in (0, 1)):
+        if any(abs(used["origin"][axis] - game["origin_m"][axis]) > ORIGIN_TOLERANCE for axis in (0, 1)):
             problems.append(f"origin {used['origin']}, the game's {game['origin_m']}")
         if list(used["size"]) != game["size_vertices"]:
             problems.append(f"size {used['size']}, the game's {game['size_vertices']}")

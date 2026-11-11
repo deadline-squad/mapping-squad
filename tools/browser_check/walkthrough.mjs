@@ -231,11 +231,11 @@ async function startRun(name, contextOptions, videoSize) {
             const file = join(framesDir, `${name}-${String(shotIndex).padStart(2, "0")}-${label}.png`);
             await page.screenshot({ path: file });
         },
-        /** Wait until the heightmap of the current map is loaded; a coarse one instead of the precise one is a problem */
+        /** Wait until the heightmap of the current map loaded or failed; a failed one is a problem */
         async waitHeightmap() {
-            await page.waitForFunction(() => window.__App?.minimap?.heightmap?.jsonPng?.length, null, { timeout: 120000 });
-            const { precise, map } = await page.evaluate(() => ({ precise: window.__App.minimap.heightmap.precise, map: window.__App.minimap.activeMap.name }));
-            if (!precise) run.problems.push({ step, kind: "heightmap", text: `${map}: the coarse 8-bit heightmap was loaded instead of the precise one` });
+            await page.waitForFunction(() => window.__App?.minimap?.heightmap?.ready || window.__App?.minimap?.heightmap?.failed, null, { timeout: 120000 });
+            const { failed, map } = await page.evaluate(() => ({ failed: window.__App.minimap.heightmap.failed, map: window.__App.minimap.activeMap.name }));
+            if (failed) run.problems.push({ step, kind: "heightmap", text: `${map}: the heightmap failed to load` });
         },
         /** Screen point of a position `east`/`north` meters from the map centre */
         async pointAt(east, north) {
@@ -294,7 +294,7 @@ async function desktop() {
     const { page } = run;
 
     await page.goto(base, { waitUntil: "load" });
-    await run.caption("Deadline SquadCalc: loading the map and its precise heightmap");
+    await run.caption("Deadline SquadCalc: loading the map and its heightmap");
     await run.waitHeightmap();
     await run.pause(2500);
     await run.shot("start");

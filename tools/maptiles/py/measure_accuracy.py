@@ -34,7 +34,6 @@ import os
 import sys
 
 import numpy as np
-from PIL import Image
 from scipy import ndimage, spatial
 
 import check_alignment
@@ -381,9 +380,7 @@ def measure_crowns(slug):
 
 def served_heightmap(slug, ground):
     """The served precise heightmap (m above the map's lowest point) on the 1 m grid of the prepared ground."""
-    folder = os.path.join("/heightmaps", slug)
-    step = json.load(open(os.path.join(folder, "meta.json")))["z_step_m"]
-    return check_alignment.on_ground_grid(np.asarray(Image.open(os.path.join(folder, "heightmap.png"))).astype(np.float64) * step, ground)
+    return check_alignment.served_on_ground(os.path.join("/heightmaps", slug), ground)
 
 
 def roof_height_pairs(labels, heightmap, ground, bounds):

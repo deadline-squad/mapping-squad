@@ -1,7 +1,9 @@
 """Topographic metrics of a precise heightmap, per cell, in float64 (tools/heightmaps/topometrics).
 
 Grid and frame: `z[row, col]` metres, `cell` metres between samples (meta.json `resolution_m`), the frame of
-the map image: east = +col, north = -row (the image's top is north). Every metric uses the 3 x 3 window
+the heightmap's grid: east = +col, north = -row. The grid is the landscape's vertices (tools/heightmaps lattice.py): on a
+turned landscape (meta.json `yaw_deg`, Skorpo's -2.006 deg) +col points `yaw_deg` clockwise of east, and map_summary turns
+the aspect back to a compass bearing. Every metric uses the 3 x 3 window
 
     z1 z2 z3
     z4 z5 z6        (z2 north of z5, z4 west of z5)
@@ -29,9 +31,9 @@ Curvatures (positive = convex, i.e. a hilltop or ridge; negative = concave, a va
     profile = -(p^2 r + 2 p q s + q^2 t) / (g (1 + g)^(3/2))   curvature of the normal section along the slope line
     plan    = -(q^2 r - 2 p q s + p^2 t) / g^(3/2)             curvature of the contour line, 1/m, plan view
 
-Both are NaN where the slope is under CURVATURE_MIN_SLOPE_DEG (0.5 deg): the heights are quantised (1 cm and
-coarser), a gradient that small is rounding, and the curvature of a contour line whose direction is rounding is
-meaningless (it grows without bound as g goes to 0). The unit of both is 1/m.
+Both are NaN where the slope is under CURVATURE_MIN_SLOPE_DEG (0.5 deg): the heights are quantised (the heightmap's
+16-bit step, up to 1.6 cm), a gradient that small is rounding, and the curvature of a contour line whose direction is
+rounding is meaningless (it grows without bound as g goes to 0). The unit of both is 1/m.
 
 Texture, over the same window (cell = centre z5, ring = the 8 neighbours):
 
@@ -226,6 +228,10 @@ def map_summary(z, meta, with_sky=True):
         for name, value in metrics.items():
             store = stores.setdefault(name, np.empty(z.shape, dtype=np.float32))
             store[start:start + value.shape[0]] = value
+    # The grid's north (-row) is yaw_deg clockwise of the world's
+    yaw = meta.get("yaw_deg", 0.0)
+    if yaw:
+        stores["aspect_deg"] = (stores["aspect_deg"] + yaw) % 360.0
     slope = stores["slope_deg"]
     summary = {
         "map": meta["map"], "cell_m": cell, "rows": z.shape[0], "cols": z.shape[1],

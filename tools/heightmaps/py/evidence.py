@@ -33,6 +33,7 @@ import os
 
 import numpy as np
 
+import lattice
 import objects
 import spline_mesh
 
@@ -140,28 +141,38 @@ def scene_placements(scene_dir):
     return np.concatenate(boxes), surfaces
 
 
-def _mark_under_boxes(out, surface, wanted, boxes, bounds, step):
-    """Set ``out`` at the wanted grid points under a box (MARGIN_M around it) whose surface height lies in the box's height range (MARGIN_M beyond it)."""
+def _mark_under_boxes(out, surface, wanted, boxes, grid):
+    """Set ``out`` at the wanted nodes of ``grid`` (a lattice.Lattice) under a box (MARGIN_M around it) whose surface height lies
+    in the box's height range (MARGIN_M beyond it)."""
     rows, cols = surface.shape
-    first = lambda low, origin, count: np.clip(np.ceil((low - MARGIN_M - origin) / step), 0, count).astype(np.int64)
-    after = lambda high, origin, count: np.clip(np.floor((high + MARGIN_M - origin) / step) + 1, 0, count).astype(np.int64)
-    c0, c1 = first(boxes[:, 0], bounds["min_x"], cols), after(boxes[:, 3], bounds["min_x"], cols)
-    r0, r1 = first(boxes[:, 1], bounds["min_y"], rows), after(boxes[:, 4], bounds["min_y"], rows)
+    lo_x, lo_y = boxes[:, 0] - MARGIN_M, boxes[:, 1] - MARGIN_M
+    hi_x, hi_y = boxes[:, 3] + MARGIN_M, boxes[:, 4] + MARGIN_M
+    # The nodes whose lattice position lies within the box's corners, then (on a turned lattice) those inside it in the world
+    corner_cols, corner_rows = lattice.to_grid(grid, np.stack([lo_x, hi_x, lo_x, hi_x], 1), np.stack([lo_y, lo_y, hi_y, hi_y], 1))
+    c0 = np.clip(np.ceil(corner_cols.min(1)), 0, cols).astype(np.int64)
+    c1 = np.clip(np.floor(corner_cols.max(1)) + 1, 0, cols).astype(np.int64)
+    r0 = np.clip(np.ceil(corner_rows.min(1)), 0, rows).astype(np.int64)
+    r1 = np.clip(np.floor(corner_rows.max(1)) + 1, 0, rows).astype(np.int64)
     # Wanted points in any window of the grid, from their summed table: most boxes reach none
     table = np.zeros((rows + 1, cols + 1), np.int32)
-    table[1:, 1:] = wanted.cumsum(0, dtype=np.int32).cumsum(1, dtype=np.int32)
+    np.cumsum(wanted, 0, dtype=np.int32, out=table[1:, 1:])
+    np.cumsum(table[1:, 1:], 1, out=table[1:, 1:])
     for k in np.flatnonzero((c1 > c0) & (r1 > r0) & (table[r1, c1] - table[r0, c1] - table[r1, c0] + table[r0, c0] > 0)):
         window = (slice(r0[k], r1[k]), slice(c0[k], c1[k]))
         part = surface[window]
-        out[window] |= wanted[window] & (part >= boxes[k, 2] - MARGIN_M) & (part <= boxes[k, 5] + MARGIN_M)
+        under = wanted[window] & (part >= boxes[k, 2] - MARGIN_M) & (part <= boxes[k, 5] + MARGIN_M)
+        if grid.yaw_deg:
+            gc, gr = np.meshgrid(np.arange(c0[k], c1[k], dtype=np.float64), np.arange(r0[k], r1[k], dtype=np.float64))
+            x, y = lattice.to_world(grid, gc, gr)
+            under &= (x >= lo_x[k] - 1e-9) & (x <= hi_x[k] + 1e-9) & (y >= lo_y[k] - 1e-9) & (y <= hi_y[k] + 1e-9)
+        out[window] |= under
 
 
-def _points_under_triangles(tris, wanted, bounds, step):
-    """Yield (flat grid indices, heights) of the points of the world triangles [t, 3, 3] (m) straight above or below the wanted grid
-    points, in chunks of CHUNK_CELLS grid points. The grid walk of objects.rasterize."""
+def _points_under_triangles(tris, wanted, grid):
+    """Yield (flat grid indices, heights) of the points of the world triangles [t, 3, 3] (m) straight above or below the wanted
+    nodes of ``grid``, in chunks of CHUNK_CELLS nodes. The grid walk of objects.rasterize, in the lattice's own frame."""
     rows, cols = wanted.shape
-    gx = (tris[:, :, 0] - bounds["min_x"]) / step
-    gy = (tris[:, :, 1] - bounds["min_y"]) / step
+    gx, gy = lattice.to_grid(grid, tris[:, :, 0], tris[:, :, 1])
     i0 = np.maximum(np.ceil(gx.min(1)), 0).astype(np.int64)
     j0 = np.maximum(np.ceil(gy.min(1)), 0).astype(np.int64)
     nx = np.minimum(np.floor(gx.max(1)), cols - 1).astype(np.int64) - i0 + 1
@@ -193,27 +204,27 @@ def _points_under_triangles(tris, wanted, bounds, step):
         start = stop
 
 
-def explained(surface, wanted, boxes, bounds, step, surfaces=()):
-    """Bool [rows, cols]: the ``wanted`` grid points whose ``surface`` height (m) a placement holds: one of the world ``boxes``
-    [n, 6], or a mesh of ``surfaces`` (world triangles [t, 3, 3] in m of each vast placement), as the module description says.
-    Grid point (row j, col i) is (bounds min_x + i * step, min_y + j * step)."""
+def explained(surface, wanted, boxes, grid, surfaces=()):
+    """Bool [rows, cols]: the ``wanted`` nodes of ``grid`` (lattice.Lattice) whose ``surface`` height (m) a placement holds: one of
+    the world ``boxes`` [n, 6], or a mesh of ``surfaces`` (world triangles [t, 3, 3] in m of each vast placement), as the module
+    description says."""
     out = np.zeros(surface.shape, bool)
-    _mark_under_boxes(out, surface, wanted, boxes, bounds, step)
+    _mark_under_boxes(out, surface, wanted, boxes, grid)
     flat_out, flat_surface = out.reshape(-1), surface.reshape(-1)
     for tris in surfaces:
-        for index, height in _points_under_triangles(tris, wanted & ~out, bounds, step):
+        for index, height in _points_under_triangles(tris, wanted & ~out, grid):
             flat_out[index[np.abs(height - flat_surface[index]) <= MARGIN_M]] = True
     return out
 
 
-def surface_below(surface, wanted, surfaces, bounds, step):
-    """Float [rows, cols]: at the ``wanted`` grid points the highest point of the vast meshes (``surfaces``, as explained takes them)
+def surface_below(surface, wanted, surfaces, grid):
+    """Float [rows, cols]: at the ``wanted`` nodes of ``grid`` the highest point of the vast meshes (``surfaces``, as explained takes them)
     straight under the ``surface`` height (m), -inf where there is none and at the other points. What the game shows under an
     object it does not have: the water of the ocean plane, a mountain mesh."""
-    below = np.full(surface.shape, -np.inf)
+    below = np.full(surface.shape, -np.inf, surface.dtype)
     flat_below, flat_surface = below.reshape(-1), surface.reshape(-1)
     for tris in surfaces:
-        for index, height in _points_under_triangles(tris, wanted, bounds, step):
+        for index, height in _points_under_triangles(tris, wanted, grid):
             under = height <= flat_surface[index]
             np.maximum.at(flat_below, index[under], height[under])
     return below

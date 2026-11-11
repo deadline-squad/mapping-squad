@@ -10,19 +10,20 @@
 import "./stub-app.mjs";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { decodePng16 } from "./png16.mjs";
 
 const args = process.argv.slice(2);
 const root = args[0];
 const reference = args[1] && !args[1].startsWith("--") ? args[1] : null;
 const mapName = args.includes("--map") ? args[args.indexOf("--map") + 1] : "albasrah";
 
-const { decode } = await import(`${homedir()}/agl/SquadCalc/node_modules/fast-png/lib/index.js`);
 const dir = `${homedir()}/apps/squadcalc/dist/heightmaps/${mapName}`;
 const meta = JSON.parse(readFileSync(`${dir}/meta.json`));
-const { width, height: rows, data } = decode(readFileSync(`${dir}/heightmap.png`));
+const { width, height: rows, data } = decodePng16(readFileSync(`${dir}/heightmap.png`));
 const step = meta.z_step_m;
 
-// The heights as SquadHeightmap stores them (one Uint16Array view per row) and read them: getHeight(fromMeters(...))
+// The heights as SquadHeightmap stores them (one Uint16Array view per row), read bilinearly as a stand-in for its
+// getHeight(fromMeters(...)): the bench times the damage field, the same heights for every run
 const levels = Uint16Array.from(data);
 const grid = Array.from({ length: rows }, (_, y) => levels.subarray(y * width, (y + 1) * width));
 const getHeight = (latlng) => {

@@ -1,60 +1,185 @@
 # Precise heightmaps from the game files
 
-SquadCalc's own heightmaps are 8-bit (up to 2.1 m per level). These are built from the Squad
-dedicated server paks and served by the Deadline SquadCalc in `/heightmaps/<map>/`
-(`src/js/squadHeightmaps.js` falls back to the 8-bit ones when a map has none).
+Heightmaps built from the Squad dedicated server paks and served by the Deadline SquadCalc in `/heightmaps/<map>/`. They
+are the only heights SquadCalc reads: since 45.51.0 it has no 8-bit fallback (upstream's `img/maps/<map>/heightmap.png`,
+up to 2.1 m per level), and a map whose heightmap cannot be loaded says so and reads every height as 0.
 
-Each `heightmap.png` is a 16-bit grayscale PNG on SquadCalc's grid (minimap bounds, `resolution_m` of `meta.json`
-per pixel: 1 m, 0.5 m for Chora and Kokan, see "Grid size" below; row = world Y min→max, col = world X min→max);
-height above the map's lowest point = `value * z_step_m` from `meta.json`, which also holds the sources and
+Each `heightmap.png` is a 16-bit grayscale PNG whose pixels are the vertices of the map's landscape ("Grid" below);
+height above the map's lowest point = `value * z_step_m` from `meta.json`, which also holds the grid, the sources and
 agreement statistics.
+
+## Grid
+
+The pixels of a heightmap are the nodes of its landscape's own lattice: node (col, row) lies at
+`origin_m + col * resolution_m * (cos yaw, sin yaw) + row * resolution_m * (-sin yaw, cos yaw)`, `yaw = yaw_deg`, world X
+east and Y south, all three keys in `meta.json` (`py/lattice.py`: `landscape_lattice` reads them from the landscape actors,
+`covering` takes the nodes that cover the minimap bounds `bounds_m`, the area the page shows, with at most one node beyond
+each edge). The landscape's vertices are 1 m apart on most maps, 0.5 m on Chora and Kokan, 0.75 m on Anvil, 1.0039 m on
+Black Coast, 0.9999 m on Logar and 1.2 m on Skorpo, whose landscape is also turned by -2.006195 degrees. A heightmap
+built before this grid had a sample every `resolution_m` (1 m, 0.5 m on Chora and Kokan) from the bounds' min corner
+along world X and Y: a resample of the vertices on 18 maps, whose vertices lie 0.4 cm (Kokan) to 49 cm (Jensen) off
+those samples or at another spacing (Anvil, Black Coast, Logar, Skorpo). Its `meta.json` has no `origin_m`, and
+`lattice.from_meta` still reads it that way.
+
+On the lattice the game's terrain is the vertices themselves, and SquadCalc's `getHeight` reads the grid with the game's
+triangles ("Interpolation" below), so on bare ground the page's height is the game's collision up to the 16-bit step
+(at most half of `z_step_m`: 0.5 mm on Al Basrah and Mutaha to 8.1 mm on Skorpo). The static meshes are sampled at the
+nodes, SquadHeight's 1 m surface by the nearest sample's height above the terrain (`build_heightmap.surface_on_lattice`);
+nodes outside the landscape (some maps' bounds reach past it) read SquadHeight's grid along the game's triangles, as
+before. SquadCalc takes the grid from `meta.json` (`heightmapWorker.js`), so no page setting names the map.
+
+Against the landscape's own vertices and random points between them (`py/compare_native_vertices.py`, terrain only, read
+with the page's triangle rule), the heightmaps of the corner grid against the lattice:
+
+| Map | Vertex spacing (m) | Vertices | Corner grid p99 / max (cm) | Lattice p99 / max (cm) | Points between | Corner grid p99 / max (cm) | Lattice p99 / max (cm) |
+|---|---|---|---|---|---|---|---|
+| Al Basrah | 1 | 10.8 M | 0.54 / 2.95 | 0.05 / 0.06 | 136 k | 0.47 / 1.03 | 0.05 / 0.05 |
+| Anvil | 0.75 | 13.2 M | 17.56 / 238.30 | 0.09 / 0.10 | 159 k | 11.50 / 84.76 | 0.08 / 0.09 |
+| Black Coast | 1.00394 | 11.5 M | 11.32 / 344.12 | 0.16 / 0.16 | 110 k | 6.63 / 33.48 | 0.14 / 0.16 |
+| Chora | 0.5 | 19.8 M | 0.38 / 0.39 | 0.38 / 0.39 | 60 k | 0.37 / 0.38 | 0.37 / 0.39 |
+| Fallujah | 1 | 7.0 M | 0.50 / 37.21 | 0.06 / 37.53 | 154 k | 0.46 / 0.51 | 0.05 / 0.06 |
+| Fools Road | 1 | 2.6 M | 8.90 / 156.06 | 0.08 / 0.08 | 167 k | 5.27 / 68.02 | 0.07 / 0.08 |
+| Goose Bay | 1 | 10.4 M | 8.97 / 72.82 | 0.12 / 0.13 | 129 k | 5.28 / 21.54 | 0.11 / 0.12 |
+| Gorodok | 1 | 13.8 M | 0.57 / 3.75 | 0.07 / 0.08 | 167 k | 0.48 / 1.18 | 0.06 / 0.07 |
+| Harju | 1 | 11.5 M | 0.58 / 6.37 | 0.09 / 0.10 | 143 k | 0.46 / 1.21 | 0.08 / 0.09 |
+| Jensen | 1 | 14.4 M | 4.33 / 37.87 | 0.07 / 0.07 | 179 k | 2.60 / 11.42 | 0.07 / 0.07 |
+| Kamdesh | 1 | 11.5 M | 0.50 / 0.51 | 0.15 / 0.16 | 141 k | 0.43 / 0.51 | 0.14 / 0.15 |
+| Kohat | 1 | 9.2 M | 1.46 / 189.42 | 0.29 / 0.30 | 86 k | 0.92 / 153.37 | 0.27 / 0.29 |
+| Kokan | 0.5 | 23.0 M | 0.49 / 1.18 | 0.07 / 0.08 | 184 k | 0.44 / 0.57 | 0.06 / 0.07 |
+| Lashkar | 1 | 13.1 M | 0.50 / 0.51 | 0.13 / 0.13 | 139 k | 0.44 / 0.51 | 0.11 / 0.13 |
+| Logar | 0.9999 | 2.5 M | 17.69 / 64.95 | 0.10 / 0.10 | 160 k | 10.16 / 46.12 | 0.09 / 0.10 |
+| Manicouagan | 1 | 10.2 M | 7.96 / 69.74 | 0.16 / 0.16 | 126 k | 4.67 / 21.83 | 0.14 / 0.16 |
+| Mestia | 1 | 3.0 M | 0.69 / 12.08 | 0.19 / 0.20 | 105 k | 0.51 / 3.13 | 0.17 / 0.19 |
+| Mutaha | 1 | 6.0 M | 0.63 / 3.44 | 0.05 / 0.05 | 160 k | 0.51 / 1.74 | 0.05 / 0.05 |
+| Narva | 1 | 6.1 M | 0.50 / 0.51 | 0.08 / 0.09 | 156 k | 0.45 / 0.51 | 0.07 / 0.08 |
+| Pacific | 1 | 13.5 M | 0.50 / 0.51 | 0.12 / 0.13 | 166 k | 0.43 / 0.51 | 0.11 / 0.12 |
+| Sanxian | 1 | 4.7 M | 0.50 / 0.51 | 0.09 / 0.10 | 45 k | 0.46 / 0.51 | 0.09 / 0.10 |
+| Skorpo | 1.2 | 21.2 M | 11.31 / 131.67 | 0.80 / 0.82 | 130 k | 6.40 / 36.12 | 0.72 / 0.81 |
+| Sumari | 1 | 1.0 M | 0.57 / 1.42 | 0.11 / 0.11 | 120 k | 0.48 / 0.94 | 0.10 / 0.11 |
+| Tallil | 1 | 16.3 M | 4.14 / 37.09 | 0.06 / 0.07 | 149 k | 2.41 / 12.59 | 0.05 / 0.06 |
+| Yehorivka | 1 | 27.4 M | 0.92 / 7.11 | 0.19 / 0.20 | 137 k | 0.62 / 2.36 | 0.17 / 0.19 |
+
+On the lattice the page's read is within 0.82 cm of the game's collision at every vertex and between them on every map
+(Skorpo, whose step is 1.6 cm; 0.05 to 0.39 cm on the others) but at one seam of Fallujah, below. The corner grid was up
+to 3.44 m off at a vertex on Black Coast, 2.38 m on Anvil, 1.89 m on Kohat, 1.56 m on Fools Road and 1.32 m on Skorpo;
+Chora's 0.5 m corner grid already lay on its vertices, so both are the same there. Fallujah's landscape is six streaming
+proxies, and two of them (`L_070_Landscape_Fallujah_00` and `_05`) disagree at 30 of their shared vertices along
+x = -510 m around y = 460 m, by up to 37.5 cm: the game's collision steps there, a grid holds one height per vertex, and
+next to those vertices one side is off by up to that much (the table's 37.53 cm). A second such seam (`_00` and `_01`,
+84 vertices, up to 69.5 cm) lies along x = 0 m around y = 1598 m, outside the minimap. Elsewhere the proxies agree to
+0.04 cm.
+
+`tools/browser_check/heightmap_native.mjs` loads maps in the page and checks their grid, decode time and the page's
+heights at the game's vertices and between them (points written by `py/compare_native_vertices.py --points-out`).
+
+The map pipelines of `tools/maptiles` and `tools/maprender` keep their ground on the 1 m grid from the minimap corner
+(`ground.npy`): `maptiles/py/prep.py` reads the game's landscape there with the game's triangles, and the readers of a
+served heightmap (`check_alignment.py`, `measure_accuracy.py`, `relief.py`) resample it to that grid with
+`lattice.on_grid`.
 
 ## WebP form
 
-Next to each PNG is a `heightmap.webp` of the same grid: lossless WebP, an RGB image with the high byte
-of the 16-bit level in red and the low byte in green (`py/heightmap_webp.py`). The browser decodes it
-natively, and it is 33 to 53 % smaller than the PNG (326 MB for the 25 maps become 171 MB) because its
-step is coarsened to 1 cm, except where the PNG's is already coarser (Skorpo: its 1064 m range does not
-fit 16 bits at 1 cm) and Chora (re-quantising it makes the file bigger). `meta.json` announces it:
+Next to each PNG is a `heightmap.webp` of the same levels: lossless WebP, an RGB image with the high byte of the 16-bit
+level in red and the low byte in green (`py/heightmap_webp.py`). The browser decodes it natively, in about half the time
+of the PNG in JavaScript. It holds the PNG's step; heightmaps built before 2026-11-10 coarsened it to 1 cm (except on
+Skorpo and Chora), up to 0.5 cm off on bare ground, which on the lattice would be the largest error left there.
+At the PNG's step the WebP is 68 to 85 % of the PNG (262.6 against 336.9 MB for the 25 maps built on 2026-11-10;
+the served ones of 2026-10-30, coarsened, take 183.2 MB). `meta.json` announces it:
 
 * `format: "webp-rg16"`, `generated` (UTC build time: the page requests the files with `?v=<generated>`, so a
   rebuild must change it) and `webp: {file, encoding, z_step_m, levels_sum}`; `levels_sum` is the sum of all
   levels modulo 2^32, which the page checks after decoding, so a browser that alters canvas pixels uses the
   PNG instead of showing wrong heights;
-* `z_step_m` stays the PNG's step: a SquadCalc bundle that only knows the PNG (an older one in a cached
-  page) keeps working. The PNG stays until the owner drops it.
+* `z_step_m` is the PNG's step, and the WebP's own `z_step_m` the same.
 
-`heightmaps.sh build` writes both files. For heightmaps built before, `heightmaps.sh webp` converts them from
-the served copy and checks each result (`py/convert_webp.py`: the WebP decoded again equals the levels it was
-made from; the same step must match the PNG in every pixel, a coarsened one must be within half of the new step),
+`heightmaps.sh build` writes both files. For heightmaps built before, `heightmaps.sh webp` converts them from the
+served copy and checks each result (`py/convert_webp.py`: the WebP decoded again equals the PNG in every pixel),
 `heightmaps.sh deploy-webp` copies the WebP files next to the PNGs (nothing changes for a page), and
 `heightmaps.sh switch-webp` then replaces each map's `meta.json`: the switch, last.
 In a browser, `tools/browser_check/heightmap_exact.mjs` compares the WebP and PNG paths of the site's worker.
 
-## Grid size
+## Detail where objects stand
 
-The landscapes of Chora and Kokan have a vertex every 0.5 m (landscape scale 50); every other map's vertices are 1 m or
-more apart. `py/maps.py` holds the cell size of each map (`CELL_M`, default 1 m) and the pipeline builds the map on that
-grid: samples at the bounds' min corner and every cell from it (Chora 8129 x 8129, Kokan 4993 x 4993), the landscape and
-the static meshes sampled at those points, `meta.json` `resolution_m` 0.5. SquadHeight only exports a 1 m grid, so on a
-finer grid its surface is read as follows (`build_heightmap.upsample_surface`): over the landscape each cell takes the
-nearest SquadHeight sample's height above the terrain on top of its own terrain (a building keeps its height, a slope
-does not turn into steps); outside the landscape it is read along the game's triangles. `fuse` is the same code and its
-statistics keep their meaning (for example `terrain_rms_diff_m` is unchanged, the object cell counts are four times as
-many). SquadCalc takes the grid from `resolution_m` and the image size, so no page setting names the map.
+On the lattice bare ground is the game's, but between two nodes the page reads the triangle rule's plane: where a wall or
+a roof edge crosses a quad, that plane runs from the roof down to the ground across the whole quad (1 m on most maps), and
+a target there reads a height in between, metres off. Next to the heightmap, `heightmap.detail.bin` (`py/heightmap_detail.py`)
+holds, in the quads where it matters, the nodes of the lattice subdivided by 2 (0.5 m apart on most maps, 0.375 m on Anvil,
+0.6 m on Skorpo, 0.25 m on Chora and Kokan), fused like the heightmap from the same sources (`py/build_detail.py`:
+`build_all.fuse_on` on the subdivided lattice, in bands of whole quad rows). SquadCalc reads such a quad as its 2 x 2
+smaller quads, with the same triangle rule (`heightmapDetail.js`), and every other quad as before.
 
-Against the landscape's own vertices (`py/compare_native_vertices.py`, terrain only, read with the page's triangle
-rule), 1 m grid against 0.5 m grid:
+The file is the gzip of (little endian) the magic `HMD1`, uint32 factor, unit, quad columns, quad rows and quad count; the
+bitset of the quads with detail; then per quad, in the bitset's order, the 5 nodes of its sub-grid that are not its
+corners, row-major, each the zigzag varint of its level minus the level the triangle rule reads there from the quad's
+corners (rounded half up), in units of `unit` levels (`UNIT_M`, 5 cm): a node is at most 2.5 cm off, and one that the
+corners predict is exact. `meta.json` announces it: `detail: {file, encoding, factor, unit, threshold_m, quads, bytes}`.
 
-| map | vertices | 1 m RMS / p99 / max | 0.5 m RMS / p99 / max |
+The size limit: for each map, `heightmap.webp` and the detail together stay within the size of `heightmap.png`, so a
+page that reads the WebP and the detail downloads no more than the PNG alone. A quad has detail when one of its sub-grid
+nodes lies more than `threshold_m` from the triangle rule's read of its corners; `build_detail.py` takes the smallest of
+0.25, 0.5, 1 and 2 m whose file fits, and writes none on a map where none does (an earlier file and its key are removed).
+
+The 25 maps as built on 2026-11-10 and 2026-11-11 (`build_detail.py`, about 3 h with 2 CPUs and 4 GB of memory, an hour of
+it Yehorivka):
+
+| Map | Sub-grid (m) | Threshold (m) | Quads with detail | of all quads | Detail (kB) | PNG - WebP (kB) |
+|---|---|---|---|---|---|---|
+| Al Basrah | 0.5 | 0.25 | 585 976 | 3.66 % | 1 968 | 2 775 |
+| Anvil | 0.375 | 0.25 | 266 411 | 1.60 % | 909 | 3 788 |
+| Black Coast | 0.502 | 0.25 | 222 625 | 1.06 % | 790 | 4 705 |
+| Chora | 0.25 | 0.25 | 458 937 | 0.69 % | 1 356 | 2 740 |
+| Fallujah | 0.5 | 0.5 | 310 512 | 3.44 % | 1 125 | 1 349 |
+| Fools Road | 0.5 | 0.25 | 19 415 | 0.62 % | 69 | 802 |
+| Goose Bay | 0.5 | 0.25 | 387 470 | 2.38 % | 1 322 | 3 748 |
+| Gorodok | 0.5 | 0.25 | 109 330 | 0.66 % | 404 | 2 184 |
+| Harju | 0.5 | 0.25 | 287 925 | 1.77 % | 1 051 | 2 693 |
+| Jensen | 0.5 | 0.25 | 23 169 | 0.14 % | 68 | 3 870 |
+| Kamdesh | 0.5 | 0.25 | 214 649 | 1.32 % | 583 | 2 809 |
+| Kohat | 0.5 | 0.25 | 99 676 | 0.47 % | 327 | 5 214 |
+| Kokan | 0.25 | 0.25 | 117 413 | 0.47 % | 379 | 4 737 |
+| Lashkar | 0.5 | 0.25 | 543 970 | 2.90 % | 1 476 | 4 398 |
+| Logar | 0.4999 | 0.25 | 83 456 | 2.69 % | 282 | 886 |
+| Manicouagan | 0.5 | 0.25 | 395 508 | 2.43 % | 1 260 | 2 897 |
+| Mestia | 0.5 | 0.25 | 165 698 | 2.88 % | 556 | 1 627 |
+| Mutaha | 0.5 | 0.25 | 190 761 | 2.51 % | 571 | 1 591 |
+| Narva | 0.5 | 0.25 | 186 634 | 2.38 % | 630 | 1 654 |
+| Pacific | 0.5 | 0.25 | 5 464 | 0.03 % | 22 | 4 621 |
+| Sanxian | 0.5 | 1 | 226 905 | 1.07 % | 946 | 1 352 |
+| Skorpo | 0.6 | 0.25 | 161 106 | 0.46 % | 715 | 5 489 |
+| Sumari | 0.5 | 0.25 | 77 003 | 4.55 % | 256 | 306 |
+| Tallil | 0.5 | 0.25 | 189 223 | 0.86 % | 644 | 2 595 |
+| Yehorivka | 0.5 | 0.25 | 135 412 | 0.34 % | 470 | 5 480 |
+
+With their details the WebP files take 280.8 MB for the 25 maps (18.2 MB of detail on 1.20 % of the quads), against 336.9 MB
+of PNG; the served WebP files of 2026-10-30, coarsened and without detail, take 183.2 MB. On every map a threshold fits,
+0.25 m on all but Fallujah 0.5 m, Sanxian 1 m.
+
+On the 50 dense windows of the accuracy research (two 200 m windows per map where objects stand closest; truth every 0.25 m:
+the game's landscape and the server's static mesh collision; measured with the research's tools, not committed), on the
+7 489 877 points on objects:
+
+| Read | More than 0.5 m off | More than 2 m off | RMS (cm) |
 |---|---|---|---|
-| Chora | 22.0 M | 8.91 cm / 9.37 cm / 31.4 m | 0.000 / 0.000 / 0.00 cm |
-| Kokan | 23.6 M | 0.89 cm / 3.12 cm / 114 cm | 0.017 / 0.065 / 1.59 cm |
+| The heightmaps served now (corner grid) | 12.01 % | 4.20 % | 117.9 |
+| On the vertices | 11.93 % | 4.09 % | 117.1 |
+| On the vertices, with the detail | 8.40 % | 3.00 % | 112.5 |
 
-The files are three times as big (heightmap.webp: Chora 4.9 → 14.2 MB, Kokan 2.6 → 6.4 MB; 171 → about 184 MB for the
-25 maps) and the worker decodes them in about three times the time (Chora 0.6 → 1.8 s, Kokan 0.2 → 0.7 s in Chromium),
-so a map is still loaded only when it is selected. `tools/browser_check/heightmap_native.mjs` loads these maps in the
-page and checks their grid, decode time and page heights at the game's vertices.
+The share drops in 49 of the 50 windows; on the other 24 509 714 points of the windows (the ground beside the objects) it is
+4.02 % against 4.10 %, but more than 2 m off 2.64 % against 2.48 % (RMS 88.5 against 83.9 cm): most likely the ground beside
+a thin wall between a quad's corners, which the quad read as ground and whose sub-quads now slope up to the node on the
+wall. What stays is what a sub-grid of half the spacing cannot hold (a wall's edge inside a sub-quad, the coarser thresholds
+above) and the objects SquadHeight has where the server's collision has none ("Which of SquadHeight's objects are taken"). A
+finer sub-grid holds more and does not fit: in the measurement that chose the factor (the server-only fusion on the same
+windows, files estimated from the windows at the heightmap's step), a 0.25 m sub-grid leaves 4.75 % of the object points
+more than 0.5 m off against 7.42 % at 0.5 m (11.63 % without), and takes 126.9 against 29.5 MB for the 25 maps at a 0.25 m
+threshold, Al Basrah's alone 10.4 MB against the 2.8 MB its PNG leaves.
+
+The volume layer (`tools/volumetric`: 0.5 m columns of 0.25 m voxels, served already) is the other fix: the target dialog
+offers the surfaces of the column under the target. On the same points its roof choice, the top of the column, is more than
+0.5 m off at 12.56 % (RMS 157.8 cm), and the heightmap's height clamped into the column's top voxel at 7.77 % (7.78 % with
+the detail, RMS 151.7 cm); but on the ground beside the objects the clamped height is more than 0.5 m off at 11.05 % of the
+points against 4.02 % without the clamp (RMS 304.8 against 88.5 cm): a column at a wall's foot holds the wall. So a target's
+height is the heightmap's with its detail, and the dialog's voxel surfaces stay a choice.
 
 ## Sources and fusion
 
@@ -115,7 +240,9 @@ terrain of the game; no mesh of the client's own levels passes within 1 m of it 
 does at 4 299 of the 11 226 points: scenery the game shows and the server does not collide with).
 `build` of the six maps writes exactly this: their heightmaps differ from the served ones at the points above, by the measured
 lowering to 1 cm, and nowhere else but at 12 764 points of Gorodok, one 16-bit level (1.4 mm) lower, where the server's collision
-holds SquadHeight's surface to the millimetre.
+holds SquadHeight's surface to the millimetre. On the landscape's vertices ("Grid"; the 25 maps built on 2026-11-10), SquadHeight
+stands 0.5 m and more above the terrain at 28 621 312 nodes; the rule keeps 28 052 108 of them and leaves 569 204
+(`stats.sdk_object_cells`, `stats.sdk_unexplained_cells`).
 
 Checks (Squad build 26005357):
 
@@ -124,8 +251,8 @@ Checks (Squad build 26005357):
 * game objects vs SquadHeight on Skorpo: recall 98.9 %, precision 99.5 %, heights within 0.5 m on
   99.75 % of the shared object cells (median 5 mm); 99.99 % of all cells within 0.5 m
   (`compare_objects.py`);
-* SquadCalc's 8-bit heightmap of Skorpo is SquadHeight quantized to 2.09 m steps: error up to
-  1.05 m (`compare_squadcalc.py`).
+* upstream's 8-bit heightmap of Skorpo, which SquadCalc read until 45.51.0 when this one did not load, is SquadHeight
+  quantized to 2.09 m steps: error up to 1.05 m (`compare_squadcalc.py`).
 
 ## Map inventory: what the server package can play
 
@@ -190,16 +317,19 @@ needs the game client): `$SCENES/<map>` says which of SquadHeight's objects the 
 ```sh
 tools/heightmaps/heightmaps.sh setup     # CUE4Parse at the pinned commit + cue4parse.patch, extractor, Python image
 tools/heightmaps/heightmaps.sh extract   # landscapes and static meshes of every map (about 1 h)
-tools/heightmaps/heightmaps.sh build     # fused heightmaps into $OUT (about 1–2 h); "build skorpo" for one map
+tools/heightmaps/heightmaps.sh build     # fused heightmaps into $OUT (about 1–2 h, their details about 3 h more); "build skorpo" for one map
 tools/heightmaps/heightmaps.sh deploy    # replace the built files in the served SquadCalc, previous copy kept as heightmaps.bak.<date>
 ```
 
 Paths are set with `SQUAD_DIR`, `SQUADHEIGHT`, `WORK`, `SCENES`, `CLIENT_DIR`, `OUT` and `DIST` (see the script header).
 After a game patch: update the server with SteamCMD and the client scenes (`tools/maprender/maprender.sh scene`), then
 `extract`, `build`, `deploy`; a new map goes into `py/maps.py` (its SquadHeight name and landscape levels).
-`deploy` replaces in each served map folder only what `build` wrote for it (`heightmap.png`, `heightmap.webp` and the keys of
-`meta.json`); the volume layer of `tools/volumetric` (`volume.vcol`, `terrain.bin` and the `volume` key of `meta.json`) stays,
-and so do the maps `$OUT` does not hold. A map of `$OUT` that lacks one of its three files stops it before anything is touched.
+`deploy` replaces in each served map folder only what `build` wrote for it (`heightmap.png`, `heightmap.webp`, the
+`heightmap.detail.bin` where it made one, and the keys of `meta.json`; a map built without a detail loses the served one);
+the volume layer of `tools/volumetric` (`volume.vcol`, `terrain.bin` and the `volume` key of `meta.json`) stays, and so do
+the maps `$OUT` does not hold. A build whose grid moved (`origin_m`, `resolution_m` or `yaw_deg` of `meta.json`) needs its
+`terrain.bin` rebuilt on the new grid after `deploy` (`tools/volumetric` README). A map of `$OUT` that lacks one of its
+three files stops it before anything is touched.
 
 ## Interpolation: the game's triangles
 
@@ -208,13 +338,13 @@ from vertex (x, y) to (x + 1, y + 1) of the landscape grid. This was found with 
 server log (below): on points where the other diagonal would differ by more than 5 mm the diagonal above
 is the closer one in 79 of 89 (17 of 20 above 2 cm), and it is Unreal's landscape render mesh diagonal.
 `landscape.triangle_surface` reads it; SquadCalc's `getHeight` reads the served grid the same way (its quads
-split from (row, col) to (row + 1, col + 1), the same diagonal in world axes), where it used bilinear
+split from (row, col) to (row + 1, col + 1), the same diagonal along the landscape's axes), where it used bilinear
 interpolation. `py/compare_interpolation.py <extract root> <heightmaps dir> <map>` measures a grid against the
-game's surface at random points (terrain only). Bilinear against triangle on a grid whose nodes sit on the
-game's vertices (Al Basrah, Fallujah, Gorodok, Harju, Kamdesh, Lashkar, Mestia, Mutaha, Narva, Pacific, Sanxian,
-Sumari): RMS 0.3 to 2.2 cm and up to 0.2 to 1.1 m on the steepest quads, triangle 0.0 to 0.1 cm. On maps
-whose vertices are not on the 1 m grid (Goose Bay, Jensen, Manicouagan, Tallil, Black Coast, Skorpo, Anvil, Chora, Kokan)
-the grid itself is a resample of the vertices and the read is a small part of an error of 0.5 to 3 cm RMS.
+game's surface at random points (terrain only). Bilinear against triangle on a grid whose nodes are the game's
+vertices (measured on the 12 maps whose vertices were on the earlier corner grid: Al Basrah, Fallujah, Gorodok, Harju,
+Kamdesh, Lashkar, Mestia, Mutaha, Narva, Pacific, Sanxian, Sumari): RMS 0.3 to 2.2 cm and up to 0.2 to 1.1 m on the
+steepest quads, triangle 0.0 to 0.1 cm. On the other maps the corner grid was a resample of the vertices, and the
+read was a small part of an error of 0.5 to 3 cm RMS; on the lattice ("Grid") every map reads like the first 12.
 On static objects the mesh heights are not triangle surfaces: in the object-dense 1 km window of Fallujah
 (`py/compare_resolution.py`) the triangle read is 2 % worse than bilinear on object cells (RMS 0.951 against 0.931 m)
 and equal on terrain, an accepted cost of being exact on terrain.
@@ -240,6 +370,11 @@ Every Fallujah point more than 15 cm off (36 of 143) has a static mesh on it or 
 truck: `object`, `above-terrain`, `grid-object` name the mesh), or the log has Z = 0 (`no-trace`: markers the
 server did not trace). The river bed at -44.20 m is the landscape's own flat floor (spawn points stand on it); the
 water actor of Fallujah is a box volume at -48.43 m, not a collision plane.
+On the heightmaps on the vertices ("Grid"; the 25 maps built on 2026-11-10) the triangle read is within 2 cm on Fallujah,
+Goose Bay, Yehorivka and Black Coast on 92, 96, 97 and 95 % of those points (107, 162, 167, 165). On the points of 12 maps
+where the landscape itself is within 2 cm of the log and neither grid has an object (689), 98.7 % are within 2 cm on the
+vertices against 96.2 % on the corner grid (p95 1.1 against 1.7 cm); the rest read the same on both, small objects between
+the nodes (up to 33.9 cm on Fallujah).
 `py/test_audit_ground_truth.py` tests it on synthetic grids (`python -m unittest test_audit_ground_truth`).
 Kinds that are ground traces: placed markers except those with Z = 0 and the types logged at odd heights,
 deployables, spawn points. `tools/direct_fire/precision_check.mjs` (B2) and `tools/browser_check/precision_browser.mjs`
@@ -257,7 +392,9 @@ Files:
   water actors, for `tools/maptiles`). `cue4parse.patch` keeps the cooked
   landscape collision that CUE4Parse skips.
 * `py/heightmap_webp.py`, `py/convert_webp.py` — the WebP form above;
-* `py/landscape.py` — cooked Chaos heightfield reader and landscape assembly;
+* `py/heightmap_detail.py`, `py/build_detail.py` — the detail where objects stand above (`py/test_heightmap_detail.py`);
+* `py/landscape.py` — cooked Chaos heightfield reader and landscape assembly; `py/lattice.py` — the grid on the
+  landscape's vertices and the page's read on it (`py/test_lattice.py`);
   `py/objects.py` — static mesh collision rasterizer; `py/evidence.py` — the placements of the server and the
   client that explain SquadHeight's objects (`py/test_evidence.py`); `py/build_heightmap.py`, `py/build_all.py` —
   fusion and output; `py/maps.py` — SquadCalc map → SquadHeight name and landscape levels;

@@ -26,6 +26,7 @@ import codec
 import collision
 import columns
 import eval_los
+import lattice
 import maps
 import models
 import reference
@@ -40,13 +41,12 @@ LANDSCAPE_ROOT = "/data/squad-extract/landscapes"
 
 
 def landscape(slug, meta):
-    """models.Landscape of the map on its heightmap grid (landscape collision, holes marked)."""
+    """models.Landscape of the map on the 1 m grid from its bounds' corner, the grid the models index (landscape collision,
+    holes marked)."""
     b = meta["bounds_m"]
-    cell = float(meta.get("resolution_m", 1.0))
-    width = int(round((b["max_x"] - b["min_x"]) / cell)) + 1
-    height = int(round((b["max_y"] - b["min_y"]) / cell)) + 1
+    rows, cols = lattice.minimap_shape(b, 1.0)
     actors = [(g, h, x0, y0, root) for level in maps.MAPS[slug][1] for g, h, x0, y0, root in terrain.assemble(f"{LANDSCAPE_ROOT}/{level}").values()]
-    z, hole = terrain_raster.sample_grid(actors, b["min_x"], b["min_y"], cell, width, height)
+    z, hole = terrain_raster.sample_grid(actors, lattice.Lattice(b["min_x"], b["min_y"], 1.0, 0.0, cols, rows))
     return models.Landscape(z, hole, b["min_x"], b["min_y"])
 
 

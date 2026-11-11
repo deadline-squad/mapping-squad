@@ -39,7 +39,7 @@ const mapValue = option("--map", null);
 if (mapValue) {
     await page.evaluate((value) => window.__App.MAP_SELECTOR.val(value).trigger("change"), mapValue);
 }
-await page.waitForFunction(() => window.__App?.minimap?.heightmap?.precise, null, { timeout: 120000 });
+await page.waitForFunction(() => window.__App?.minimap?.heightmap?.ready, null, { timeout: 120000 });
 await page.waitForTimeout(1500);
 
 /**
@@ -91,7 +91,7 @@ if (scenarios.includes("mapswitch")) {
                 const current = options.findIndex((option) => option.value === app.MAP_SELECTOR.val());
                 app.MAP_SELECTOR.val(options[(current + 1) % options.length].value).trigger("change");
             });
-            await page.waitForFunction(() => window.__App.minimap.heightmap?.precise, null, { timeout: 120000, polling: 50 });
+            await page.waitForFunction(() => window.__App.minimap.heightmap?.ready, null, { timeout: 120000, polling: 50 });
             await page.waitForTimeout(2500);
         });
     }

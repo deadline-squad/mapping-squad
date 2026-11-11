@@ -4,13 +4,11 @@ A WebP of the same grid as heightmap.png: an RGB image whose red channel holds t
 green channel the low byte of a 16-bit level (blue is 0), so height above the map's lowest point =
 level * meta["webp"]["z_step_m"]. SquadCalc's worker (src/js/heightmapWorker.js in the deployment
 repository) decodes it with the browser's own WebP decoder, which takes about half the time of the PNG
-in JavaScript, and the file is 20 to 50 % smaller.
+in JavaScript, and at the same levels the file is 15 to 32 % smaller (the 25 maps built on 2026-11-10).
 
-The step is coarsened to MIN_STEP_M (1 cm: finer than the game's own collision, and the noise under it
-is what makes the file big) except for the maps in KEEP_STEP, where it only gets bigger. A step
-already coarser than 1 cm is kept: the level range of a map as high as Skorpo's (1064 m) does not fit
-16 bits at 1 cm. meta.json keeps `z_step_m` for heightmap.png (a bundle that only knows the PNG still
-reads it), the WebP has its own entry:
+It holds the PNG's own levels and step: one step of the game's collision heightfield is at most 0.3 to 6.4 mm on
+each map (cooked Chaos heightfields of build 26005357), and a step coarsened to 1 cm was up to 0.5 cm off on bare ground
+(README "WebP form"). meta.json keeps `z_step_m` for heightmap.png, and the WebP has its own entry with the same step:
 
     "format": "webp-rg16", "generated": "<UTC>", "webp": {"file", "encoding", "z_step_m", "levels_sum"}
 
@@ -27,14 +25,6 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 FORMAT = "webp-rg16"
 FILE = "heightmap.webp"
-MIN_STEP_M = 0.01
-# Re-quantising these to 1 cm makes their file bigger (audit of 2026-10-30)
-KEEP_STEP = {"Chora"}
-
-
-def step_for(map_name, png_step):
-    """Step in metres of the WebP of a map whose PNG has `png_step`."""
-    return png_step if map_name in KEEP_STEP else max(png_step, MIN_STEP_M)
 
 
 def levels_sum(levels):

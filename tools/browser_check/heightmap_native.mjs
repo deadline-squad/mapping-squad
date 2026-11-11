@@ -1,13 +1,16 @@
-// A map with a heightmap finer than 1 m (Chora, Kokan: 0.5 m) in the page, in Chromium through Playwright:
+// The heightmap of a map on the game's landscape vertices in the page, in Chromium through Playwright:
 //
-//     node heightmap_native.mjs <site URL> --maps chora,kokan [--points <points.json>] [--runs 5]
+//     node heightmap_native.mjs <site URL> --maps skorpo,anvil,chora [--points <points.json>] [--detail <points.json>] [--runs 5]
 //
 // For each map the page loads the heightmap through its own worker and the check reports the grid it got
-// (samples, resolution, step), the time from the worker's start to its result (`--runs` times: the first is
-// cold, the rest read the browser cache, i.e. the decoding) and the bytes of the heavy file transferred.
-// With --points (compare_native_vertices.py --points-out: {"<map>": [[x, y, z], ...]}, world metres of landscape vertices of the game) the
-// page's own getHeight (height above the map's lowest point, meta.json z_min_m) is read at each point on the map and must be within half the heightmap's step of z (the
-// points are vertices where the file holds the landscape to that step: no building on them). Exits with 1 on any failure.
+// (samples, the lattice of meta.json: origin, resolution, yaw; step), the time from the worker's start to its result (`--runs`
+// times: the first is cold, the rest read the browser cache, i.e. the decoding) and the bytes of the heavy file transferred,
+// and the quads of its detail where objects stand, which must be meta.json's `detail.quads` (none without the entry).
+// With --points (compare_native_vertices.py --points-out: {"<map>": [[x, y, z], ...]}, world metres and the game's
+// collision: landscape vertices and points inside quads, where the file holds the bare landscape) the page's own getHeight
+// (height above the map's lowest point, meta.json z_min_m) is read at each point on the map and must be within half the
+// heightmap's step of z, plus 0.5 mm. With --detail (heightmap_detail.py of tools/heightmaps: points in quads with detail,
+// z the height its reader gives from the served files) the page must read z within 0.1 mm. Exits with 1 on any failure.
 // Environment: PLAYWRIGHT_CORE, CHROME as in browser_check.mjs.
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
 import { readFileSync } from "node:fs";
@@ -16,10 +19,11 @@ const base = process.argv[2];
 const option = (name) => { const index = process.argv.indexOf(name); return index > 0 ? process.argv[index + 1] : null; };
 const slugs = option("--maps")?.split(",") ?? [];
 if (!base || !slugs.length) {
-    console.error("usage: node heightmap_native.mjs <site URL> --maps a,b [--points <points.json>] [--runs 5]");
+    console.error("usage: node heightmap_native.mjs <site URL> --maps a,b [--points <points.json>] [--detail <points.json>] [--runs 5]");
     process.exit(2);
 }
 const points = option("--points") ? JSON.parse(readFileSync(option("--points"), "utf8")) : {};
+const detailPoints = option("--detail") ? JSON.parse(readFileSync(option("--detail"), "utf8")) : {};
 const runs = Number(option("--runs") ?? 5);
 
 let failures = 0;
@@ -70,12 +74,13 @@ for (const slug of slugs) {
             worker.onmessage = ({ data }) => {
                 const ms = performance.now() - start;
                 worker.terminate();
-                resolve(data.error ? { error: data.error } : { ms, width: data.width, height: data.height, step: data.step, resolution: data.resolution, precise: data.precise, url: data.url });
+                resolve(data.error ? { error: data.error } : { ms, width: data.width, height: data.height, step: data.step, lattice: data.lattice, url: data.url,
+                    detailQuads: data.detail ? data.detail.nodes.length / data.detail.inner : null, detailError: data.detailError });
             };
-            worker.postMessage({ preciseBase: `${origin}/heightmaps/${slug}/`, fallbackUrl: "about:blank", fallbackScale: 1 });
+            worker.postMessage({ base: `${origin}/heightmaps/${slug}/` });
         }), { slug, origin: new URL(base).origin });
-        if (result.error || !result.precise) {
-            check(`${slug} loads`, false, result.error ?? "not precise");
+        if (result.error) {
+            check(`${slug} loads`, false, result.error);
             break;
         }
         times.push(result.ms);
@@ -84,27 +89,56 @@ for (const slug of slugs) {
     if (!grid) continue;
     const sorted = [...times].sort((a, b) => a - b);
     const warm = sorted.slice(0, Math.max(1, times.length - 1));
-    check(`${slug} grid`, grid.width === meta.width && grid.height === meta.height && grid.resolution === meta.resolution_m,
-        `${grid.width} x ${grid.height} samples, resolution ${grid.resolution} m, step ${grid.step} m, ${grid.url}`);
+    const { originX, originY, resolution, yawDeg } = grid.lattice;
+    check(`${slug} grid`, grid.width === meta.width && grid.height === meta.height && resolution === meta.resolution_m
+        && originX === meta.origin_m[0] && originY === meta.origin_m[1] && yawDeg === meta.yaw_deg,
+        `${grid.width} x ${grid.height} samples from (${originX}, ${originY}), resolution ${resolution} m, yaw ${yawDeg} deg, step ${grid.step} m, ${grid.url}`);
+    check(`${slug} detail`, grid.detailQuads === (meta.detail?.quads ?? null) && !grid.detailError,
+        meta.detail ? `${grid.detailQuads} quads with detail (meta.json ${meta.detail.quads}, threshold ${meta.detail.threshold_m} m, ${meta.detail.bytes} bytes)${grid.detailError ? `, ${grid.detailError}` : ""}`
+            : `none announced, ${grid.detailQuads ?? "none"} read`);
     console.log(`     ${slug} worker time: cold ${times[0].toFixed(0)} ms, then ${times.slice(1).map((t) => t.toFixed(0)).join(", ")} ms (median warm ${warm[Math.floor(warm.length / 2)].toFixed(0)} ms)`);
+}
+
+/**
+ * The page's getHeight plus meta.json z_min_m minus z at world points [[x, y, z], ...] of a map, the map selected first
+ * @param {string} slug
+ * @param {number[][]} vertices
+ * @returns {Promise<{name: string, resolution: number, step: number, errors: number[], ready: boolean}>}
+ */
+async function pageErrors(slug, vertices) {
+    return page.evaluate(async ({ slug, vertices }) => {
+        const app = window.__App;
+        const map = app.minimap;
+        if (!map.activeMap.mapURL.includes(`/${slug}/`)) app.MAP_SELECTOR.val([...app.MAP_SELECTOR[0].options].find((o) => o.dataset.i18n.toLowerCase() === `maps:${slug}`).value).trigger("change");
+        await new Promise((resolve) => { const timer = setInterval(() => { if (map.activeMap.mapURL.includes(`/${slug}/`) && map.heightmap.ready) { clearInterval(timer); resolve(); } }, 50); setTimeout(resolve, 120000); });
+        const meta = await (await fetch(`/heightmaps/${slug}/meta.json`)).json();
+        const { min_x: minX, max_x: maxX, min_y: minY, max_y: maxY } = meta.bounds_m;
+        const errors = vertices.map(([x, y, z]) => map.heightmap.getHeight({ lat: -(y - minY) / (maxY - minY) * map.pixelSize, lng: (x - minX) / (maxX - minX) * map.pixelSize }) + meta.z_min_m - z);
+        return { name: map.activeMap.name, resolution: map.heightmap.resolution, step: map.heightmap.step, errors, ready: map.heightmap.ready };
+    }, { slug, vertices });
+}
+
+/**
+ * Check the page's errors at a map's points against a tolerance in metres
+ * @param {string} label
+ * @param {{resolution: number, step: number, errors: number[], ready: boolean}} result
+ * @param {number} tolerance
+ */
+function checkErrors(label, result, tolerance) {
+    const abs = result.errors.map(Math.abs).sort((a, b) => a - b);
+    const rms = Math.sqrt(abs.reduce((sum, e) => sum + e * e, 0) / abs.length);
+    check(label, result.ready && abs.length > 0 && abs[abs.length - 1] <= tolerance,
+        `resolution ${result.resolution} m, rms ${(rms * 100).toFixed(3)} cm, p99 ${(abs[Math.floor(abs.length * 0.99)] * 100).toFixed(3)} cm, max ${(abs[abs.length - 1] * 100).toFixed(3)} cm (step ${(result.step * 100).toFixed(2)} cm)`);
 }
 
 for (const [slug, vertices] of Object.entries(points)) {
     if (!slugs.includes(slug)) continue;
-    const result = await page.evaluate(async ({ slug, vertices }) => {
-        const app = window.__App;
-        const map = app.minimap;
-        if (!map.activeMap.mapURL.includes(`/${slug}/`)) app.MAP_SELECTOR.val([...app.MAP_SELECTOR[0].options].find((o) => o.textContent.toLowerCase().includes(slug)).value).trigger("change");
-        await new Promise((resolve) => { const timer = setInterval(() => { if (map.activeMap.mapURL.includes(`/${slug}/`) && map.heightmap.precise) { clearInterval(timer); resolve(); } }, 50); setTimeout(resolve, 120000); });
-        const meta = await (await fetch(`/heightmaps/${slug}/meta.json`)).json();
-        const { min_x: minX, max_x: maxX, min_y: minY, max_y: maxY } = meta.bounds_m;
-        const errors = vertices.map(([x, y, z]) => map.heightmap.getHeight({ lat: -(y - minY) / (maxY - minY) * map.pixelSize, lng: (x - minX) / (maxX - minX) * map.pixelSize }) + meta.z_min_m - z);
-        return { name: map.activeMap.name, resolution: map.heightmap.resolution, step: map.heightmap.step, errors, precise: map.heightmap.precise };
-    }, { slug, vertices });
-    const abs = result.errors.map(Math.abs).sort((a, b) => a - b);
-    const rms = Math.sqrt(abs.reduce((sum, e) => sum + e * e, 0) / abs.length);
-    check(`${slug} page heights at ${abs.length} landscape vertices`, result.precise && abs[abs.length - 1] <= result.step / 2 + 0.0005,
-        `resolution ${result.resolution} m, rms ${(rms * 100).toFixed(3)} cm, p99 ${(abs[Math.floor(abs.length * 0.99)] * 100).toFixed(3)} cm, max ${(abs[abs.length - 1] * 100).toFixed(3)} cm (step ${(result.step * 100).toFixed(2)} cm)`);
+    const result = await pageErrors(slug, vertices);
+    checkErrors(`${slug} page heights at ${vertices.length} points of the game's landscape`, result, result.step / 2 + 0.0005);
+}
+for (const [slug, vertices] of Object.entries(detailPoints)) {
+    if (!slugs.includes(slug) || !vertices.length) continue;
+    checkErrors(`${slug} page heights at ${vertices.length} points in quads with detail`, await pageErrors(slug, vertices), 0.0001);
 }
 
 check("console clean", problems.length === 0, problems.length ? problems.slice(0, 5).join(" | ") : "no errors or warnings");

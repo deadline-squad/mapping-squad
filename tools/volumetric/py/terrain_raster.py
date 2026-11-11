@@ -1,19 +1,21 @@
-"""Landscape-only heights of one map ("TER1"): the ground that the voxel layer needs under the objects.
+"""Landscape-only heights of one map ("TER2"): the ground that the voxel layer needs under the objects.
 
 The served heightmap fuses the landscape with the buildings, so under a bridge or in a doorway it reports the roof.
 The voxel layer (VCOL1) only holds what stands above the landscape, so a page that answers segment tests with it needs
-the landscape alone, on the heightmap's own grid, plus the quads the landscape visibility mask cut out (holes do not block).
+the landscape alone, on the heightmap's own grid (the landscape's vertices, tools/heightmaps/py/lattice.py), plus the quads
+the landscape visibility mask cut out (holes do not block).
 
     python terrain_raster.py <slug> <heightmap meta.json> <out terrain.bin>
 
 File layout (little endian), before gzip:
-    magic "TER1\\0\\0\\0\\0", float32 min_x, min_y, cell, z_min, step, uint32 width, height, hole_count
+    magic "TER2\\0\\0\\0\\0", float64 origin_x, origin_y, cell, float32 yaw_deg, z_min, step, uint32 width, height, hole_count
     width * height residuals, stored as all their low bytes then all their high bytes (gzip packs the planes better):
     the level of a vertex minus the plane prediction left + above - above-left (0 for a neighbour outside the grid),
     modulo 65536, as a signed 16-bit number zigzag coded ((r << 1) ^ (r >> 15)); level 0 = no landscape under the
     vertex, else z = z_min + (level - 1) * step
     hole_count varints: the vertex indices (row * width + column) of the holes, as differences of the sorted list.
-Vertex (column, row) lies at world (min_x + column * cell, min_y + row * cell). A vertex is a hole when
+Vertex (column, row) lies at world origin + column * cell * (cos yaw, sin yaw) + row * cell * (-sin yaw, cos yaw), metres
+(the heightmap's meta.json origin_m, resolution_m and yaw_deg). A vertex is a hole when
 ``terrain.sample`` reports a hole at it (the flag of the quad the vertex is the lower corner of, as eval_los does).
 """
 
@@ -24,11 +26,12 @@ import sys
 
 import numpy as np
 
+import lattice
 import maps
 import terrain
 
-MAGIC = b"TER1\0\0\0\0"
-HEADER = "<8s5f3I"
+MAGIC = b"TER2\0\0\0\0"
+HEADER = "<8s3d3f3I"
 LANDSCAPE_ROOT = "/data/squad-extract/landscapes"
 LEVELS = 65535
 MIN_STEP_M = 0.05
@@ -36,16 +39,15 @@ STRIP_CELLS = 1_000_000
 LEVEL_ROWS = 256
 
 
-def sample_grid(actors, min_x, min_y, cell, width, height):
-    """(z [height, width] with NaN where no landscape, hole [height, width]) at the grid vertices."""
-    z = np.full((height, width), np.nan)
-    hole = np.zeros((height, width), bool)
-    xs = min_x + np.arange(width) * cell
-    rows_per_strip = max(1, STRIP_CELLS // width)
-    for first in range(0, height, rows_per_strip):
-        ys = min_y + np.arange(first, min(height, first + rows_per_strip)) * cell
-        gx, gy = np.meshgrid(xs, ys)
-        z[first:first + len(ys)], hole[first:first + len(ys)] = terrain.sample(actors, gx, gy)
+def sample_grid(actors, grid):
+    """(z [height, width] with NaN where no landscape, hole [height, width]) at the nodes of ``grid`` (lattice.Lattice)."""
+    z = np.full((grid.height, grid.width), np.nan)
+    hole = np.zeros((grid.height, grid.width), bool)
+    rows_per_strip = max(1, STRIP_CELLS // grid.width)
+    for first in range(0, grid.height, rows_per_strip):
+        count = min(rows_per_strip, grid.height - first)
+        gx, gy = lattice.node_rows(grid, first, count)
+        z[first:first + count], hole[first:first + count] = terrain.sample(actors, gx, gy)
     return z, hole
 
 
@@ -67,8 +69,8 @@ def varints(values):
     return out
 
 
-def encode(z, hole, min_x, min_y, cell):
-    """gzip bytes of the TER1 file for heights `z` [height, width] (NaN: no landscape) and the hole mask."""
+def encode(z, hole, grid):
+    """gzip bytes of the TER2 file for heights `z` [height, width] at the nodes of ``grid`` (NaN: no landscape) and the hole mask."""
     height, width = z.shape
     z_min, step = choose_step(z)
     # int32 and row blocks keep the peak near three copies of the grid (a 66 M-vertex map fits in 4 GB)
@@ -84,7 +86,7 @@ def encode(z, hole, min_x, min_y, cell):
     zigzag = ((signed << 1) ^ (signed >> 15)) & 0xFFFF
     del signed
     holes = np.flatnonzero(hole.ravel())
-    head = struct.pack(HEADER, MAGIC, min_x, min_y, cell, z_min, step, width, height, len(holes))
+    head = struct.pack(HEADER, MAGIC, grid.origin_x, grid.origin_y, grid.resolution, grid.yaw_deg, z_min, step, width, height, len(holes))
     planes = (zigzag & 0xFF).astype(np.uint8).tobytes() + (zigzag >> 8).astype(np.uint8).tobytes()
     body = planes + bytes(varints(np.diff(holes, prepend=0).tolist()))
     return gzip.compress(head + body, 6)
@@ -94,9 +96,9 @@ def decode(blob):
     """(z [height, width] with NaN where no landscape, hole mask, header dict) from `encode` output."""
     raw = gzip.decompress(blob)
     size = struct.calcsize(HEADER)
-    magic, min_x, min_y, cell, z_min, step, width, height, hole_count = struct.unpack_from(HEADER, raw, 0)
+    magic, origin_x, origin_y, cell, yaw_deg, z_min, step, width, height, hole_count = struct.unpack_from(HEADER, raw, 0)
     if magic != MAGIC:
-        raise ValueError("not a TER1 file")
+        raise ValueError("not a TER2 file")
     count = width * height
     low = np.frombuffer(raw, np.uint8, count, size).astype(np.int64)
     high = np.frombuffer(raw, np.uint8, count, size + count).astype(np.int64)
@@ -118,22 +120,22 @@ def decode(blob):
             shift += 7
         index += value
         hole[index] = True
-    header = dict(min_x=min_x, min_y=min_y, cell=cell, z_min=z_min, step=step, width=width, height=height, holes=hole_count)
+    header = dict(origin_x=origin_x, origin_y=origin_y, cell=cell, yaw_deg=yaw_deg, z_min=z_min, step=step, width=width, height=height,
+                  holes=hole_count)
     return z, hole.reshape(height, width), header
 
 
 def main():
     slug, meta_path, out = sys.argv[1:4]
-    meta = json.load(open(meta_path))
-    b = meta["bounds_m"]
-    cell = float(meta.get("resolution_m", 1.0))
-    width = int(round((b["max_x"] - b["min_x"]) / cell)) + 1
-    height = int(round((b["max_y"] - b["min_y"]) / cell)) + 1
+    with open(meta_path) as f:
+        grid = lattice.from_meta(json.load(f))
     actors = [(g, h, x0, y0, root) for level in maps.MAPS[slug][1] for g, h, x0, y0, root in terrain.assemble(f"{LANDSCAPE_ROOT}/{level}").values()]
-    z, hole = sample_grid(actors, b["min_x"], b["min_y"], cell, width, height)
-    blob = encode(z, hole, b["min_x"], b["min_y"], cell)
-    open(out, "wb").write(blob)
-    print(json.dumps(dict(file=out, width=width, height=height, holes=int(hole.sum()), no_landscape=int(np.isnan(z).sum()), gzip_bytes=len(blob))))
+    z, hole = sample_grid(actors, grid)
+    blob = encode(z, hole, grid)
+    with open(out, "wb") as f:
+        f.write(blob)
+    print(json.dumps(dict(file=out, width=grid.width, height=grid.height, holes=int(hole.sum()), no_landscape=int(np.isnan(z).sum()),
+                          gzip_bytes=len(blob))))
 
 
 if __name__ == "__main__":

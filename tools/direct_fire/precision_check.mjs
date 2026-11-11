@@ -4,8 +4,9 @@
 //     node --import ./register.mjs precision_check.mjs <SquadCalc checkout> [SECTION ...]
 //
 //   B1  non-square maps: distance and bearing use the scale of each map axis (Skorpo 6849 x 6869 m)
-//   B2  heightmap grid of width+1 samples and interpolation (synthetic plane heightmap), and the game's triangles:
-//       each quad splits along the diagonal from (row, col) to (row + 1, col + 1), not bilinear (synthetic saddles)
+//   B2  heightmap grid of width+1 samples and interpolation (synthetic plane heightmap), the game's triangles:
+//       each quad splits along the diagonal from (row, col) to (row + 1, col + 1), not bilinear (synthetic saddles),
+//       and samples on the landscape's vertices (0.5 m, off the minimap's corner, 1.2 m and turned)
 //   B6  UB-32 equivalent velocity below the end of its deceleration (Squad Ballistics' time_to model)
 //   B7  rockets: the elevation lands on the target, to 0.5 m, in a simulation of the game's 20 ms substeps
 //       with the game's values (GAME_ROCKETS): the S-5's boost along the launch axis, the other rockets'
@@ -83,18 +84,31 @@ sections.B2 = async () => {
     const { default: SquadHeightmap } = await import(`${root}/src/js/squadHeightmaps.js`);
     globalThis.document ??= {};
     globalThis.$ ??= () => ({ trigger() {}, show() {}, hide() {}, text() {}, html() {}, attr() {} });
-    // A plane on a 100 x 120 m map: one sample per meter, corners included (101 x 121 samples), level =
-    // 3 per meter east + 7 per meter south, 1 cm per level. Both bilinear and triangle interpolation are exact on a plane.
-    const width = 101, height = 121, step = 0.01;
-    const levels = new Uint16Array(width * height);
-    for (let row = 0; row < height; row++) for (let col = 0; col < width; col++) levels[row * width + col] = 3 * col + 7 * row;
-    const heightmap = Object.create(SquadHeightmap.prototype);
-    heightmap.jsonPng = [];
-    heightmap.worker = null;
-    heightmap.map = { pixelSize: 256, heightmap, activeMap: { size: 100, sizeY: 120 } };
-    heightmap.receive({ levels, width, height, step, precise: true, url: "synthetic" });
-    for (const [east, south] of [[0, 0], [37.3, 88.6], [99.5, 0.25], [100, 120], [12.75, 119.9], [50, 60]]) {
-        const got = heightmap.getHeight({ lat: -south / 120 * 256, lng: east / 100 * 256 });
+    /** A SquadHeightmap of the worker's result (heightmapWorker.js) on a 256-unit map of `bounds` */
+    const loaded = (levels, width, height, step, lattice, bounds) => {
+        const heightmap = Object.create(SquadHeightmap.prototype);
+        heightmap.jsonPng = [];
+        heightmap.worker = null;
+        heightmap.map = { pixelSize: 256, heightmap };
+        heightmap.receive({ levels, width, height, step, lattice, bounds, url: "synthetic" });
+        return heightmap;
+    };
+    /** Levels of the plane 3 per sample column + 7 per sample row */
+    const plane = (width, height) => {
+        const levels = new Uint16Array(width * height);
+        for (let row = 0; row < height; row++) for (let col = 0; col < width; col++) levels[row * width + col] = 3 * col + 7 * row;
+        return levels;
+    };
+    const unturned = (originX, originY, resolution) => ({ originX, originY, resolution, yawDeg: 0 });
+    const bounds = { min_x: 0, max_x: 100, min_y: 0, max_y: 120 };
+    const at = (east, south) => ({ lat: -south / 120 * 256, lng: east / 100 * 256 });
+    const points = [[0, 0], [37.3, 88.6], [99.5, 0.25], [100, 120], [12.75, 119.9], [50, 60]];
+    // A plane on a 100 x 120 m map: one sample per meter, corners included (101 x 121 samples), 1 cm per level. Both
+    // bilinear and triangle interpolation are exact on a plane.
+    const step = 0.01;
+    const heightmap = loaded(plane(101, 121), 101, 121, step, unturned(0, 0, 1), bounds);
+    for (const [east, south] of points) {
+        const got = heightmap.getHeight(at(east, south));
         const expected = (3 * east + 7 * south) * step;
         check(`plane heightmap at ${east} m east, ${south} m south`, Math.abs(got - expected) < 1e-9,
             `${got.toFixed(4)} m, expected ${expected.toFixed(4)} m (error ${(got - expected).toFixed(4)} m)`);
@@ -105,11 +119,7 @@ sections.B2 = async () => {
     // (0, 0) has the peak at that far corner, so its surface is min(east, south); quad (0, 1) has it at its
     // (row + 1, col) corner, off the diagonal: 0 where east - 1 >= south and south - (east - 1) above it.
     // Bilinear interpolation gives east * south and (1 - fx) * fy there.
-    const peak = Object.create(SquadHeightmap.prototype);
-    peak.jsonPng = [];
-    peak.worker = null;
-    peak.map = { pixelSize: 256, heightmap: peak, activeMap: { size: 2, sizeY: 2 } };
-    peak.receive({ levels: Uint16Array.from([0, 0, 0, 0, 100, 0, 0, 0, 0]), width: 3, height: 3, step: 0.01, precise: true, url: "synthetic" });
+    const peak = loaded(Uint16Array.from([0, 0, 0, 0, 100, 0, 0, 0, 0]), 3, 3, 0.01, unturned(0, 0, 1), { min_x: 0, max_x: 2, min_y: 0, max_y: 2 });
     const triangles = [
         [0.5, 0.5, 0.5], [0.75, 0.25, 0.25], [0.25, 0.75, 0.25], [0.5, 0.25, 0.25], [0.25, 0.5, 0.25], [1, 1, 1],
         [1.5, 0.5, 0], [1.75, 0.25, 0], [1.25, 0.75, 0.5],
@@ -120,27 +130,29 @@ sections.B2 = async () => {
             `${got.toFixed(4)} m, expected ${expected.toFixed(4)} m`);
     }
 
-    // A 0.5 m heightmap (Chora, Kokan: meta.json resolution_m 0.5) of a 100 x 120 m map has 201 x 241 samples: the
-    // page scales its grid from the sample count, the reads stay exact on a plane, and the sample spacing is kept
-    // for the obstacle step. A heightmap without resolution (the 8-bit one, an older meta.json) is one meter.
-    const fine = Object.create(SquadHeightmap.prototype);
-    fine.jsonPng = [];
-    fine.worker = null;
-    fine.map = { pixelSize: 256, heightmap: fine, activeMap: { size: 100, sizeY: 120 } };
-    const fineWidth = 201, fineHeight = 241;
-    const fineLevels = new Uint16Array(fineWidth * fineHeight);
-    for (let row = 0; row < fineHeight; row++) for (let col = 0; col < fineWidth; col++) fineLevels[row * fineWidth + col] = 3 * col + 7 * row;
-    fine.receive({ levels: fineLevels, width: fineWidth, height: fineHeight, step, resolution: 0.5, precise: true, url: "synthetic" });
-    check("0.5 m heightmap: resolution kept", fine.resolution === 0.5, String(fine.resolution));
-    check("0.5 m heightmap: samples per map unit follow the grid", fine.colsPerUnit === 200 / 256 && fine.rowsPerUnit === 240 / 256,
-        `${fine.colsPerUnit} x ${fine.rowsPerUnit}`);
-    for (const [east, south] of [[0, 0], [37.3, 88.6], [99.5, 0.25], [100, 120], [12.75, 119.9], [50, 60]]) {
-        const got = fine.getHeight({ lat: -south / 120 * 256, lng: east / 100 * 256 });
-        const expected = (3 * east / 0.5 + 7 * south / 0.5) * step;
-        check(`0.5 m plane heightmap at ${east} m east, ${south} m south`, Math.abs(got - expected) < 1e-9,
-            `${got.toFixed(4)} m, expected ${expected.toFixed(4)} m (error ${(got - expected).toFixed(4)} m)`);
+    // The samples are the landscape's vertices (meta.json origin_m, resolution_m, yaw_deg): 0.5 m apart on Chora and Kokan,
+    // off the minimap's corner on Goose Bay (0.431 m east and 0.252 m south of a whole metre), 1.2 m apart and turned by
+    // -2.006195 degrees on Skorpo. Each is a plane over its own samples, read exactly at world points.
+    const yaw = -2.006195 * Math.PI / 180;
+    const lattices = [
+        ["0.5 m (Chora)", unturned(0, 0, 0.5), 201, 241],
+        ["off the corner (Goose Bay)", unturned(-0.569, -0.748, 1), 102, 122],
+        ["1.2 m turned (Skorpo)", { originX: -6, originY: -1.5, resolution: 1.2, yawDeg: -2.006195 }, 90, 108],
+    ];
+    for (const [label, lattice, width, height] of lattices) {
+        const grid = loaded(plane(width, height), width, height, step, lattice, bounds);
+        check(`${label} heightmap: resolution kept`, grid.resolution === lattice.resolution, String(grid.resolution));
+        const theta = lattice.yawDeg ? yaw : 0;
+        for (const [east, south] of points) {
+            const dx = east - lattice.originX, dy = south - lattice.originY;
+            const col = (Math.cos(theta) * dx + Math.sin(theta) * dy) / lattice.resolution;
+            const row = (Math.cos(theta) * dy - Math.sin(theta) * dx) / lattice.resolution;
+            const got = grid.getHeight(at(east, south));
+            const expected = (3 * col + 7 * row) * step;
+            check(`${label} plane heightmap at ${east} m east, ${south} m south`, Math.abs(got - expected) < 1e-9,
+                `${got.toFixed(4)} m, expected ${expected.toFixed(4)} m (error ${(got - expected).toFixed(4)} m)`);
+        }
     }
-    check("1 m heightmap without resolution: one meter", heightmap.resolution === 1, String(heightmap.resolution));
 };
 
 /** App.minimap stand-in for the bridge in smcConnector: one weapon marker and these targets (their firingSolution1) */

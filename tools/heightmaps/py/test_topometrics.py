@@ -179,6 +179,13 @@ class Summary(unittest.TestCase):
         self.assertEqual(summary["slope_share"]["over_30_deg"], 0.0)
         self.assertEqual(summary["metrics"]["aspect_deg"]["p50"], 270.0)
 
+    def test_aspect_of_a_turned_grid_is_a_compass_bearing(self):
+        # Skorpo: the grid's columns run 2.006195 degrees anticlockwise of east, so a slope facing the grid's west faces 267.99 deg
+        x, y = grid(50, 50, 1.2)
+        meta = {"map": "plane", "resolution_m": 1.2, "yaw_deg": -2.006195}
+        summary = topometrics.map_summary(x * np.tan(np.radians(20.0)), meta, with_sky=False)
+        self.assertAlmostEqual(summary["metrics"]["aspect_deg"]["p50"], 270.0 - 2.006195, places=4)
+
 
 class Loader(unittest.TestCase):
     def test_round_trip_of_the_rg16_webp(self):

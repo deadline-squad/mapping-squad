@@ -20,6 +20,7 @@ from scipy.ndimage import distance_transform_edt
 
 import compare_interpolation
 import landscape
+import lattice
 import maps
 import objects
 
@@ -30,8 +31,9 @@ Z_STEP = 0.002
 def fused_grid(actors, statics, bounds, step):
     """Terrain and objects of the window fused: (fused heights, terrain heights), float32 [rows, cols]."""
     terrain = compare_interpolation.grid_nodes(actors, bounds, step, "triangle")
-    top, _ = objects.object_surface(statics, bounds, step, terrain.shape)
-    return np.fmax(terrain, top.astype(np.float32)), terrain
+    grid = lattice.Lattice(bounds["min_x"], bounds["min_y"], step, 0.0, terrain.shape[1], terrain.shape[0])
+    top, _ = objects.object_surface(statics, grid)
+    return np.fmax(terrain, top), terrain
 
 
 def main(extract_root, slug, min_x, min_y, size, out_dir, points="500000"):

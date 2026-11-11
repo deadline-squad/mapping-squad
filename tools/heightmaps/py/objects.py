@@ -20,6 +20,8 @@ import struct
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 
+import lattice
+
 NO_COLLISION = ("ECollisionEnabled::NoCollision", "ECollisionEnabled::PhysicsOnly", "ECollisionEnabled::ProbeOnly")
 NO_COLLISION_PROFILES = ("NoCollision", "OverlapAll", "OverlapAllDynamic", "UI")
 SKIPPED_LEVEL_PARTS = ("/Coop/", "/Tutorials/")
@@ -296,9 +298,9 @@ def world_triangles(directory, by_mesh):
             yield mesh, source, (points @ m)[:, :3].reshape(-1, 3, 3) / 100
 
 
-def object_surface(directory, bounds, step, shape):
-    """Highest static mesh collision above each grid point in metres (-inf where none), and stats."""
-    top = np.full(shape, -np.inf)
+def object_surface(directory, grid):
+    """Highest static mesh collision above each node of ``grid`` (lattice.Lattice) in metres (float32, -inf where none), and stats."""
+    top = np.full((grid.height, grid.width), -np.inf, np.float32)
     by_mesh, skipped = placements(directory)
     sources = {"complex": 0, "simple": 0, "none": 0, "no_collision_mesh": 0}
     for mesh, mats in by_mesh.items():
@@ -313,8 +315,7 @@ def object_surface(directory, bounds, step, shape):
         sources[source] += len(mats)
         points = np.concatenate([local.reshape(-1, 3), np.ones((local.shape[0] * 3, 1))], axis=1)
         for m in mats:
-            world_tris = (points @ m)[:, :3].reshape(-1, 3, 3) / 100
-            rasterize(world_tris, top, bounds["min_x"], bounds["min_y"], step)
+            rasterize(lattice.local_triangles(grid, (points @ m)[:, :3].reshape(-1, 3, 3) / 100), top, 0.0, 0.0, grid.resolution)
     return top, {**skipped, **sources}
 
 

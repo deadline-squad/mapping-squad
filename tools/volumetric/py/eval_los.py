@@ -21,6 +21,7 @@ from PIL import Image
 
 import collision
 import columns
+import lattice
 import models
 import reference
 
@@ -28,9 +29,13 @@ EYE_M = 1.6
 
 
 def load_heightmap(directory):
-    meta = json.load(open(os.path.join(directory, "meta.json")))
-    levels = np.asarray(Image.open(os.path.join(directory, "heightmap.png"))).astype(np.float64)
-    return levels * meta["z_step_m"] + meta["z_min_m"], meta["bounds_m"]
+    """(heights m, bounds) of a served heightmap at the points of the 1 m grid from its bounds' corner, the grid the models
+    index; its own samples are the landscape's vertices, read at those points as SquadCalc reads them (lattice.on_grid)."""
+    with open(os.path.join(directory, "meta.json")) as handle:
+        meta = json.load(handle)
+    with Image.open(os.path.join(directory, "heightmap.png")) as image:
+        heights = np.asarray(image).astype(np.float32) * np.float32(meta["z_step_m"]) + np.float32(meta["z_min_m"])
+    return lattice.on_grid(heights, lattice.from_meta(meta), meta["bounds_m"], 1.0), meta["bounds_m"]
 
 
 GRAZE_M = 0.25

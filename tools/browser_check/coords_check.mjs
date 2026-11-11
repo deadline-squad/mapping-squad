@@ -48,7 +48,7 @@ const problems = [];
 page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
 
 await page.goto(`${base}/?map=Skorpo`, { waitUntil: "load" });
-await page.waitForFunction(() => window.__App?.minimap?.activeMap?.name === "Skorpo" && window.__App.minimap.heightmap?.precise && !window.__App.minimap._spinning, null, { timeout: 120000 });
+await page.waitForFunction(() => window.__App?.minimap?.activeMap?.name === "Skorpo" && window.__App.minimap.heightmap?.ready && !window.__App.minimap._spinning, null, { timeout: 120000 });
 console.log(`site ${base}, SquadCalc ${await page.evaluate(() => window.__App.version)}`);
 
 /** Select a weapon of weapons.js by its name */

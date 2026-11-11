@@ -18,9 +18,9 @@ rest at the build's `dist`).
 node browser_check.mjs <site URL> [--maps] [--ballistics <weapons.json>]
 ```
 
-Console and requests clean, precise heightmaps (`--maps`: on every map; a dropped heightmap.png or
-meta.json request is tried again, a network that keeps dropping it gives the 8-bit heightmap with a
-warning, a 404 falls back at once), regression checks for
+Console and requests clean, heightmaps (`--maps`: on every map; a dropped heightmap or meta.json request is
+tried again, a network that keeps dropping it ends in the failed-heightmap toast after four attempts, a 404 at once),
+regression checks for
 the bugs fixed in 45.5.1 and after the walkthrough review, the `window.squadBallistics` bridge the
 Squad Ballistics app reads (targets, weapon, weapon selection; `--ballistics`: every weapon of
 Squad Ballistics' weapons.json aimed with the overlay is selected by its name and reported back, the
@@ -226,12 +226,12 @@ renderer (this host has no GPU: SwiftShader, so there is no GPU timing). Results
 ## precision_browser.mjs: precision checks on the served build
 
 ```sh
-node precision_browser.mjs <site URL> <SquadCalc checkout for node_modules/fast-png>
+node precision_browser.mjs <site URL>
 ```
 
 The audit's precision checks in the browser, against oracles computed from the served files: distance and
-bearing on a non-square map (Skorpo) from the world coordinates, the page's heights against the bilinear
-interpolation of the served 16-bit heightmap, mortar and UB-32 solutions in a simulation with the game's
+bearing on a non-square map (Skorpo) from the world coordinates, the page's heights against the game's triangles on
+the served 16-bit heightmap (read with `tools/direct_fire/png16.mjs`, on the grid of its meta.json), mortar and UB-32 solutions in a simulation with the game's
 values, a session peer's height padding as a number, and the warning when the heightmaps fail to load.
 `tools/direct_fire/precision_check.mjs` holds the same checks on the modules, without a browser.
 
@@ -283,20 +283,25 @@ node heightmap_exact.mjs <site URL> --maps albasrah,chora,skorpo [--dist <dir>] 
 ```
 
 Loads each map's heightmap in the site's worker through the WebP and through the PNG and compares them in the
-page pixel by pixel (identical where the step is the same, within half a step of each where it was coarsened);
+page pixel by pixel: the WebP holds the PNG's levels and step, so every pixel must be the same;
 `--dist` with `--fast-png` also checks the worker's PNG decode against fast-png's. Exits with 1 on a difference.
 
-## heightmap_native.mjs: maps finer than 1 m
+## heightmap_native.mjs: heights on the game's landscape vertices
 
 ```sh
-node heightmap_native.mjs <site URL> --maps chora,kokan [--points points.json] [--runs 5]
+node heightmap_native.mjs <site URL> --maps skorpo,anvil,chora [--points points.json] [--detail detail.json] [--runs 5]
 ```
 
-Chora and Kokan have 0.5 m heightmaps (`tools/heightmaps`, "Grid size"). For each map the site's worker loads the
-heightmap `--runs` times and the script prints its grid (samples, `resolution`, step) and the worker's time (the
-first run is cold, the rest read the browser cache, so they are the decoding). `--points` is a file written by
-`tools/heightmaps/py/compare_native_vertices.py --points-out`: the page's own `getHeight` is read at landscape
-vertices of the game and must agree to half the height step. Exits with 1 on a failure.
+The heightmaps lie on the landscape's own vertices (`tools/heightmaps`, "Grid"): 0.75 m apart on Anvil, 1.2 m and turned
+by -2.006 degrees on Skorpo, 0.5 m on Chora and Kokan. For each map the site's worker loads the heightmap `--runs` times and
+the script checks its grid against meta.json (samples, `origin_m`, `resolution_m`, `yaw_deg`) and prints the worker's time
+(the first run is cold, the rest read the browser cache, so they are the decoding). `--points` is a file written by
+`tools/heightmaps/py/compare_native_vertices.py --points-out`: the page's own `getHeight` is read at landscape vertices and
+at points inside quads, where the heightmap holds the bare landscape, and must agree with the game's collision to half the
+height step (plus 0.5 mm). The worker's detail where objects stand (`heightmap.detail.bin`) must hold as many quads as
+meta.json's `detail.quads`, none without the entry; `--detail` is a file written by `tools/heightmaps/py/heightmap_detail.py`
+(points in quads with detail and the height its reader gives there from the same files), which the page must read within
+0.1 mm. Exits with 1 on a failure.
 
 ## fonts_check.mjs: the fonts come from the site
 
@@ -380,7 +385,7 @@ yellow ring on every click or tap, the pressed keys at the bottom right and a ca
 
 Also written to `<dir>` (default `~/videos/squadcalc`): a screenshot per notable step in `frames/`,
 and `walkthrough-log.json` with the steps and every console error or warning, page error, failed
-request, coarse heightmap and unscripted outcome, each tagged with its step. Exits with 1 when there
+request, failed heightmap and unscripted outcome, each tagged with its step. Exits with 1 when there
 was any.
 
 Not clicked: the collaborative session (it would create a session on the upstream squadcalc.app

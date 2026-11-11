@@ -48,7 +48,8 @@ function heightmapOf(step) {
     heightmap.worker = null;
     const size = (meta.width - 1) * meta.step;
     heightmap.map = { pixelSize: size, heightmap };
-    heightmap.receive({ levels, width: meta.width, height: meta.height, step: meta.z_step, resolution: step, precise: true, url: "synthetic" });
+    heightmap.receive({ levels, width: meta.width, height: meta.height, step: meta.z_step, url: "synthetic",
+        lattice: { originX: 0, originY: 0, resolution: Number(step), yawDeg: 0 }, bounds: { min_x: 0, max_x: size, min_y: 0, max_y: size } });
     // receive() ignores z_min: all grids share it, so it cancels in every height difference
     return { heightmap, size, step };
 }

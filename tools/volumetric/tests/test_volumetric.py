@@ -13,6 +13,7 @@ sys.path.insert(0, os.environ.get("HEIGHTMAPS_PY", os.path.join(os.path.dirname(
 import codec  # noqa: E402
 import collision  # noqa: E402
 import columns  # noqa: E402
+import lattice  # noqa: E402
 import models  # noqa: E402
 import reference  # noqa: E402
 import terrain_raster  # noqa: E402
@@ -104,12 +105,14 @@ class VolumetricTests(unittest.TestCase):
         z[4, 5:9] = np.nan
         hole = np.zeros(z.shape, bool)
         hole[10, 3] = hole[29, 39] = True
-        out, out_hole, header = terrain_raster.decode(terrain_raster.encode(z, hole, -100.0, 50.0, 0.5))
+        grid = lattice.Lattice(-100.431, 50.252, 1.2, -2.006195, 40, 30)
+        out, out_hole, header = terrain_raster.decode(terrain_raster.encode(z, hole, grid))
         self.assertEqual(out.shape, z.shape)
         np.testing.assert_array_equal(np.isnan(out), np.isnan(z))
         self.assertLessEqual(float(np.nanmax(np.abs(out - z))), header["step"] / 2 + 1e-6)
         np.testing.assert_array_equal(out_hole, hole)
-        self.assertEqual((header["min_x"], header["min_y"], header["cell"]), (-100.0, 50.0, 0.5))
+        self.assertEqual((header["origin_x"], header["origin_y"], header["cell"]), (-100.431, 50.252, 1.2))
+        self.assertAlmostEqual(header["yaw_deg"], -2.006195, places=5)
 
 
 if __name__ == "__main__":

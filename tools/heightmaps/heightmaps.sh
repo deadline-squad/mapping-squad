@@ -5,7 +5,8 @@
 #   heightmaps.sh extract             landscape collision and static meshes of every map from the paks
 #   heightmaps.sh build [map ...]     fuse them with SquadHeight into $OUT/<map>/{heightmap.png,heightmap.webp,meta.json}; the
 #                                     client scenes ($SCENES, "maprender.sh scene" of tools/maprender) say which of
-#                                     SquadHeight's objects the game has
+#                                     SquadHeight's objects the game has; then heightmap.detail.bin, the finer grid where
+#                                     objects stand, where it fits (build_detail.py)
 #   heightmaps.sh deploy              replace those files of each map of $OUT in the served SquadCalc (backup first); the
 #                                     map's other files and meta.json keys (the volume layer of tools/volumetric) stay
 #   heightmaps.sh webp [map ...]      heightmap.webp and its meta.json for heightmaps already in $DIST/heightmaps, into $OUT_WEBP
@@ -88,11 +89,12 @@ build)
     shift
     mkdir -p "$OUT" "$SCENES"
     python_tool build_all.py /squadheight /work /scene /out "$(game_build)" "$@"
+    python_tool build_detail.py /squadheight /work /scene /out "$@"
     ;;
 deploy)
-    # Each map of $OUT replaces the files and the meta.json keys that "build" writes; the map's other files (volume.vcol and
-    # terrain.bin of tools/volumetric) and meta.json keys ("volume") stay. A map of $OUT without all of its files stops the
-    # deploy before anything is touched.
+    # Each map of $OUT replaces the files and the meta.json keys that "build" writes (heightmap.detail.bin and "detail" where the
+    # build has them); the map's other files (volume.vcol and terrain.bin of tools/volumetric) and meta.json keys ("volume")
+    # stay. A map of $OUT without all of its files stops the deploy before anything is touched.
     for dir in "$OUT"/*/; do
         for file in $HEIGHTMAP_FILES meta.json; do
             [ -f "$dir$file" ] || { echo "$dir$file is missing: build the map again" >&2; exit 1; }
@@ -108,13 +110,21 @@ deploy)
         for file in $HEIGHTMAP_FILES; do
             cp -p "$dir$file" "$target/$file.new" && mv "$target/$file.new" "$target/$file"
         done
+        # The detail exists only where it fits (build_detail.py): a map built without one loses the served one and its key
+        if [ -f "${dir}heightmap.detail.bin" ]; then
+            cp -p "${dir}heightmap.detail.bin" "$target/heightmap.detail.bin.new" && mv "$target/heightmap.detail.bin.new" "$target/heightmap.detail.bin"
+        fi
         python3 -c 'import json, os, sys
 built, served = sys.argv[1:]
 meta = json.load(open(served)) if os.path.exists(served) else {}
-meta.update(json.load(open(built)))
+fresh = json.load(open(built))
+meta.update(fresh)
+if "detail" not in fresh:
+    meta.pop("detail", None)
 with open(served + ".new", "w") as out:
     json.dump(meta, out, indent=1)
 os.replace(served + ".new", served)' "${dir}meta.json" "$target/meta.json"
+        [ -f "${dir}heightmap.detail.bin" ] || rm -f "$target/heightmap.detail.bin"
     done
     echo "deployed $(find "$OUT" -mindepth 2 -maxdepth 2 -name meta.json | wc -l) heightmaps to $DIST/heightmaps"
     ;;

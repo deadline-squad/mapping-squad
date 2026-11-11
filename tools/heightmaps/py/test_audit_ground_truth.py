@@ -10,13 +10,14 @@ import numpy as np
 
 import audit_ground_truth as audit
 import landscape
+import lattice
 
 # A 3 x 3 grid of 1 m samples with a 1 m peak in the middle (row 1, col 1); rows run along world Y
 PEAK = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]], dtype=float)
 
 
 def grid():
-    return audit.HeightGrid(PEAK, min_x=100.0, min_y=-50.0, resolution=1.0)
+    return audit.HeightGrid(PEAK, lattice.Lattice(100.0, -50.0, 1.0, 0.0, 3, 3))
 
 
 class HeightGridTest(unittest.TestCase):
