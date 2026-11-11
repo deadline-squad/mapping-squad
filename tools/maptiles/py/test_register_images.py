@@ -11,8 +11,13 @@ from PIL import Image
 from scipy import ndimage
 
 import layer_minimaps as lm
-import register_images as ri
-import relief
+
+try:
+    import register_images as ri
+    import relief
+except ModuleNotFoundError as error:
+    # pmtiles and rvt are in the relief image only: run this module there (README, "Where each map picture lies")
+    raise unittest.SkipTest(f"needs the relief image squadcalc-relief-py ({error.name} is missing)") from error
 
 
 def smooth_field(shape, seed, sigma=3.0):
