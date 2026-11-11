@@ -27,6 +27,11 @@
 #   maptiles.sh layer-minimaps         the game's per-layer minimap textures (Seed, Skirmish; a layer's data asset overrides
 #                                      its level's texture and corners) as webp into $DIST/maptiles/<texture>/0/0_0.webp and
 #                                      $DIST/maptiles/layer-minimaps.json (keyed by layer, with the corners)
+#   maptiles.sh register-setup [map ...]  after layer-minimaps: every minimap texture the levels and layer data name into
+#                                      $WORK/register/tex, the upstream images (basemap, terrainmap, topomap, heightmap.png)
+#                                      into $WORK/register/upstream/<map>, fetched when missing
+#   maptiles.sh register <measure> [args]  where each map picture lies on the world (py/register_images.py in the relief
+#                                      image: basemaps, rect, layer-minimaps, locate, orientation, upstream-relief, relief)
 #
 # Without maps every map of ../heightmaps/py/maps.py is processed.
 # Environment (defaults in brackets):
@@ -48,6 +53,8 @@
 #   SCENE_RASTER gpu or cpu: where "scene" draws the scene raster [gpu]
 #   CLIENT_DIR   Squad game client install (its paks hold the minimap textures) [~/data/squad-client]
 #   BASEMAPS     upstream basemap images <map>.webp for the colour styles, fetched when missing [$WORK/basemaps]
+#   LAYER_TILES  the folder with layer-minimaps.json and its pictures that "register layer-minimaps" measures [$DIST/maptiles]
+#   CPUS         CPUs of each "register" container [2]
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -67,6 +74,7 @@ MEMORY=${MEMORY:-3g}
 PYTHON=${PYTHON:-$HOME/data/venv-torch/bin/python}
 SCENE_RASTER=${SCENE_RASTER:-gpu}
 PAIRS=${PAIRS:-$HOME/data/mapsr}
+CPUS=${CPUS:-2}
 DOTNET_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
 PY_IMAGE=squadcalc-maptiles-py
 RELIEF_IMAGE=squadcalc-relief-py
@@ -97,6 +105,23 @@ colour_tool() {
         -v "$HERE/py:/py" -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" -v "$EXTRACT:/extract:ro" -v "$HEIGHTMAPS:/heightmaps:ro" \
         -v "$WORK/features:/features:ro" -v "$WORK/prep:/prep" -v "$BASEMAPS:/basemaps:ro" -v "$DIST/maptiles:/tiles" \
         -w /py "$PY_IMAGE" python -W ignore "$@"
+}
+
+# The extractor over the client's paks
+client_extractor() {
+    # shellcheck disable=SC2086
+    nice docker run --rm $USER_FLAGS -v "$WORK:/work" -v "$CLIENT_DIR/SquadGame/Content/Paks:/paks:ro" -w /work/bin \
+        "$DOTNET_IMAGE" dotnet SquadExtract.dll /paks "$@"
+}
+
+# py/register_images.py in the relief image, every input read only
+register_tool() {
+    # shellcheck disable=SC2086
+    nice docker run --rm $USER_FLAGS --memory="$MEMORY" --memory-swap="$MEMORY" --cpus="$CPUS" -e PYTHONPATH=/py:/hmpy \
+        -v "$HERE/py:/py:ro" -v "$HEIGHTMAPS_TOOL/py:/hmpy:ro" -v "$WORK/prep:/prep:ro" -v "$DIST/maptiles:/tiles:ro" \
+        -v "${HEIGHTMAPS_SERVED:-$DIST/heightmaps}:/heightmaps:ro" -v "$WORK/layer-minimaps:/layer-minimaps:ro" \
+        -v "$WORK/register:/register:ro" -v "${LAYER_TILES:-$DIST/maptiles}:/layer-tiles:ro" -w /py "$RELIEF_IMAGE" \
+        python -W ignore register_images.py "$@"
 }
 
 fetch_basemap() {
@@ -230,22 +255,40 @@ layer-minimaps)
     out="$WORK/layer-minimaps"
     rm -rf "${out:?}/layerdata" "${out:?}/tex"
     mkdir -p "$out" "$DIST/maptiles"
-    extractor() {
-        # shellcheck disable=SC2086
-        nice docker run --rm $USER_FLAGS -v "$WORK:/work" -v "$CLIENT_DIR/SquadGame/Content/Paks:/paks:ro" -w /work/bin \
-            "$DOTNET_IMAGE" dotnet SquadExtract.dll /paks "$@"
-    }
     layer_minimaps() {
         # shellcheck disable=SC2086
         nice docker run --rm $USER_FLAGS -v "$HERE/py:/py:ro" -v "$out:/layer-minimaps" -v "$DIST/maptiles:/tiles" \
             -v "$CLIENT_DIR/steamapps:/steamapps:ro" -w /py "$PY_IMAGE" python -W ignore layer_minimaps.py "$@"
     }
-    extractor layerminimaps 'Gameplay_Layers/' > "$out/layers.tsv"
-    extractor dumpall '/Gameplay_Layer_Data/[^/]+\.uasset$' /work/layer-minimaps/layerdata
+    client_extractor layerminimaps 'Gameplay_Layers/' > "$out/layers.tsv"
+    client_extractor dumpall '/Gameplay_Layer_Data/[^/]+\.uasset$' /work/layer-minimaps/layerdata
     textures=$(layer_minimaps textures /layer-minimaps/layers.tsv /layer-minimaps/layerdata)
-    extractor texraw "$textures" /work/layer-minimaps/tex
+    client_extractor texraw "$textures" /work/layer-minimaps/tex
     layer_minimaps build /layer-minimaps/layers.tsv /layer-minimaps/layerdata /layer-minimaps/tex \
         /steamapps/appmanifest_393380.acf /tiles
+    ;;
+register-setup)
+    shift
+    if [ ! -s "$WORK/layer-minimaps/layers.tsv" ]; then
+        echo "no $WORK/layer-minimaps/layers.tsv: run maptiles.sh layer-minimaps first" >&2
+        exit 1
+    fi
+    rm -rf "${WORK:?}/register/tex"
+    mkdir -p "$WORK/register/tex"
+    textures=$(register_tool textures)
+    client_extractor texraw "$textures" /work/register/tex
+    for slug in $(maps "$@"); do
+        mkdir -p "$WORK/register/upstream/$slug"
+        for file in basemap.webp terrainmap.webp topomap.webp heightmap.png; do
+            [ -s "$WORK/register/upstream/$slug/$file" ] && continue
+            curl -fsS -o "$WORK/register/upstream/$slug/$file" "https://squadcalc.app/api/img/maps/$slug/$file"
+            sleep 1
+        done
+    done
+    ;;
+register)
+    shift
+    register_tool "$@"
     ;;
 relief-setup)
     docker build -q -t "$RELIEF_IMAGE" -f "$HERE/py/Dockerfile.relief" "$HERE/py"
