@@ -17,7 +17,6 @@ listed under "FIELDS" in the style, which render.py then samples instead of the 
 import argparse
 import json
 import math
-import multiprocessing
 import os
 
 import numpy as np
@@ -27,6 +26,7 @@ from scipy import ndimage
 import features
 import fit_palette
 import render
+import worker_pool
 
 # Group: (classes of fit_palette.classify, Gaussian sigma in pixels at the fitting zoom, grid cell in metres)
 GROUPS = {
@@ -108,7 +108,7 @@ def build(slug, style_file, zoom, workers, basemap_path):
         np.lib.format.open_memmap(os.path.join(work, f"{group}_weight.npy"), "w+", np.float32, (size, size)).flush()
     n = math.ceil(2 ** zoom / render.BLOCK_TILES)
     blocks = [(zoom, bx, by) for by in range(n) for bx in range(n)]
-    with multiprocessing.Pool(workers, init, (slug, style_file, zoom, basemap_path, work)) as pool:
+    with worker_pool.Pool(workers, init, (slug, style_file, zoom, basemap_path, work)) as pool:
         for _ in pool.imap_unordered(task, blocks):
             pass
     meta = json.load(open(os.path.join(base, "meta.json")))

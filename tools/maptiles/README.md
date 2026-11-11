@@ -252,6 +252,8 @@ Files:
 * `py/scene_prep.py` — per map: the scene raster in blocks, the old collision raster's remaining objects, the 7-level pyramid,
   roof labels, crowns, the narrowed splines and the completeness report (`top_meta.json`);
 * `py/render.py` — the tile renderer: styles, contour and label placement, layer order;
+* `py/worker_pool.py` — the worker processes of `prep.py`, `scene_prep.py`, `scene_raster_gpu.py`, `render.py` and the colour fits: a
+  worker whose initializer fails (a source file missing) or that dies (the memory limit) stops the step at once with its error;
 * `py/check_alignment.py` — the checks; `py/measure_accuracy.py` — the accuracy measures; `py/palette_contrast.py` — the palette's contrast;
 * `py/compare_builds.py` — server build against client build placements; `py/outline_accuracy.py` — building outlines against
   the game's own layer minimap textures (edge F1 at 1, 2, 3 px); `py/compare_crops.py` — before/after crops;
@@ -263,7 +265,8 @@ Files:
   block size, identical bytes on every run, open-sea blocks linked with the bytes of the drawing, the MDOW relief against the
   published slope-and-aspect formula, the visible width of road meshes for masked, mask-channel, ramped, opaque, hidden and mirrored
   materials and for meshes the spline rolls, and its drawing); `py/test_scene_gpu.py` on the host (`cd tools/maptiles/py && PYTHONPATH=.:../../heightmaps/py
-  $PYTHON -m unittest test_scene_gpu`: the GPU raster against the CPU one, skipped without an EGL context);
+  $PYTHON -m unittest test_scene_gpu`: the GPU raster against the CPU one, skipped without an EGL context); `py/test_worker_pool.py` (in the
+  image, as `test_scene`): the pools of `worker_pool.py` and the steps that use them stop at once when a source is missing or a worker is killed;
 * `py/fit_palette.py`, `py/fit_fields.py`, `py/fit_relief.py`, `py/colour_distance.py`, `py/styles/` — the game colours above.
 
 ## Size and time
@@ -294,9 +297,10 @@ for m in $(python3 -c "import sys; sys.path.insert(0, 'tools/heightmaps/py'); im
 done
 ```
 
-`render` of a map stops with a Python error when `scene` was not run for it (its `top_*` files missing). A worker killed by the memory limit
-(the container's 3 GB) makes `render.py` wait forever on its last block: stop that container and render the missing tiles with
-`render.py <map> --zooms <z> --out <the .tmp folder>`.
+`render` of a map stops before it draws when `scene` was not run for it: `/prep/<map>/top_meta.json is missing: run maptiles.sh scene <map>
+first`; a source file missing besides stops it with the file's name. A worker killed by the memory limit (the container's 3 GB) stops it at
+once with `BrokenProcessPool`, the tiles drawn by then left in `$DIST/maptiles/.<map>.tmp`: run `render` again, which starts that folder
+afresh, or render the zooms that are missing into it with `render.py <map> --zooms <z> --out <the .tmp folder>`.
 
 ## Relief layer (PMTiles)
 

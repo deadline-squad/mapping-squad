@@ -34,7 +34,6 @@ level k cell aggregates the 2**k x 2**k level 0 points from [r * 2**k, c * 2**k]
 import argparse
 import collections
 import json
-import multiprocessing
 import os
 import time
 
@@ -48,6 +47,7 @@ import features
 import landscape
 import lattice
 import objects
+import worker_pool
 from maps import MAPS
 
 OBJECT_STEP_M = 0.25
@@ -173,7 +173,7 @@ def rasterize_objects(statics_dir, bounds, shape_q, ground_path, out_dir, z_min,
     open_memmap(os.path.join(out_dir, "obj_c0.npy"), mode="w+", dtype=np.uint8, shape=shape_q).flush()
     tasks = [(r, min(r + OBJECT_BLOCK, shape_q[0]), c, min(c + OBJECT_BLOCK, shape_q[1]), z_min)
              for r in range(0, shape_q[0], OBJECT_BLOCK) for c in range(0, shape_q[1], OBJECT_BLOCK)]
-    with multiprocessing.Pool(workers, _init_objects, (statics_dir, bounds, ground_path, out_dir)) as pool:
+    with worker_pool.Pool(workers, _init_objects, (statics_dir, bounds, ground_path, out_dir)) as pool:
         total = 0
         for done, count in enumerate(pool.imap_unordered(_object_block, tasks), 1):
             total += count

@@ -41,7 +41,6 @@ cells off the landscape; and the railway tracks, which are drawn from their spli
 
 import argparse
 import json
-import multiprocessing
 import os
 import time
 
@@ -57,6 +56,7 @@ import landscape_paths
 import prep
 import road_width
 import scene_objects as scene
+import worker_pool
 
 BLOCK = 1024
 PYRAMID_LEVELS = 7
@@ -121,7 +121,7 @@ def rasterize(scene_dir, prep_dir, bounds, z_min, shape, workers):
         open_memmap(os.path.join(prep_dir, f"top_{name}0.npy"), mode="w+", dtype=dtype, shape=shape).flush()
     tasks = blocks_of(shape)
     total = 0
-    with multiprocessing.Pool(workers, _init, (scene_dir, prep_dir, z_min, bounds)) as pool:
+    with worker_pool.Pool(workers, _init, (scene_dir, prep_dir, z_min, bounds)) as pool:
         for done, count in enumerate(pool.imap_unordered(_block, tasks), 1):
             total += count
             if done % max(1, len(tasks) // 10) == 0:
