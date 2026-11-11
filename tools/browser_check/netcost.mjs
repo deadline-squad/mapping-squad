@@ -1,5 +1,5 @@
 // Network cost of the Deadline SquadCalc as a first-time and as a returning visitor: bytes on the wire,
-// requests and the time to the precise heightmap, per scenario, in a real Chromium.
+// requests and the time to the heightmap, per scenario, in a real Chromium.
 //
 //     node netcost.mjs <site URL> [--json <file>] [--cold-only]
 //
@@ -201,7 +201,7 @@ async function openSite(context, query = "") {
             constructor(...args) {
                 super(...args);
                 this.addEventListener("message", ({ data }) => {
-                    if (data?.levels) window.__heightmaps.push({ at: performance.timeOrigin + performance.now(), precise: data.precise, step: data.step, url: data.url });
+                    if (data?.levels) window.__heightmaps.push({ at: performance.timeOrigin + performance.now(), step: data.step, url: data.url });
                 });
             }
         };
@@ -237,7 +237,7 @@ const log = (message) => console.error(`[${new Date().toISOString().slice(11, 19
 const round = (value, digits = 0) => Number(value.toFixed(digits));
 
 /**
- * Switch to a map and measure the download and the time to its precise heightmap
+ * Switch to a map and measure the download and the time to its heightmap
  * @returns {Promise<object>}
  */
 async function switchMap(page, mapName) {
@@ -259,7 +259,6 @@ async function switchMap(page, mapName) {
     await wire.idle();
     return {
         ...wire.summary(),
-        precise: timing.precise,
         step_mm: round(timing.step * 1000, 2),
         totalMs: round(timing.at - timing.start),
         decodeMs: file ? round(timing.at - file.finishedAt) : null,

@@ -26,7 +26,7 @@ const page = await context.newPage();
 const announcements = [];
 page.on("console", (message) => { if (message.text() === "sb:changed") announcements.push(Date.now()); });
 await page.goto(base, { waitUntil: "load" });
-await page.waitForFunction(() => window.__App?.minimap?.heightmap?.precise, null, { timeout: 120000 });
+await page.waitForFunction(() => window.__App?.minimap?.heightmap?.ready, null, { timeout: 120000 });
 await page.waitForTimeout(1500);
 
 // The poll script with the revision the host already has (bridge_script(known_revision))

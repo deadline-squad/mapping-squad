@@ -8,19 +8,20 @@
 import { App } from "./stub-app.mjs";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { decodePng16 } from "./png16.mjs";
 
 const args = process.argv.slice(2);
 const root = args[0];
 const reference = args[1] && !args[1].startsWith("--") ? args[1] : null;
 const mapName = args.includes("--map") ? args[args.indexOf("--map") + 1] : "albasrah";
 
-const { decode } = await import(`${homedir()}/agl/SquadCalc/node_modules/fast-png/lib/index.js`);
 const dir = `${homedir()}/apps/squadcalc/dist/heightmaps/${mapName}`;
 const meta = JSON.parse(readFileSync(`${dir}/meta.json`));
-const { width, height: rows, data } = decode(readFileSync(`${dir}/heightmap.png`));
+const { width, height: rows, data } = decodePng16(readFileSync(`${dir}/heightmap.png`));
 const grid = Array.from({ length: rows }, (_, y) => Uint16Array.from(data.subarray(y * width, (y + 1) * width)));
 
-// SquadHeightmap.getHeight: row = -lat, col = lng, one sample per map unit
+// The heights of the served heightmap as a stand-in for SquadHeightmap.getHeight (bilinear, row = -lat, col = lng,
+// one sample per map unit): the bench times the solutions and compares two checkouts on the same heights
 const heightmap = {
     jsonPng: grid,
     failed: false,

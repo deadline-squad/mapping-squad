@@ -1,7 +1,7 @@
 // Proves the browser decodes heightmap.webp exactly: for each map the worker of the site loads the
 // heightmap twice, once through the WebP (meta.json announcing it) and once through the PNG (meta.json
-// without `format`), and the two are compared pixel by pixel in the page. A map whose WebP keeps the
-// PNG's step must match it in every pixel; a coarsened one must be within half of the WebP's step plus half of the PNG's (each is the same height rounded to its own step). With
+// without `format`), and the two are compared pixel by pixel in the page: the WebP holds the PNG's levels and step
+// (tools/heightmaps/py/heightmap_webp.py), so every pixel must match. With
 // --fast-png the PNG the worker decoded (native inflate and our own scanline filters) is also compared
 // with the one fast-png (the decoder the worker used before 45.10) reads from --dist, by checksum.
 //
@@ -70,12 +70,12 @@ for (const slug of slugs) {
             const worker = new Worker(window.__workerUrl);
             worker.onmessage = ({ data }) => {
                 worker.terminate();
-                if (data.error || !data.precise) return resolve({ error: data.error || `not precise: ${data.url}` });
+                if (data.error) return resolve({ error: data.error });
                 window[`__levels_${slug}`] = window[`__levels_${slug}`] || {};
                 window[`__levels_${slug}`][data.url.split("?")[0].split(".").pop()] = data.levels;
                 resolve({ url: data.url, step: data.step, width: data.width, height: data.height });
             };
-            worker.postMessage({ preciseBase: `${origin}/heightmaps/${slug}/`, fallbackUrl: "about:blank", fallbackScale: 1 });
+            worker.postMessage({ base: `${origin}/heightmaps/${slug}/` });
         }), { slug, origin: new URL(base).origin });
     }
     const label = `map ${slug}`;
@@ -84,22 +84,16 @@ for (const slug of slugs) {
         failures++;
         continue;
     }
-    const compared = await page.evaluate(({ slug, webpStep, pngStep }) => {
+    const compared = await page.evaluate((slug) => {
         const { webp, png } = window[`__levels_${slug}`];
-        const same = webpStep === pngStep;
         let mismatches = 0;
-        let worst = 0;
-        for (let i = 0; i < webp.length; i++) {
-            if (same && webp[i] !== png[i]) mismatches++;
-            worst = Math.max(worst, Math.abs(webp[i] * webpStep - png[i] * pngStep));
-        }
+        for (let i = 0; i < webp.length; i++) if (webp[i] !== png[i]) mismatches++;
         let hash = 0x811c9dc5;
         for (let i = 0; i < png.length; i++) hash = Math.imul(hash ^ png[i], 16777619) >>> 0;
         delete window[`__levels_${slug}`];
-        return { sizeMatches: webp.length === png.length, mismatches, worstMm: worst * 1000, pngChecksum: hash };
-    }, { slug, webpStep: result.webp.step, pngStep: result.png.step });
-    const same = result.webp.step === result.png.step;
-    let ok = compared.sizeMatches && result.webp.width === result.png.width && (same ? compared.mismatches === 0 : compared.worstMm <= (result.webp.step + result.png.step) * 500 + 1e-6);
+        return { sizeMatches: webp.length === png.length, mismatches, pngChecksum: hash };
+    }, slug);
+    let ok = compared.sizeMatches && result.webp.width === result.png.width && result.webp.step === result.png.step && compared.mismatches === 0;
     let reference = "";
     if (fastPng && distDir) {
         const old = fastPng.decode(readFileSync(`${distDir}/${slug}/heightmap.png`));
@@ -108,7 +102,7 @@ for (const slug of slugs) {
         reference = `, native PNG decode ${referenceMatches ? "identical to" : "DIFFERENT from"} fast-png`;
     }
     console.log(`${ok ? "ok  " : "FAIL"} ${label}: webp step ${(result.webp.step * 1000).toFixed(3)} mm, png step ${(result.png.step * 1000).toFixed(3)} mm, `
-        + (same ? `${compared.mismatches} mismatched pixels` : `worst height difference ${compared.worstMm.toFixed(3)} mm (limit ${((result.webp.step + result.png.step) * 500).toFixed(3)})`) + reference);
+        + `${compared.mismatches} mismatched pixels${reference}`);
     if (!ok) failures++;
 }
 await browser.close();

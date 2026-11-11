@@ -1,12 +1,12 @@
 // Checks the Deadline SquadCalc in a real browser (Chromium through Playwright): the console stays clean,
-// the precise heightmaps load (also when the network drops a request), the detailed map layer works, and the
+// the heightmaps load (also when the network drops a request), the detailed map layer works, and the
 // bugs fixed in 45.5.1 and in the walkthrough review (walkthrough.mjs) stay fixed.
 //
 //     node browser_check.mjs <site URL> [--maps] [--ballistics <weapons.json>]
 //
-// <site URL> is a served build with the precise heightmaps under /heightmaps/ (the stand, or Caddy over
+// <site URL> is a served build with the heightmaps under /heightmaps/ (the stand, or Caddy over
 // a local `npm run build`). --maps also switches through every map on the detailed layer and checks each
-// loads its precise heightmap and its detailed tiles (tools/maptiles) without a failed request. --ballistics
+// loads its heightmap and its detailed tiles (tools/maptiles) without a failed request. --ballistics
 // also selects every weapon of Squad Ballistics' weapons.json aimed with the overlay through
 // window.squadBallistics, by its name. Environment: PLAYWRIGHT_CORE = path of the playwright-core package
 // if it is not
@@ -62,13 +62,12 @@ async function group(label, body) {
  * Open SquadCalc with window.__App and a log of console errors, page errors and failed requests
  * @param {object} [contextOptions] - Playwright browser context options (viewport, mobile emulation)
  * @param {(context: object) => Promise<void>} [prepare] - called with the context before the page loads (routes)
- * @param {boolean} [precise] - wait for the precise heightmap (true) or for any heightmap result, also
- *   the 8-bit one or a failure (false)
+ * @param {boolean} [loaded] - wait for the heightmap (true) or for any heightmap result, also a failure (false)
  * @throws {Error} when the page does not load, or the heightmap or the map image does not, within 120 s each: the
  *   error says which of the three and why (Playwright's reason), with the spinner's count and the requests without
  *   an answer, and the context is closed
  */
-async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }, prepare = async () => {}, precise = true) {
+async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }, prepare = async () => {}, loaded = true) {
     const context = await browser.newContext(contextOptions);
     await prepare(context);
     await context.route(/\/src\/js\/main\.[0-9a-f]+\.min\.js$/, async (route) => {
@@ -102,10 +101,10 @@ async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }
     };
     try {
         await page.goto(base, { waitUntil: "load", timeout: 120000 }).catch(stalled("the page did not load"));
-        await page.waitForFunction((precise) => {
+        await page.waitForFunction((loaded) => {
             const heightmap = window.__App?.minimap?.heightmap;
-            return precise ? heightmap?.precise : heightmap?.jsonPng.length || heightmap?.failed;
-        }, precise, { timeout: 120000 }).catch(stalled("no heightmap"));
+            return loaded ? heightmap?.ready : heightmap?.ready || heightmap?.failed;
+        }, loaded, { timeout: 120000 }).catch(stalled("no heightmap"));
         // The map image still fades in after the heights (the WebP heightmap is usually there first): clicks
         // before the spinner is gone are lost
         await page.waitForFunction(() => !window.__App.minimap._spinning, null, { timeout: 120000 }).catch(stalled("the map's spinner still turns"));
@@ -132,7 +131,7 @@ const popupText = (target) => target.calcMarker1.getContent().replace(/<[^>]+>/g
 await group("desktop checks", async () => {
     const { context, page, problems } = await open();
 
-    // Markers placed before the precise heightmap arrives are solved again once it has
+    // Markers placed before the heightmap arrives are solved again once it has
     const stale = await page.evaluate(async (popupSource) => {
         const popup = new Function(`return ${popupSource}`)();
         const app = window.__App;
@@ -140,7 +139,7 @@ await group("desktop checks", async () => {
         const other = [...app.MAP_SELECTOR[0].options].find((option) => option.value !== app.MAP_SELECTOR.val());
         app.MAP_SELECTOR.val(other.value).trigger("change");
         await new Promise((resolve) => setTimeout(resolve, 0));
-        const loadedBefore = map.heightmap.precise;
+        const loadedBefore = map.heightmap.ready;
         const scale = map.mapToGameScale;
         const scaleY = map.mapToGameScaleY;
         const weapon = { lat: -map.pixelSize * 0.45, lng: map.pixelSize * 0.45 };
@@ -148,7 +147,7 @@ await group("desktop checks", async () => {
         const target = map.createTarget({ lat: weapon.lat + 400 / scaleY, lng: weapon.lng + 200 / scale }) || map.activeTargetsMarkers.getLayers()[0];
         // While the heights load the popup says it has no height data and the bridge sends no height
         const early = { heightDiff: window.squadBallistics.lastTarget()?.heightDiff, noHeightLine: popup(target).includes("height"), noHeightClass: target.calcMarker1.getContent().includes("calcNoHeight"), profile: window.squadBallistics.lastTarget()?.profile };
-        await new Promise((resolve) => { const timer = setInterval(() => { if (map.heightmap.precise) { clearInterval(timer); resolve(); } }, 50); });
+        await new Promise((resolve) => { const timer = setInterval(() => { if (map.heightmap.ready) { clearInterval(timer); resolve(); } }, 50); });
         await new Promise((resolve) => setTimeout(resolve, 300));
         const shown = popup(target);
         const heightDiff = target.firingSolution1.heightDiff;
@@ -159,7 +158,7 @@ await group("desktop checks", async () => {
     check("solution after the heightmap loads", !stale.loadedBefore && stale.shown === stale.fresh && Math.abs(stale.heightDiff - stale.expected) < 0.01,
         `${stale.map}: shown "${stale.shown}", recomputed "${stale.fresh}", height difference ${stale.heightDiff.toFixed(2)} m of ${stale.expected.toFixed(2)} m`);
 
-    check("heights unknown until the precise heightmap loaded", stale.early.heightDiff === null && stale.early.noHeightClass && stale.early.profile === null
+    check("heights unknown until the heightmap loaded", stale.early.heightDiff === null && stale.early.noHeightClass && stale.early.profile === null
         && Number.isFinite(stale.late.heightDiff) && stale.late.hasProfile, JSON.stringify({ early: { ...stale.early, profile: stale.early.profile }, late: stale.late }));
 
     // Back to a fresh map state for the rest
@@ -353,18 +352,18 @@ await group("desktop checks", async () => {
                 observer.observe({ type: "longtask" });
                 const start = performance.now();
                 app.MAP_SELECTOR.val(value).trigger("change");
-                await new Promise((resolve) => { const timer = setInterval(() => { if (map.heightmap.precise) { clearInterval(timer); resolve(); } }, 20); setTimeout(() => { clearInterval(timer); resolve(); }, 120000); });
+                await new Promise((resolve) => { const timer = setInterval(() => { if (map.heightmap.ready) { clearInterval(timer); resolve(); } }, 20); setTimeout(() => { clearInterval(timer); resolve(); }, 120000); });
                 const ms = performance.now() - start;
                 const folder = map.activeMap.mapURL.split("/").filter(Boolean).pop();
                 const detailed = () => map.activeLayer?._url?.startsWith(`/maptiles/${folder}/`);
                 await new Promise((resolve) => { const timer = setInterval(() => { if (detailed()) { clearInterval(timer); resolve(); } }, 50); setTimeout(() => { clearInterval(timer); resolve(); }, 10000); });
                 await new Promise((resolve) => setTimeout(resolve, 1500));
                 observer.disconnect();
-                return { name: map.activeMap.name, precise: map.heightmap.precise, detailed: detailed(), ms: Math.round(ms), longest: Math.round(Math.max(0, ...longTasks)) };
+                return { name: map.activeMap.name, ready: map.heightmap.ready, detailed: detailed(), ms: Math.round(ms), longest: Math.round(Math.max(0, ...longTasks)) };
             }, value);
             const errors = problems.slice(before);
-            check(`map ${result.name}`, result.precise && result.detailed && errors.length === 0,
-                `precise heightmap in ${result.ms} ms, longest task ${result.longest} ms, detailed tiles ${result.detailed}${errors.length ? `; ${errors.join(" | ")}` : ""}`);
+            check(`map ${result.name}`, result.ready && result.detailed && errors.length === 0,
+                `heightmap in ${result.ms} ms, longest task ${result.longest} ms, detailed tiles ${result.detailed}${errors.length ? `; ${errors.join(" | ")}` : ""}`);
         }
     }
     await context.close();
@@ -759,28 +758,28 @@ await group("layers across map changes", async () => {
     await context.close();
 });
 
-// The precise heightmap's requests: meta.json first, then the heavy file it names (heightmap.webp or
+// The heightmap's requests: meta.json first, then the heavy file it names (heightmap.webp or
 // heightmap.png, with ?v=<generated> once meta.json has it)
-const preciseRequest = /\/heightmaps\/[^/]+\/(heightmap\.(?:webp|png)|meta\.json)(?:\?.*)?$/;
+const heightmapRequest = /\/heightmaps\/[^/]+\/(heightmap\.(?:webp|png)|meta\.json)(?:\?.*)?$/;
 /**
- * Open SquadCalc with the precise heightmap's requests answered by `answer`
+ * Open SquadCalc with the heightmap's requests answered by `answer`
  * @param {(route: object, file: string, attempt: number) => Promise<void>} answer - answers the
  *   `attempt`-th request (1 for the first) of `file` ("heightmap" for the heavy file, "meta.json")
  * @returns {Promise<{requests: object, result: object}>} - the number of requests per file, and the
- *   heightmap's state (map, precise, the toast shown) or {error}
+ *   heightmap's state (map, ready, failed, the toast shown) or {error}
  */
 async function openWithHeightmapRequests(answer) {
     const requests = { heightmap: 0, "meta.json": 0 };
     let result;
     try {
-        const { context, page } = await open(undefined, (context) => context.route(preciseRequest, (route) => {
-            const file = route.request().url().match(preciseRequest)[1].replace(/\.(webp|png)$/, "");
+        const { context, page } = await open(undefined, (context) => context.route(heightmapRequest, (route) => {
+            const file = route.request().url().match(heightmapRequest)[1].replace(/\.(webp|png)$/, "");
             requests[file] += 1;
             return answer(route, file, requests[file]);
         }), false);
         result = await page.evaluate(() => {
             const map = window.__App.minimap;
-            return { map: map.activeMap.name, precise: map.heightmap.precise, failed: map.heightmap.failed, toast: document.querySelector("#toast h4").getAttribute("data-i18n") };
+            return { map: map.activeMap.name, ready: map.heightmap.ready, failed: map.heightmap.failed, toast: document.querySelector("#toast h4").getAttribute("data-i18n") };
         });
         await context.close();
     } catch (error) {
@@ -789,29 +788,28 @@ async function openWithHeightmapRequests(answer) {
     return { requests, result };
 }
 
-// A heightmap request the network drops (connection lost) is tried again: the map still gets its
-// precise heightmap instead of silently keeping the coarse 8-bit one
+// A heightmap request the network drops (connection lost) is tried again: the map still gets its heightmap
 for (const dropped of ["heightmap", "meta.json"]) {
     const { requests, result } = await openWithHeightmapRequests((route, file, attempt) =>
         file === dropped && attempt === 1 ? route.abort("internetdisconnected") : route.fallback());
-    check(`precise heightmap after a dropped ${dropped} request`, requests[dropped] >= 2 && result.precise === true,
+    check(`heightmap after a dropped ${dropped} request`, requests[dropped] >= 2 && result.ready === true,
         `requests ${JSON.stringify(requests)}, ${JSON.stringify(result)}`);
 }
 
 {
-    // A network that keeps dropping it: four attempts, then the 8-bit heightmap with a warning toast
+    // A network that keeps dropping it: four attempts, then no heights, with an error toast
     const { requests, result } = await openWithHeightmapRequests((route, file) =>
         file === "heightmap" ? route.abort("internetdisconnected") : route.fallback());
-    check("coarse heightmap announced when the network keeps dropping it",
-        requests.heightmap === 4 && result.precise === false && result.failed === false && result.toast === "tooltips:heightmapCoarse",
+    check("failed heightmap announced when the network keeps dropping it",
+        requests.heightmap === 4 && result.ready === false && result.failed === true && result.toast === "tooltips:heightmapFailed",
         `requests ${JSON.stringify(requests)}, ${JSON.stringify(result)}`);
 }
 
 {
-    // A deployment without precise heightmaps (meta.json 404) falls back at once: one request, the heavy file is not downloaded, no warning
+    // A deployment without the map's heightmap (meta.json 404) fails at once: one request, the heavy file is not downloaded
     const { requests, result } = await openWithHeightmapRequests((route) => route.fulfill({ status: 404, body: "" }));
-    check("no precise heightmap (404): 8-bit one at once, no retry, no heavy download",
-        requests.heightmap === 0 && requests["meta.json"] === 1 && result.precise === false && result.failed === false && result.toast !== "tooltips:heightmapCoarse",
+    check("no heightmap (404): failed at once, no retry, no heavy download",
+        requests.heightmap === 0 && requests["meta.json"] === 1 && result.ready === false && result.failed === true && result.toast === "tooltips:heightmapFailed",
         `requests ${JSON.stringify(requests)}, ${JSON.stringify(result)}`);
 }
 
@@ -821,7 +819,7 @@ for (const dropped of ["heightmap", "meta.json"]) {
         const { requests, result } = await openWithHeightmapRequests((route, file) =>
             file === "heightmap" && /\.webp(\?|$)/.test(route.request().url()) ? answer(route) : route.fallback());
         const announcedWebp = requests.heightmap > 0 && await fetch(new URL("/heightmaps/albasrah/meta.json", base)).then((response) => response.json()).then((meta) => meta.format === "webp-rg16");
-        check(`precise heightmap from the PNG when the WebP is ${label}`, !result.error && (!announcedWebp || (requests.heightmap === 2 && result.precise === true)),
+        check(`heightmap from the PNG when the WebP is ${label}`, !result.error && (!announcedWebp || (requests.heightmap === 2 && result.ready === true)),
             `requests ${JSON.stringify(requests)}, ${JSON.stringify(result)}`);
     }
 }

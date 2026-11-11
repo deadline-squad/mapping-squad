@@ -17,6 +17,7 @@ import { App } from "./stub-app.mjs";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
+import { decodePng16 } from "./png16.mjs";
 
 const args = process.argv.slice(2);
 const root = args[0];
@@ -27,7 +28,6 @@ const repeat = Number(option("--repeat", 1));
 const saveDir = option("--save", null);
 const compareDir = option("--compare", null);
 
-const { decode } = await import(`${homedir()}/agl/SquadCalc/node_modules/fast-png/lib/index.js`);
 const { WEAPONS } = await import(`${root}/src/data/weapons.js`);
 const { Weapon } = await import(`${root}/src/js/squadWeapons.js`);
 const coverage = await import(`${root}/src/js/squadCoverage.js`);
@@ -37,11 +37,11 @@ const MAX_COVERAGE_RANGE = 4000, CELLS_PER_RANGE = 320, MIN_CELL = 5, RAYS_PER_C
 
 const dir = `${homedir()}/apps/squadcalc/dist/heightmaps/${mapName}`;
 const meta = JSON.parse(readFileSync(`${dir}/meta.json`));
-const png = decode(readFileSync(`${dir}/heightmap.png`));
+const png = decodePng16(readFileSync(`${dir}/heightmap.png`));
 const { width, height: rows, data } = png;
 const step = meta.z_step_m;
 
-// Bilinear height at (east, north) meters from the weapon, like SquadHeightmap.getHeight (0 outside the grid)
+// Bilinear height at (east, north) meters from the weapon, a stand-in for SquadHeightmap.getHeight (0 outside the grid)
 const originCol = (width - 1) / 2 + startEast, originRow = (rows - 1) / 2 - startNorth;
 const gridHeight = (east, north) => {
     const col = originCol + east, row = originRow - north;

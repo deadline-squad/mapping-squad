@@ -49,7 +49,7 @@ async function open(mapName) {
         if (response.status() >= 400) problems.push(`HTTP ${response.status()}: ${response.url()}`);
     });
     await page.goto(base, { waitUntil: "load" });
-    await page.waitForFunction(() => window.__App?.minimap?.heightmap?.precise, null, { timeout: 120000 });
+    await page.waitForFunction(() => window.__App?.minimap?.heightmap?.ready, null, { timeout: 120000 });
     await page.evaluate(async (name) => {
         const app = window.__App;
         const option = [...app.MAP_SELECTOR[0].options].find((candidate) => candidate.dataset.i18n === `maps:${name}`);
@@ -58,7 +58,7 @@ async function open(mapName) {
     }, mapName);
     await page.waitForFunction((name) => {
         const map = window.__App.minimap;
-        return map.activeMap.name === name && map.heightmap?.precise && !map._spinning;
+        return map.activeMap.name === name && map.heightmap?.ready && !map._spinning;
     }, mapName, { timeout: 120000 });
     return { context, page, problems, requests };
 }
@@ -281,7 +281,7 @@ for (const mapName of ["Fallujah", "GooseBay", "Kamdesh", "Skorpo", "BlackCoast"
     await context.route(/\/heightmaps\/albasrah\/volume\.vcol/, (route) => route.fulfill({ status: 404, body: "" }));
     await page.evaluate(() => window.__App.userSettings.set("volumeLayer", true));
     await page.waitForFunction(() => window.__App.minimap.volume.state === "unavailable", null, { timeout: 60000 });
-    const state = await page.evaluate(() => ({ ready: window.__App.minimap.volume.ready, heightmap: Boolean(window.__App.minimap.heightmap?.precise) }));
+    const state = await page.evaluate(() => ({ ready: window.__App.minimap.volume.ready, heightmap: Boolean(window.__App.minimap.heightmap?.ready) }));
     check("a map whose volume file is missing keeps the heightmap", !state.ready && state.heightmap, JSON.stringify(state));
     const unexpected = problems.filter((problem) => !/HTTP 404: .*volume\.vcol|Failed to load resource|\[VOLUME\]/.test(problem));
     check("a map whose volume file is missing: only the 404 and the layer's own warning in the console", unexpected.length === 0 && problems.some((problem) => /\[VOLUME\]/.test(problem)), problems.join(" | "));

@@ -36,7 +36,7 @@ await context.route(/\/src\/js\/main\.[0-9a-f]+\.min\.js$/, async (route) => {
 });
 const page = await context.newPage();
 await page.goto(base, { waitUntil: "load" });
-await page.waitForFunction(() => window.__App?.minimap?.heightmap?.precise, null, { timeout: 120000 });
+await page.waitForFunction(() => window.__App?.minimap?.heightmap?.ready, null, { timeout: 120000 });
 
 const renderer = await page.evaluate(() => {
     const gl = document.createElement("canvas").getContext("webgl");
@@ -56,7 +56,7 @@ for (const name of MAPS) {
     }, name);
     await page.waitForFunction((mapName) => {
         const map = window.__App.minimap;
-        return map.activeMap.name === mapName && map.heightmap?.precise && !map._spinning && map.volume.ready;
+        return map.activeMap.name === mapName && map.heightmap?.ready && !map._spinning && map.volume.ready;
     }, name, { timeout: 600000 });
 
     const result = await page.evaluate(async ({ mapName, ranges }) => {

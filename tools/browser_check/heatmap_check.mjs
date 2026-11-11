@@ -77,7 +77,7 @@ async function open(mapName) {
         if (response.status() >= 400) problems.push(`HTTP ${response.status()}: ${response.url()}`);
     });
     await page.goto(base, { waitUntil: "load" });
-    await page.waitForFunction(() => window.__App?.minimap?.heightmap?.precise, null, { timeout: 120000 });
+    await page.waitForFunction(() => window.__App?.minimap?.heightmap?.ready, null, { timeout: 120000 });
     await page.evaluate(async (name) => {
         const app = window.__App;
         const option = [...app.MAP_SELECTOR[0].options].find((candidate) => candidate.dataset.i18n === `maps:${name}`);
@@ -86,7 +86,7 @@ async function open(mapName) {
     }, mapName);
     await page.waitForFunction((name) => {
         const map = window.__App.minimap;
-        return map.activeMap.name === name && map.heightmap?.precise && !map._spinning;
+        return map.activeMap.name === name && map.heightmap?.ready && !map._spinning;
     }, mapName, { timeout: 120000 });
     return { context, page, problems, requests };
 }
