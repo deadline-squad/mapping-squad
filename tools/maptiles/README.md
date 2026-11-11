@@ -198,7 +198,7 @@ names (`T_...` or `..._Minimap_...`), which no map folder has, and `maptiles/<te
 same long cache rule as the tile folders. Files are written under a temporary name and renamed; nothing else under
 `$DIST/maptiles` is touched. Table, override and decoding (`py/layer_minimaps.py`: BC1 and B8G8R8A8 to RGB) are covered
 by `py/test_layer_minimaps.py`:
-`docker run --rm -v tools/maptiles/py:/py -w /py squadcalc-maptiles-py python -m unittest test_layer_minimaps`.
+`docker run --rm -v "$PWD/tools/maptiles/py:/py" -w /py squadcalc-maptiles-py python -m unittest test_layer_minimaps`.
 
 ## Game colours (style `colour`)
 
@@ -255,8 +255,8 @@ Files:
 * `py/check_alignment.py` — the checks; `py/measure_accuracy.py` — the accuracy measures; `py/palette_contrast.py` — the palette's contrast;
 * `py/compare_builds.py` — server build against client build placements; `py/outline_accuracy.py` — building outlines against
   the game's own layer minimap textures (edge F1 at 1, 2, 3 px); `py/compare_crops.py` — before/after crops;
-* `py/test_scene.py`, `py/test_cartography.py`, `py/test_layer_minimaps.py` — tests: `docker run --rm -e PYTHONPATH=/py:/hmpy -v tools/maptiles/py:/py:ro
-  -v tools/heightmaps/py:/hmpy:ro -w /tmp squadcalc-maptiles-py python -B -m unittest test_scene test_cartography` (`test_cartography`: the
+* `py/test_scene.py`, `py/test_cartography.py`, `py/test_layer_minimaps.py` — tests: `docker run --rm -e PYTHONPATH=/py:/hmpy -v "$PWD/tools/maptiles/py:/py:ro"
+  -v "$PWD/tools/heightmaps/py:/hmpy:ro" -w /tmp squadcalc-maptiles-py python -B -m unittest test_scene test_cartography` (`test_cartography`: the
   symbol rules above, the class rules, the water surfaces, the summits, the legend, the palette's contrast against published values, and the
   accuracy measures on pictures with a known answer; `test_scene`: the rasterizer on a small scene
   with a known answer, service materials, crown stamps and sprites, the old raster's merge, what of it is no object and what of it the scene shows, the roll of a spline mesh, tiles that do not depend on the
