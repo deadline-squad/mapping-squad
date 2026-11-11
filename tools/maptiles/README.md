@@ -198,7 +198,7 @@ names (`T_...` or `..._Minimap_...`), which no map folder has, and `maptiles/<te
 same long cache rule as the tile folders. Files are written under a temporary name and renamed; nothing else under
 `$DIST/maptiles` is touched. Table, override and decoding (`py/layer_minimaps.py`: BC1 and B8G8R8A8 to RGB) are covered
 by `py/test_layer_minimaps.py`:
-`docker run --rm -v tools/maptiles/py:/py -w /py squadcalc-maptiles-py python -m unittest test_layer_minimaps`.
+`docker run --rm -v "$PWD/tools/maptiles/py:/py" -w /py squadcalc-maptiles-py python -m unittest test_layer_minimaps`.
 
 ## Game colours (style `colour`)
 
@@ -255,8 +255,8 @@ Files:
 * `py/check_alignment.py` — the checks; `py/measure_accuracy.py` — the accuracy measures; `py/palette_contrast.py` — the palette's contrast;
 * `py/compare_builds.py` — server build against client build placements; `py/outline_accuracy.py` — building outlines against
   the game's own layer minimap textures (edge F1 at 1, 2, 3 px); `py/compare_crops.py` — before/after crops;
-* `py/test_scene.py`, `py/test_cartography.py`, `py/test_layer_minimaps.py` — tests: `docker run --rm -e PYTHONPATH=/py:/hmpy -v tools/maptiles/py:/py:ro
-  -v tools/heightmaps/py:/hmpy:ro -w /tmp squadcalc-maptiles-py python -B -m unittest test_scene test_cartography` (`test_cartography`: the
+* `py/test_scene.py`, `py/test_cartography.py`, `py/test_layer_minimaps.py` — tests: `docker run --rm -e PYTHONPATH=/py:/hmpy -v "$PWD/tools/maptiles/py:/py:ro"
+  -v "$PWD/tools/heightmaps/py:/hmpy:ro" -w /tmp squadcalc-maptiles-py python -B -m unittest test_scene test_cartography` (`test_cartography`: the
   symbol rules above, the class rules, the water surfaces, the summits, the legend, the palette's contrast against published values, and the
   accuracy measures on pictures with a known answer; `test_scene`: the rasterizer on a small scene
   with a known answer, service materials, crown stamps and sprites, the old raster's merge, what of it is no object and what of it the scene shows, the roll of a spline mesh, tiles that do not depend on the
@@ -312,15 +312,208 @@ and `maptiles.sh relief [map ...]` (`RELIEF_ARGS="--tint"` multiplies a hypsomet
 * Multiply at 50 % opacity of the SVF over the MDOW hillshade: `MDOW * (0.5 + 0.5 * SVF)`;
 * resampled with Lanczos to the finest zoom (heightmap samples on the frame's nodes), coarser zooms average 2 x 2 pixels.
 
-Placement (measured 2026-11-10; zoom-4 mosaic of the served archives, 0.4 to 1.7 m a pixel, registered in 8 x 8 windows with
-an affine fit): the layer lies in the tile frame, which `build` checks against the heightmap's. Against a plain MDOW hillshade
-it reads 0.2 to 1.8 m south-east at the centre of every map but Skorpo (Jensen +1.80 m east, +0.52 m south; Yehorivka +1.62,
-+0.66 m), against the same heightmap shaded with this layer's own formula (`shade_map`, `blend`) within 0.01 to 0.03 m on
-Al Basrah, Fallujah, Goose Bay, Jensen, Logar, Mutaha, Narva and Sumari, 0.11 m on Sanxian and 0.25 m on Skorpo, and against
-the game's bare ground (`prep/<map>/ground.npy`) with the same formula within 0.19 m on the other maps. The offset is the
-drawing: the anisotropic sky-view term (main direction 315 degrees) darkens the slopes facing away from the light and moves
-the edges a hillshade alone would show south-east; the frame is right. On towns the bare ground reads 0.30 to 0.66 m off, as
-the heightmap's buildings shade and the bare ground has none.
+Placement (measured 2026-11-10 with `maptiles.sh register relief` and `register relief --reference heightmap`, see "Where
+each map picture lies on the world"; zoom-4 mosaic of the served archives, 0.4 to 1.7 m a pixel): the layer lies in the tile
+frame, which `build` checks against the heightmap's. Against a plain MDOW hillshade it reads 0.2 to 1.8 m south-east at the
+centre of every map but Skorpo and Sanxian (Jensen +1.80 m east, +0.52 m south; Yehorivka +1.62, +0.66 m; Sanxian +2.28,
++1.03 m against its bare ground, which is not the heightmap the layer shades, and +0.21, +0.27 m against that heightmap),
+against the same heightmap shaded with this layer's own formula (`shade_map`, `blend`) within 0.01 to 0.03 m on Al Basrah,
+Fallujah, Goose Bay, Jensen, Logar, Mutaha, Narva and Sumari, 0.11 m on Sanxian and 0.25 m on Skorpo, and against the game's
+bare ground (`prep/<map>/ground.npy`) with the same formula within 0.19 m on the other maps. The offset is the drawing: the
+anisotropic sky-view term (main direction 315 degrees) darkens the slopes facing away from the light and moves the edges a
+hillshade alone would show south-east; the frame is right. On towns the bare ground reads 0.30 to 0.66 m off, as the
+heightmap's buildings shade and the bare ground has none.
 
 The Python image `py/Dockerfile.relief` installs `rvt-py` without its GDAL dependency (`vis.py` needs only numpy and scipy).
 Size: 1.8 to 4 MB for Fallujah, 3 to 11 MB for Chora, depending on the extra zoom.
+
+## Where each map picture lies on the world
+
+`py/register_images.py` measures where each picture the calculator shows lies against the world, and where the game
+draws its own minimap textures, with nothing but game data as the reference. A picture is placed over a world rectangle
+as the calculator or the game places it, resampled to about one of its pixels over the map's frame, and registered in
+8 x 8 overlapping windows: normalised cross-correlation within 30 m (80 m for upstream's relief images), a sub-pixel peak,
+windows with a weak or ambiguous peak left out, and an affine fit of the window shifts with outliers over 2.5 px left out.
+Two references, independent of each other:
+
+* **features**: the edges of the level's objects (the 0.25 m collision coverage of `prep`), tree crowns (`foliage.npz`,
+  rocks left out) and road surfaces (`lines.json`), against the edges of the picture's luminance;
+* **shade**: the bare ground's slopes (`ground.npy`) lit from the direction fitted over the map, plus the coastline on
+  a map with a sea, against the band-passed log luminance of the picture, the terrain shading it carries.
+
+Every figure is the displacement of the picture's content from the world in metres, + = drawn east or south of where it
+is: `W`/`E` in x at the middle of the frame's west and east edges, `N`/`S` in y at its north and south edges, `C` at its
+centre, `worst` the largest component at the four corners, `windows` those the fit kept (a figure on fewer than 20 is
+weak), `scale` and `rotation_deg` from the fit's linear terms. Displacements under about 0.4 m are below the method: the
+Detailed layer, drawn from the same level data, reads 0.08 to 0.40 m on 23 maps (Tallil 0.80 m, Pacific 1.07 m on 6
+windows). `py/test_register_images.py` (30 tests) recovers
+synthetic shifts, scales, turns, rectangles, orientations and squares, the shading through a sea and a hole in the ground:
+`docker run --rm -e PYTHONPATH=/py:/hmpy -v "$PWD/tools/maptiles/py:/py" -v "$PWD/tools/heightmaps/py:/hmpy" -w /py squadcalc-relief-py python -m unittest test_register_images`.
+
+```sh
+tools/maptiles/maptiles.sh relief-setup                      # once: the image the tool runs in
+tools/maptiles/maptiles.sh layer-minimaps                    # the client's layer table (layers.tsv, layer data) and layer minimaps
+tools/maptiles/maptiles.sh register-setup                    # every minimap texture the layers name, the upstream images (about 3 min)
+tools/maptiles/maptiles.sh register basemaps skorpo          # one JSON line per picture placed (2 to 5 min a map)
+```
+
+| Measure | What it registers |
+|---|---|
+| `basemaps [map ...]` | by features: `game` the client's base texture between the game's corners (the texture most layers show, over the rectangle most of them give it), `image` the upstream basemap between the image corners (the tile frame, `prep/<map>/meta.json`), `basemap_game` the upstream basemap between the game's corners, `detailed` the served Detailed tiles at the zoom nearest that grid over the image corners |
+| `rect <map> <basemap\|texture> <min x> <min y> <max x> <max y> [--reference shade]` | one picture over one rectangle; `fitted` is the rectangle the picture shows: the rectangle less the displacement, carried to its edges |
+| `layer-minimaps [map ...]` | the layer minimaps of `$LAYER_TILES/layer-minimaps.json` between their corners, by features; `finer` is the map's base texture's metres per pixel over the layer minimap's |
+| `locate <map> <texture> <min x> <min y> <max x> <max y> <sizes> [--crop x0 x1 y0 y1]` | where a texture's picture lies on the map's base texture if it shows a square of each side in `<sizes>` (`a:b:step` or a list, metres), in its 8 orientations (edge-image NCC at 2 m), and the displacement of its content when drawn over the given rectangle; `<texture>` is the package name (the raw file's) |
+| `orientation [map ...]` | the upstream basemap against the client's base texture: correlation of the 8 orientations (512 px thumbnails), then 7 x 7 windows of 384 px fitted per axis as an offset and a change across the image (px) |
+| `upstream-relief [map ...]` | upstream's 8-bit heightmap (`heightmap.png`, level 255 + red - blue, points from corner to corner) against the ground; the hillshade in `terrainmap.webp` (over `basemap.webp`) and in `topomap.webp` against that heightmap lit from the fitted direction |
+| `relief [map ...] [--reference heightmap]` | the relief layer (`relief/<map>.pmtiles`, zoom 4) against `mdow`, the multi-directional hillshade of the bare ground (or of the served heightmap), and `layer`, the layer's own shading of it (`relief.shade_map`, `relief.blend`) |
+
+`register` reads `$WORK/prep`, `$DIST/maptiles` (the relief), `$HEIGHTMAPS_SERVED`, `$WORK/layer-minimaps`, `$WORK/register`
+and `$LAYER_TILES`, all read-only, in containers of `$MEMORY` and `$CPUS`; it writes nothing but its output.
+
+### Results of 2026-11-10
+
+Client build 26234431, the pictures of SquadCalc 45.50.0 (`$DIST/maptiles`, the layer minimaps of `layer-minimaps`) and the
+upstream images of that day; section 2.5 of `docs/thesis-methods-and-results.md` cites them. Worst corner in metres with the
+windows the fit kept; a figure on fewer than 20 windows is weak, `-` is no fit (fewer than 6).
+
+`register layer-minimaps`, the 21 layers whose data asset sets a texture other than their map's, over the corners of the
+manifest:
+
+| Layer | Texture | m/px | `finer` | W | E | N | S | worst (windows) |
+|---|---|---|---|---|---|---|---|---|
+| AlBasrah_Seed_v1 | `T_AlBasrah_Minimap_Seed_v1` | 0.977 | 1.00 | +0.47 | +0.00 | +0.17 | +0.48 | 0.97 (46) |
+| AlBasrah_Seed_v2 | `T_AlBasrah_Minimap_Seed_v2` | 0.977 | 1.00 | +0.45 | +0.04 | +0.15 | +0.49 | 0.97 (47) |
+| AlBasrah_Skirmish_v1 | `T_AlBasrah_Minimap_Skirmish_v1` | 0.977 | 1.00 | +0.47 | +0.02 | +0.15 | +0.50 | 1.00 (46) |
+| AlBasrah_Skirmish_v2 | `T_AlBasrah_Minimap_Skirmish_v2` | 0.977 | 1.00 | +0.50 | -0.02 | +0.21 | +0.46 | 0.97 (45) |
+| BlackCoast_Seed_v1 | `T_BlackCoast_Seed_v1` | 0.244 | 4.60 | -0.18 | +0.10 | +0.07 | +0.01 | 0.24 (25) |
+| Chora_Skirmish_v1 | `Chora_Minimap_Skirmish_v1` | 0.396 | 2.51 | +0.07 | +0.28 | +0.07 | +0.02 | 0.44 (38) |
+| Fallujah_Seed_v1 | `Fallujah_Minimap_Skirmish` | 0.734 | 1.00 | -0.57 | +0.87 | -0.08 | -0.10 | 0.88 (42) |
+| Fallujah_Skirmish_v1 | `Fallujah_Minimap_Skirmish` | 0.734 | 1.00 | -0.57 | +0.87 | -0.08 | -0.10 | 0.88 (42) |
+| GooseBay_Seed_v1 | `GooseBay_Minimap_Seed_v1_fix` | 0.244 | 4.03 | -0.01 | -0.00 | +0.10 | -0.11 | 0.12 (41) |
+| Gorodok_Skirmish_v1 | `Gorodok_Minimap_Skirmish_v1` | 0.992 | 1.00 | +0.92 | -1.31 | +1.30 | -1.41 | 1.54 (25) |
+| Manicouagan_Seed_v1 | `T_Manicouagan_Seed_v1_Minimap` | 0.431 | 2.28 | +0.92 | -0.54 | +0.57 | -0.78 | 1.12 (23) |
+| Mutaha_Seed_v1 | `Mutaha_Minimap_Seed_v1` | 0.317 | 2.12 | -0.11 | -0.00 | +0.01 | +0.27 | 0.32 (59) |
+| Mutaha_Skirmish_v1 | `Mutaha_Minimap_Skirmish_v1` | 0.337 | 2.00 | +0.42 | +0.28 | +0.46 | +0.35 | 0.59 (51) |
+| Narva_Skirmish_v1 | `Narva_Minimap_Skirmish_v1` | 0.261 | 2.62 | +0.20 | +0.24 | +0.18 | +0.17 | 0.33 (56) |
+| Skorpo_Skirmish_v1 | `Skorpo_Minimap_Skirmish_v1` | 0.347 | 4.82 | +0.09 | +0.11 | -0.05 | +0.29 | 0.32 (35) |
+| Tallil_Seed_v1 | `Tallil_Outskirts_Minimap_Skirmish_v1` | 0.276 | 4.14 | +0.25 | -0.07 | +0.29 | +0.25 | 0.42 (42) |
+| Tallil_Skirmish_v1 | `Tallil_Outskirts_Minimap_Skirmish_v1` | 0.276 | 4.14 | +0.25 | -0.07 | +0.29 | +0.25 | 0.42 (42) |
+| Tallil_Skirmish_v2 | `Tallil_Outskirts_Minimap_Skirmish_v2` | 0.561 | 2.03 | +0.40 | +1.10 | +0.76 | +0.79 | 1.15 (31) |
+| Yehorivka_Skirmish_v1 | `Yehorivka_Minimap_Skirmish_v1` | 0.679 | 2.28 | +0.13 | +0.57 | +0.27 | +0.26 | 0.79 (33) |
+| Yehorivka_Skirmish_v1_WP | `Yehorivka_Minimap_Skirmish_v1` | 0.679 | 2.28 | +0.13 | +0.57 | +0.27 | +0.26 | 0.79 (33) |
+| Yehorivka_Skirmish_v2 | `Yehorivka_Minimap_Skirmish_v2_fix` | 0.527 | 2.94 | -0.35 | +0.42 | -0.03 | +0.22 | 0.53 (13) |
+
+`register locate blackcoast Black_Coast_Minimap_Seed_v1 -950 -1200 50 -200 650:800:25 --crop 0.3 0.85 0.2 0.7` (the
+level's corners, which the layer API gave Black Coast Seed v1 before SquadCalc 45.50.0): the texture shows the 725 m
+square (-88, -433.5) to (636, 290.5) m, neither turned nor mirrored (NCC 0.66, every other size and orientation 0.24 or
+less); drawn over those corners its content lay 586 to 862 m west and 490.5 to 766.5 m north of where it is.
+
+`register basemaps`: on the 13 maps whose image corners are the game's, `image` and `basemap_game` are one placement; on
+the 11 whose image corners are rounded and on Skorpo they differ. `detailed`, drawn from the same level data, is the
+method's floor:
+
+| Map | `game` | `image` | `basemap_game` | `detailed` |
+|---|---|---|---|---|
+| Al Basrah | 0.94 (51) | 0.94 (51) | 0.94 (51) | 0.21 (62) |
+| Anvil | 0.41 (34) | 0.41 (34) | 0.41 (34) | 0.15 (64) |
+| Black Coast | 1.48 (51) | 2.38 (49) | 1.40 (50) | 0.17 (63) |
+| Chora | 2.35 (16) | 2.09 (16) | 2.36 (16) | 0.37 (35) |
+| Fallujah | 0.44 (36) | 0.44 (37) | 0.44 (37) | 0.12 (53) |
+| Fools Road | 0.36 (7) | 0.42 (6) | 0.41 (7) | 0.08 (64) |
+| Goose Bay | 0.21 (55) | 0.97 (55) | 0.21 (55) | 0.12 (64) |
+| Gorodok | 1.53 (24) | 1.55 (25) | 1.61 (25) | 0.16 (64) |
+| Harju | 1.10 (15) | 0.90 (15) | 0.90 (15) | 0.13 (60) |
+| Jensen | 2.05 (10) | 2.02 (10) | 2.02 (10) | 0.40 (17) |
+| Kamdesh | 0.17 (60) | 0.18 (60) | 0.18 (60) | 0.13 (64) |
+| Kohat | 1.02 (42) | 0.91 (39) | 0.91 (39) | 0.24 (45) |
+| Kokan | 0.75 (43) | 0.47 (43) | 0.77 (43) | 0.17 (40) |
+| Lashkar | 0.25 (29) | 0.26 (29) | 0.26 (29) | 0.19 (64) |
+| Logar | 0.31 (30) | 0.76 (30) | 0.33 (30) | 0.17 (43) |
+| Manicouagan | 0.69 (63) | 0.65 (58) | 0.66 (61) | 0.11 (64) |
+| Mestia | 0.64 (33) | 0.63 (33) | 0.63 (33) | 0.20 (54) |
+| Mutaha | 0.49 (35) | 0.50 (35) | 0.50 (35) | 0.22 (57) |
+| Narva | 0.50 (60) | 0.49 (60) | 0.50 (60) | 0.15 (59) |
+| Pacific | - | - | - | 1.07 (6) |
+| Sanxian | 0.66 (40) | 0.70 (38) | 0.70 (38) | 0.25 (48) |
+| Skorpo | 9.44 (32) | 19.55 (31) | 9.49 (32) | 0.25 (44) |
+| Sumari | 0.70 (28) | 0.77 (29) | 0.67 (28) | 0.12 (40) |
+| Tallil | 4.46 (27) | 4.45 (27) | 4.45 (27) | 0.80 (48) |
+| Yehorivka | 4.55 (62) | 4.59 (62) | 4.60 (62) | 0.27 (63) |
+
+`register rect skorpo basemap ...`: the upstream basemap over the image corners, over the rectangle that fit gives
+(`fitted`), and over that one's fit rounded to 0.1 m, which `src/data/maps.js` of SquadCalc 45.50.0 holds as Skorpo's
+`minimap.image`; `--reference shade` for the second method:
+
+| Rectangle | Reference | W | E | N | S | worst (windows) | `fitted` |
+|---|---|---|---|---|---|---|---|
+| -3611 -3293 3238 3576 | features | -0.18 | -19.53 | -0.93 | +0.11 | 19.57 (31) | -3610.82 -3292.07 3257.53 3575.89 |
+| -3611 -3293 3238 3576 | shade | -1.04 | -19.68 | -1.62 | +0.93 | 19.96 (32) | -3609.96 -3291.38 3257.68 3575.07 |
+| -3610.82 -3292.07 3257.53 3575.89 | features | +0.31 | -0.18 | -0.28 | +0.11 | 0.50 (33) | -3611.13 -3291.79 3257.71 3575.78 |
+| -3611.1 -3291.8 3257.7 3575.8 | features | +0.08 | -0.00 | +0.02 | -0.01 | 0.24 (33) | -3611.18 -3291.82 3257.70 3575.81 |
+| -3611.1 -3291.8 3257.7 3575.8 | shade | -0.44 | -0.57 | +0.04 | +0.31 | 0.88 (34) | -3610.66 -3291.84 3258.27 3575.49 |
+
+`register orientation`: on all 25 maps the upstream basemap is the client's base texture at its size, neither turned nor
+mirrored (`rot0`, correlation 0.990 to 0.999, the next orientation 0.78 or less); its 7 x 7 windows lie within 0.27 px of
+the texture's, with 0.20 px or less of change across the image.
+
+`register upstream-relief`: upstream's 8-bit heightmap against the ground, and the hillshade baked into `terrainmap.webp`
+and `topomap.webp` against that heightmap, worst corner (windows):
+
+| Map | `heightmap` | `terrain_shade` | `topo_shade` |
+|---|---|---|---|
+| Al Basrah | 0.22 (62) | 1.02 (55) | 1.41 (51) |
+| Anvil | 0.04 (61) | 0.57 (64) | 1.68 (43) |
+| Black Coast | 0.21 (35) | 1.89 (55) | 6.28 (28) |
+| Chora | 0.20 (20) | 5.83 (24) | - |
+| Fallujah | 0.18 (30) | 1.95 (27) | 1.82 (20) |
+| Fools Road | 0.08 (21) | 0.97 (54) | 1.69 (34) |
+| Goose Bay | 0.31 (26) | 1.46 (54) | 1.92 (40) |
+| Gorodok | 0.14 (54) | 0.65 (64) | 17.78 (11) |
+| Harju | 0.06 (42) | 0.98 (56) | 3.66 (43) |
+| Jensen | 0.01 (29) | 1.52 (57) | 23.71 (55) |
+| Kamdesh | 0.07 (60) | 0.76 (64) | 0.93 (64) |
+| Kohat | 0.02 (40) | 1.08 (35) | 1.58 (32) |
+| Kokan | 0.14 (25) | 5.64 (58) | 1.25 (22) |
+| Lashkar | 0.13 (63) | 1.37 (64) | 1.76 (64) |
+| Logar | 0.03 (35) | 1.98 (64) | 1.95 (55) |
+| Manicouagan | 0.24 (47) | 1.58 (62) | 2.04 (33) |
+| Mestia | 0.00 (6) | 1.86 (24) | 3.37 (13) |
+| Mutaha | 0.04 (46) | 3.55 (51) | 11.37 (9) |
+| Narva | 0.07 (12) | 10.27 (48) | - |
+| Pacific | 0.01 (49) | 2.28 (54) | 2.31 (51) |
+| Sanxian | 0.89 (28) | 2.54 (44) | 17.62 (6) |
+| Skorpo | 0.07 (29) | 43.10 (29) | 26.21 (19) |
+| Sumari | 0.08 (24) | 0.32 (39) | 1.46 (10) |
+| Tallil | 0.04 (59) | 6.96 (64) | 7.48 (41) |
+| Yehorivka | 0.16 (38) | 0.86 (63) | 0.59 (61) |
+
+`register relief` against the bare ground and `register relief --reference heightmap` against the served heightmap (run
+on 10 maps): the centre of the relief layer against `mdow` (x, y; + = east, south) and its worst corner against `layer`:
+
+| Map | `mdow` C, ground | `layer` worst (windows), ground | `layer` worst (windows), served heightmap |
+|---|---|---|---|
+| Al Basrah | +0.48, +0.32 | 0.66 (57) | 0.03 (64) |
+| Anvil | +0.27, +0.19 | 0.08 (63) | - |
+| Black Coast | +0.54, +0.49 | 0.18 (57) | - |
+| Chora | +0.24, +0.17 | 0.18 (48) | - |
+| Fallujah | +0.39, +0.20 | 0.40 (53) | 0.03 (51) |
+| Fools Road | +0.31, +0.14 | 0.02 (56) | - |
+| Goose Bay | +1.02, +0.53 | 0.35 (58) | 0.02 (63) |
+| Gorodok | +0.88, +0.46 | 0.07 (64) | - |
+| Harju | +0.79, +0.45 | 0.13 (60) | - |
+| Jensen | +1.80, +0.52 | 0.01 (62) | 0.03 (63) |
+| Kamdesh | +1.17, +0.44 | 0.08 (64) | - |
+| Kohat | +0.22, +0.29 | 0.09 (64) | - |
+| Kokan | +0.44, +0.20 | 0.14 (60) | - |
+| Lashkar | +0.64, +0.26 | 0.04 (64) | - |
+| Logar | +0.34, +0.12 | 0.02 (61) | 0.01 (62) |
+| Manicouagan | +0.74, +0.45 | 0.16 (61) | - |
+| Mestia | +0.21, +0.17 | 0.12 (37) | - |
+| Mutaha | +0.55, +0.25 | 0.37 (53) | 0.01 (64) |
+| Narva | +0.52, +0.26 | 0.30 (58) | 0.02 (64) |
+| Pacific | +0.22, +0.26 | 0.01 (64) | - |
+| Sanxian | +2.28, +1.03 | 3.60 (40) | 0.11 (49) |
+| Skorpo | +0.26, -0.05 | 0.34 (52) | 0.25 (53) |
+| Sumari | +0.21, +0.18 | 0.39 (30) | 0.02 (44) |
+| Tallil | +1.21, +0.57 | 0.19 (64) | - |
+| Yehorivka | +1.62, +0.66 | 0.03 (64) | - |

@@ -95,6 +95,29 @@ basemap lies over the rectangle its texture shows on the world ((-3611.1, -3291.
 tiles of zoom 4 end there within a pixel, 11.8 px past the image corner in the east; console clean. `SHOT_DIR=<dir>` also
 saves screenshots of the three layers and of Skorpo's east edge in HQ. Exits with 1 on any failure.
 
+## hq_sharpness.mjs: the HQ tiles against the single map image
+
+```sh
+node hq_sharpness.mjs <site URL> [--shots <dir>]
+```
+
+Skorpo's upstream basemap at the page's zooms 2 to 8, with the setting "high quality images" (the `basemap_hq` tiles,
+8192 px across at zoom 5) and without it (`basemap.webp`, 4096 px): the same view, 300 m inside the east edge and
+2000 m south of the north edge, 800 x 600 px without grid, markers or controls. Per zoom the mean gradient magnitude
+of each frame's luminance (Pillow's L of RGB and `scipy.ndimage.sobel` on both axes with its border rule, computed in
+the page from the screenshot), the ratio tiles / image and the mean absolute difference of the two frames (a few
+levels: the same view). `--shots` saves the frames. Exits with 1 when a frame shows the other kind of layer.
+
+Chromium 1243 (the Playwright build above), 2026-11-10; the image's pixel, 6849 m over 4096 px, is the page's at zoom 4:
+
+| Build | zoom 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|
+| SquadCalc 45.48.0 (the image and the tiles on the image corners) | 1.032 | 1.092 | 1.252 | 1.799 | 1.899 | 2.046 | 2.123 |
+| SquadCalc 45.50.0 (both on the rectangle the texture shows, `tools/maptiles/README.md`) | 0.948 | 1.008 | 1.275 | 1.667 | 1.921 | 2.030 | 2.193 |
+
+Two runs on one build give the same figures to the last digit. From zoom 4, where the page zooms to and past the
+image's pixel, the tiles are 1.25 to 2.2 times sharper; at zooms 2 and 3 the two are alike.
+
 ## home_server_check.mjs: the Deadline server in the servers list
 
 ```sh
