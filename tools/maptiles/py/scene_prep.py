@@ -63,7 +63,9 @@ PYRAMID_LEVELS = 7
 OLD_KEEP_M = 2
 OLD_KEEP_MIN_M2 = 4
 VOID_MIN_M2 = 1000
-# SquadHeight's floor lies on the served heightmap's minimum, up to the float rounding of z_min (Kohat: 0.0001 m)
+# Height above SquadHeight's floor up to which ground outside the landscape is that floor. The floor is measured on each map: it
+# is the served heightmap's minimum only within float rounding (Kohat: 0.0025 m above it), and since the heightmap lies on the
+# landscape's vertices its minimum can be a vertex below the floor (Skorpo: 0.0406 m)
 VOID_FLOOR_M = 0.01
 SURFACE_MATCH_M = 2.0
 SURFACE_FLUSH_M = 0.25
@@ -532,8 +534,8 @@ def scenery_ground(ground, cover, land_top, z_min, terrain):
     """(ground [H, W] float32 on the 1 m grid of ground.npy with the scenery that is the ground taken in, void cells filled, cells raised).
 
     Past the game landscape prep.py takes SquadHeight's surface, the server's world. Where the server has nothing (the background
-    mountains of Skorpo and Blackcoast are client meshes without collision) that surface is its floor, the lowest point of the
-    served heightmap: ground under VOID_FLOOR_M outside the landscape (cover NO_COVER), in runs of VOID_MIN_M2 and more. Below the
+    mountains of Skorpo and Blackcoast are client meshes without collision) that surface is its floor, the lowest ground outside
+    the landscape (cover NO_COVER): ground there less than VOID_FLOOR_M above that floor, in runs of VOID_MIN_M2 and more. Below the
     sea level such a void is drawn as sea. The scenery of the client scene (``land_top``, the surface_top of
     scene_objects.surface_groups' land) gives those cells its height; a void that no scenery covers (the open sea) keeps its floor.
 
@@ -549,7 +551,8 @@ def scenery_ground(ground, cover, land_top, z_min, terrain):
     ground and is no hill.
     """
     filled = np.array(ground, np.float32)
-    void = (np.asarray(cover) == features.NO_COVER) & (filled < VOID_FLOOR_M)
+    outside = np.asarray(cover) == features.NO_COVER
+    void = outside & (filled < filled[outside].min() + VOID_FLOOR_M) if outside.any() else outside
     labels, count = ndimage.label(void)
     fill = np.zeros(filled.shape, bool)
     if count:
