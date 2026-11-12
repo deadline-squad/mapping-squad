@@ -7,7 +7,7 @@ Updated 2026-11-05: the voxel figures of sections 4, 7 and 8 were measured again
 kept as "old" next to them.
 Final state 2026-11-05: the report was read again against SquadCalc `dev` 45.33.0, Squad Ballistics 1.6.1 and the agl `dev`
 branch; sections 1.5, 2.3, 9.3 and 12 to 15 are new or rewritten, the PENDING tables are filled with the evidence that exists
-(only the GPU timings stay PENDING, with the owner action, section 12.4), and every issue number, file path and commit named
+(the GPU timings were added on 2026-11-12, section 12.4), and every issue number, file path and commit named
 in the report is checked by `tools/release/check_report_refs.py` (section 13).
 Updated 2026-11-09: section 16 (the Detailed tactical map: method, accuracy against an independent render, GPU against CPU,
 performance, the faults found and fixed) is new; a row in section 15.
@@ -25,6 +25,12 @@ row in section 15. Its registration tool is committed and rerun (`tools/maptiles
 Updated 2026-11-11: section 2 rests on the heightmaps on the landscape's own vertices (2.1: the corner grid against the
 lattice at 283.8 M vertices; 2.2: the server-log audit on both grids; 2.4: the placement totals on the lattice), and section 3
 has the detail where objects stand and its measurement on the research's 50 windows (SC 45.51.0); a row in section 15.
+Updated 2026-11-12: one final build of every map layer (agl `d0ae886`; the Standard HD of Black Coast and Yehorivka with `f9f8382`) is
+served as SquadCalc 45.51.0: section 16.10 measures it against v2 on all 25 maps (the gate, the five measures on one reference, the
+outline F1 with intervals), 16.6 has the two faults it showed (the sky dome over Standard HD; Skorpo's ground beyond the
+landscape drawn as sea, `deadline-squad/mapping-squad#2`; both fixed, Skorpo's in the served tiles since 2026-11-12 21:23 UTC, agl
+`efb521b` merged as `9c2920f`), and the heightmaps on the landscape's vertices of section 2 are the served
+ones (2.4); a row in section 15.
 
 ## 0. How to read this report
 
@@ -37,8 +43,8 @@ Every number carries a source and one of four labels (the fourth, ASSUMED, is us
 | **UNVERIFIED** | Recorded in a commit message, an issue or a note without a reproducible output, or not measurable from the server files, or not measured. |
 | **ASSUMED** | Not in the dedicated-server files at all and used because the model needs a number: Workshop mods, the bore and zoom of handheld weapons (they come from the client's animation), the native C++ explosion defaults, SquadCalc's default lifespan; the reason is stated next to it (`DP`). |
 
-A row marked **PENDING** is a measurement that does not exist; it names the action that produces it. After the final pass one is
-left: the GPU timings (section 12.4).
+A row marked **PENDING** is a measurement that does not exist; it names the action that produces it. After the final pass none is
+left: the GPU timings, the last one, were measured on 2026-11-12 (section 12.4).
 
 **Scope.** The report covers the 25 maps that the Squad dedicated server package can play and holds the files of: `LevelRotation.cfg`
 names 25 levels, one of which has no level files in the package and is not covered, and Jensen's Range, which is not in the
@@ -60,7 +66,7 @@ community-made map data is a source of any figure.
 | `SBS` | `SB:docs/sight-scales.md` | audit of 2026-11-05 |
 | `V-README` | `AGL:tools/volumetric/README.md` | |
 | `H-README` | `AGL:tools/heightmaps/README.md` | |
-| `M-README` | `AGL:tools/maptiles/README.md` | build of 2026-11-09; the revision of 2026-11-10 (section 16.10) is in the pipeline, not yet in the served tiles |
+| `M-README` | `AGL:tools/maptiles/README.md` | build of 2026-11-09; the revision of 2026-11-10 (section 16.10) served since the final build of 2026-11-12 (SquadCalc 45.51.0) |
 | `E-README` | `SC:engine/README.md` | |
 | `CS` | `AGL:tools/volumetric/docs/collision-semantics.md` | |
 | `SDMG` | `AGL:tools/volumetric/docs/structure-damage.md` | |
@@ -68,7 +74,7 @@ community-made map data is a source of any figure.
 | `DP` | `AGL:tools/volumetric/docs/data-provenance.md` and `data-provenance.tsv` | added on the branch `fix/provenance`; counts of 2026-11-05, SC 45.30.0, SB 1.6.1 |
 | `GA` | `AGL:docs/game-data-audit.md`, the calculator's map and weapon tables against the game files; tool `AGL:tools/game_audit/README.md` | audit of 2026-11-10, SC 45.40.0, SB 1.7.2 |
 
-Paths below are relative to the repository named in the key. The equipment: one workstation, 15 GB of RAM, no GPU measurements.
+Paths below are relative to the repository named in the key. The equipment: one workstation, 15 GB of RAM, a GTX 1650 (4 GB) for the GPU timings of section 12.4.
 
 ## 1. Ballistic model
 
@@ -241,9 +247,10 @@ game terrain against SquadHeight on open ground, median difference 0.0 mm on eve
 landscape's own vertices on a 0.5 m grid RMS 0.000 (Chora) and 0.017 cm (Kokan) against 8.91 and 0.89 cm for 1 m
 (VERIFIED).
 
-The same audit on the heightmaps on the landscape's vertices (section 2.1; the 25 maps built on 2026-11-10, not yet served),
-12 maps, on the points where the game's landscape itself is within 2 cm of the log and neither heightmap has an object at
-the point (`grid_object` of `py/audit_ground_truth.py`), triangle read, cm:
+The same audit on the heightmaps on the landscape's vertices (section 2.1; the 25 maps built on 2026-11-10, whose `heightmap.png`
+the served ones of the final build repeat byte for byte on all 25 maps, 2.4), 12 maps, on the points where the game's landscape
+itself is within 2 cm of the log and neither heightmap has an object at the point (`grid_object` of `py/audit_ground_truth.py`),
+triangle read, cm:
 
 | Map | n | Corner grid within 2 cm | p95 | max | Vertices within 2 cm | p95 | max |
 |---|---|---|---|---|---|---|---|
@@ -305,7 +312,7 @@ water of such a vast mesh under SquadHeight's surface (`H-README`, "Which of Squ
 | Points lowered | 12 127 points, 11 480 m², on 6 maps: Al Basrah 11 226 (up to 22.48 m, median 6.17 m: the background city of the `_Vista` level along the map's edge and walls in open sand), Chora 792 on its 0.5 m grid (198 m², up to 8.44 m), Kokan 71 (17.8 m², up to 9.41 m), Skorpo 16 (a tree crown 30.7 m above the terrain that no tree of the game reaches), Anvil 17 (up to 0.72 m), Gorodok 5 (up to 1.84 m); the other 19 maps do not change | `H-README` | VERIFIED |
 | The client's landscape at those points | equal to the server's (largest difference 0.00 m) and nowhere within 0.5 m of SquadHeight's surface: none of it is terrain of the game | `H-README` | VERIFIED |
 | `build` of the six maps against the served heightmaps | differs exactly at the points above, by the measured lowering to 1 cm, and elsewhere only at 12 764 points of Gorodok, one 16-bit level (1.4 mm) lower, where the server's collision holds SquadHeight's surface to the millimetre | `H-README` | VERIFIED |
-| Served heightmaps | generated 2026-10-30 and 2026-10-31, with every object of SquadHeight and on the corner grid; the 25 maps were rebuilt on 2026-11-10 with the placement rule and on the landscape's vertices (section 2.1) into `~/data/squad-heightmaps-final`, not yet deployed (`heightmaps.sh deploy` keeps each map's volume layer; the rebuilt `terrain.bin` goes with it) | `H-README` | PENDING (deploy, owner) |
+| Served heightmaps | generated 2026-10-30 and 2026-10-31, with every object of SquadHeight and on the corner grid, served until 2026-11-12; since then (SquadCalc 45.51.0) those of the final build: `heightmaps.sh build` of agl `d0ae886` on 2026-11-11, with the placement rule and on the landscape's vertices (section 2.1), with the terrain raster and the volume layer published on that grid; the served folder holds the build's files byte for byte | `H-README`; section 16.10 | VERIFIED |
 
 ### 2.5 Map pictures on the world (2026-11-10)
 
@@ -717,7 +724,7 @@ tooltip (six languages) and the source say so. UNVERIFIED in game.
 | Launch height of the stationary AGS-17, MK19, SPG-9 (SB#13): files say 0.347 / 0.368 / 0.637 m, entries use 1 m | unchanged; the 67 measurements cannot tell 0.347 from 1 m (RMS 5.34 m both) | `SB:RELEASE_NOTES.md` |
 | C90-CR, DZJ-08, RPG-28: values from the game files, no in-game shots | not measured | `#22` O2; `SB:RELEASE_NOTES.md` (SB#9) |
 | QLZ87 beyond 400 m | not measured | `#22` O2 |
-| GPU timings | none: the WGSL kernel was timed on SwiftShader (a CPU emulation, 7 200 and 11 400 segments/s on a loaded host on 2026-11-05, about 19 000 on an idle one before); item C9 is open and needs a machine with a GPU (section 12.4) | `E-README`; `#22` C9 |
+| GPU timings | measured once the build host's GTX 1650 was enabled: 6.6 M voxel segments/s and 39.6 M `trace_segments` segments/s on the GPU (1 000 000 segments, the committed run `SC:engine/wgsl/bench/last-run-gtx1650.txt` of 2026-11-12, two earlier runs agree), against 7 361 and 52 591 per second on SwiftShader (a CPU emulation, 100 000 segments, 2026-11-04); item C9 of `#22` is answered by the table in section 12.4 | section 12.4; `#22` C9 |
 | Thin openings (a window or doorway about a voxel wide) are closed by the conservative voxels | open, `#26`; recommended: precision regions now | section 7.2 |
 | Hand-held launchers use zoom x1 and bore 0; the game's `SeparateAdsFov` is ignored | open, `deadline-squad/squad-ballistics#17`; needs one in-game measurement | `SBS` |
 | Grid of Skirmish and Seed layers and of Skorpo started elsewhere than the game's | the lines fixed in SC 45.30.0, the keypad text, entry, labels and extent in SC 45.48.0; the image orientation for a swapped `Corner0` cannot be checked without pixels, and the keypad rule was not checked in game | section 2.3 |
@@ -813,19 +820,22 @@ Reading: with the voxels the blast reaches through the openings (more kill, fewe
 issue comment only, were measured with the first lattice file (the windows of that building at (127, -205) are closed in the exact file, `#26`), and were not
 measured again. The hit-probability line (rounds to kill) still reads the heightmap.
 
-### 12.4 Timings: CPU measured, GPU PENDING (`#22` item C9)
+### 12.4 Timings: CPU and GPU measured (`#22` item C9)
 
 | Measurement | Result | Source | Label |
 |---|---|---|---|
 | Heatmap, all 25 maps, wasm engine in a worker of headless Chromium 153, idle host (load 1.8), 80 480 positions at 600 m and 2000 m | 0.7 to 8.7 s per heatmap (median 2.0 s), 8 to 108 us per position (median 25 us); the earlier 2 to 26 s were measured at load average 22 | `E-README` "Time"; `AGL:tools/browser_check/heatmap_timing.mjs`; raw JSON `~/work/ui-shots/heatmap-timings-volumes2.json` on the build host | VERIFIED (one run, table in the README) |
 | With a precision region (Jensen, 36 000 positions at 200 m) | region load 7.1 to 7.7 s (1.93 MB, quiet host), then 1.9 to 2.2 s for the trace against 1.0 to 1.5 s voxel only (Node, wasm) | `E-README` "Time" | VERIFIED (one run each) |
 | WGSL voxel kernel on SwiftShader (a **CPU emulation** of a GPU) | 7 200 and 11 400 segments/s on a loaded host, about 19 000 on an idle one before; says nothing about a GPU | `SC:engine/wgsl/test/last-run-voxel.txt`; `E-README` | VERIFIED (CPU emulation only) |
-| **WGSL kernels (`trace_segments`, `trace_trajectories`, `heatmap`, `voxel_segments`) and heatmap on a real GPU** | **PENDING** (the build host has no GPU: no `/dev/dri`, no `nvidia-smi`; Chromium's only device is SwiftShader) | | PENDING |
+| **WGSL kernels (`trace_segments`, `trace_trajectories`, `heatmap`, `voxel_segments`) on a real GPU**: Chromium 153.0.8010.12, WebGPU on Vulkan, adapter `nvidia` / `turing` (not a fallback adapter; GeForce GTX 1650 Mobile, 4 GB, driver 580.178.04, `timestamp-query` present), GPU idle (0 %, 9 MiB) and host load average 0.4, 2026-11-12 21:53 UTC, bench page fixtures (60 000 Fallujah triangles, the Jensen voxel columns), median of 5 timed runs by the GPU's own timestamps, the run committed as `SC:engine/wgsl/bench/last-run-gtx1650.txt` | `trace_segments` 25.23 ms for 1 000 000 segments = 39.6 M segments/s (100 000: 3.0 ms = 33.1 M/s; 10 000: 1.1 ms). `trace_trajectories` 20.0 ms for 1 000 000 chord segments = 49.9 M/s (100 000: 1.0 ms = 96.2 M/s; 10 000: 0.8 ms). `voxel_segments` 151.5 ms for 1 000 000 segments = 6.60 M segments/s (100 000: 17.3 ms = 5.79 M/s; 10 000: 2.25 ms = 4.45 M/s). `heatmap` 13.1 ms for 100 000 candidates (about 130 rays each) = 7.66 M candidates/s; its time is nearly flat from 1 000 to 100 000 candidates (13 to 22 ms) and the 1 000- and 10 000-candidate rows are as slow as each other (22.0 ms), so only the 100 000 row is a rate (the cause is not investigated). All 12 size rows passed the float64 check on their samples (0 differing of 2 000 / 625 / 1 000 / 300 / 5 000). Two runs of the same flags four minutes earlier (raw output not committed) agree at 1 000 000 segments within 0.1 % (`trace_segments` 25.25 ms both), 1 % (`voxel_segments` 152.4 and 152.2 ms) and 6 % (`trace_trajectories` 19.1 and 20.3 ms), and took 12.8 and 16.6 ms for `heatmap` at 100 000 candidates. On the same page and fixtures SwiftShader (8 vCPU server, 2026-11-04) gave, at 100 000 segments or candidates, 52 591 `trace_segments`, 174 209 `trace_trajectories` and 7 361 `voxel_segments` segments/s and 5 046 `heatmap` candidates/s (`SC:engine/wgsl/bench/last-run-swiftshader.txt`), so the GPU is about 630 times faster on `trace_segments`, 550 times on `trace_trajectories`, 790 times on `voxel_segments` and 1 500 times on `heatmap` (the SwiftShader `heatmap` figure is one wall-clock run, not a median of timestamps; the factors compare two machines and are an order of magnitude, not a ratio to quote). These are kernel times only (no upload or readback), on a small BVH, so they rank devices and show scaling, they are not a per-map figure | `SC:engine/wgsl/bench/last-run-gtx1650.txt`, made with the committed driver `SC:engine/wgsl/bench/run_headless.mjs` (`GPU=1`; SquadCalc `dev`, change `584396af2`; the rest of `engine/wgsl` is identical to the `e18519025de3` of the key), with the command below; its README `SC:engine/wgsl/bench/README.md` | VERIFIED (the committed run; two earlier runs agree) |
 
-**Owner action for the GPU row.** On a machine with a real GPU (Chrome or Edge 113+; on Linux start Chrome with `--enable-unsafe-webgpu --enable-features=Vulkan`),
-run `cd engine/wgsl && python3 -m http.server 8000` in a SquadCalc checkout, open `http://localhost:8000/bench/bench.html` (`SC:engine/wgsl/bench/bench.html`,
-instructions in `SC:engine/wgsl/bench/README.md`), keep the tab in front, press **Run** (10-60 s on a discrete GPU) and paste the JSON it prints into
-`deadline-squad/deadline-squadcalc#22`. No agent can do this: it needs hardware the build host does not have. Until then the report states no GPU figure.
+**How the GPU row was made.** The harness `SC:engine/wgsl/bench/run_headless.mjs` drives `bench.html` in Chromium through Playwright; with `GPU=1` it starts a headed Chromium with `--enable-unsafe-webgpu --enable-features=Vulkan --use-angle=vulkan` instead of the headless SwiftShader default. Chromium cannot use the NVIDIA device headless: its own Vulkan instance fails (`vulkan_instance.cc: vkCreateInstance() failed: -7`) and WebGPU falls back to SwiftShader, so the run is headed, on a virtual display (Xvfb; the machine has no display). The recorded run is `SC:engine/wgsl/bench/last-run-gtx1650.txt`; its header holds the command, the date and the state of the machine. Command, in the SquadCalc checkout:
+
+```
+GPU=1 nice xvfb-run -a node engine/wgsl/bench/run_headless.mjs 10000,100000,1000000 1000,10000,100000 5 120
+```
+
+Without `--use-angle=vulkan` one attempt returned no adapter. The page prints the adapter line (`vendor nvidia, architecture turing, isFallbackAdapter false`); a run that prints `swiftshader` measures a CPU. The WGSL voxel kernel's comparison with the Rust DDA and the exact triangles (`SC:engine/wgsl/test/run_voxel.mjs`, the numbers of section 8.1) was not run on the GPU: it needs the data of `engine/tests/voxel_parity.rs`; the bench page's own check of the same kernel passed. The heatmap row of the first table (wasm engine) is a CPU figure; the `heatmap` kernel row above is the GPU one.
 
 ## 13. Reproducibility
 
@@ -888,7 +898,7 @@ image, as in `tools/heightmaps/heightmaps.sh`. Game data: the dedicated server, 
 | **Small and non-random samples** | LOS pairs on three maps (Fallujah, Kohat, Logar), DDA segments on three (Jensen, Kokan, Fallujah), segments chosen near geometry; terrain ground truth from the Training server's logs, n unrecorded for three maps; three maps are not a sample of 25 | sections 2.2, 7, 8 |
 | **Paired comparisons** | the old-to-new figures use the same pairs or cases on purpose; a fresh draw gives other figures (listed beside them), so only differences within a pairing are meaningful | sections 7.1, 7.2, 8.1 |
 | **The reference tracer is software too** | it had a bug (section 6); it is independent of the voxel builder and agrees with the Rust BVH to 3.9e-13 m on 100 000 segments, but a bug common to both would not show | section 6 |
-| **Timings come from one shared machine, one run each**; no GPU figure | cost indications, not benchmarks | sections 4, 8, 12.4 |
+| **Timings come from one shared machine, one run each** (the GPU timings: one committed run on the idle GPU of that machine, two earlier runs agree; kernel times of a small test BVH) | cost indications, not benchmarks | sections 4, 8, 12.4 |
 | **Provenance: 522 inputs are ASSUMED and 53 UNVERIFIED** of 2 704 | Workshop mods, hand-held bore and zoom, native explosion defaults, launch heights without data | `DP` |
 | **Scope limits by owner decision** | Linux only, 16:9 screens only, no penetration calculation | `SB:RELEASE_NOTES.md` (SB#10); `#22` decision 1 |
 
@@ -913,21 +923,24 @@ image, as in `tools/heightmaps/heightmaps.sh`. Game data: the dedicated server, 
 | Map count: 25 server-derived maps | the inventory of the server package; the scope sentence of section 0 | `H-README`; SC 45.29.0 |
 | Browser-check fixes | `targets_check` failure was a stale hover timer, not the data (`deadline-squad/deadline-squadcalc#28`, SC 45.33.0) | `CL` 45.33.0 |
 | Detailed tactical map v2 (section 16, 2026-11-09) | the build of 2026-11-09 replaces that of 2026-10-29; the evaluation found Manicouagan's land drawn as sea, the lakes missing, engine placeholder textures in Standard HD and three faults of the outline evaluator, all fixed before the figures were measured | section 16; `M-README` |
-| Review and revision of the Detailed map (section 16, 2026-11-10) | intervals and pooled statistics for the placement gate (188 windows); roads, water, crowns, roof heights and contours measured on all 25 maps; false water along streams, rivers drawn dry and two wrong class rules found in v2 and fixed in the pipeline (PENDING in the served tiles); symbols revised on colour differences computed for normal and colour-deficient vision; the size table of 16.4 corrected; the outline F1 of v1, v2, the revision and HD with block-bootstrap intervals; the revised tiles measured against v2 map by map | section 16.3.3, 16.3.6 to 16.3.10, 16.6, 16.10; `M-README` |
-| SquadHeight's objects only where the game has them (2026-11-10) | SquadHeight was traced on the SDK's version of each map: 12 127 points of 6 maps held objects that neither the server nor the client scene has (Al Basrah's background city up to 22.5 m); `build` takes the game's surfaces there, PENDING in the served heightmaps | section 2.4; `H-README` |
+| Review and revision of the Detailed map (section 16, 2026-11-10) | intervals and pooled statistics for the placement gate (188 windows); roads, water, crowns, roof heights and contours measured on all 25 maps; false water along streams, rivers drawn dry and two wrong class rules found in v2 and fixed in the pipeline (served since the final build, section 16.10); symbols revised on colour differences computed for normal and colour-deficient vision; the size table of 16.4 corrected; the outline F1 of v1, v2, the revision and HD with block-bootstrap intervals; the revised tiles measured against v2 map by map | section 16.3.3, 16.3.6 to 16.3.10, 16.6, 16.10; `M-README` |
+| SquadHeight's objects only where the game has them (2026-11-10) | SquadHeight was traced on the SDK's version of each map: 12 127 points of 6 maps held objects that neither the server nor the client scene has (Al Basrah's background city up to 22.5 m); `build` takes the game's surfaces there, served since the final build (SquadCalc 45.51.0) | section 2.4; `H-README` |
 | Spline roll in Standard HD, road sides and collision without a mesh in the Detailed tiles (2026-11-10) | Standard HD drew rolled spline meshes on their side (20 maps); road widths took the unrolled side axis (no tile changes); the old raster kept collision that the scene does not show (4 531 m² on 13 maps: Manicouagan's dam over the reservoir, Kamdesh's background mountains) | section 16.6 |
 | Map pictures on the world (2026-11-10) | the client's pixels registered every picture on the world: Black Coast Seed v1 showed another part of the island (490.5 to 862 m), five Skirmish layers the whole-map picture where the game shows its own, Skorpo's basemap lay 19.5 m short in the east, the terrain and topographic maps' relief up to 43 m off; the relief layer's south-east offset is its shading, not its frame | section 2.5; SC 45.50.0 |
 | Heights on the landscape's vertices, the WebP at the PNG's step, the detail where objects stand, no 8-bit fallback (2026-11-11) | the accuracy research found the heightmap's grid off the vertices on 18 maps (Skorpo turned, Anvil 0.75 m), the WebP rounded to 1 cm, the 1 m grid metres off next to objects and Black Coast's 8-bit fallback 5.7 m off at the median; the 25 maps are rebuilt on the vertices with a detail of half the spacing where objects stand, and SquadCalc 45.51.0 reads them without a fallback | sections 2.1, 2.2, 2.4 and 3; `H-README`, "Grid", "Detail where objects stand"; SC 45.51.0 |
+| Final build of every map layer (2026-11-12) | one build of the 25 maps from agl `d0ae886` (heightmaps on the landscape's vertices, volume layer, Detailed, Detailed in the game's colours, Standard HD, relief) replaces v2 and the heightmaps of 2026-10-30; its gate found the sky dome over Black Coast's and Yehorivka's Standard HD (fixed, `f9f8382`), its measures Skorpo's ground beyond the landscape drawn as sea (fixed in `efb521b`, merged as `9c2920f`, `deadline-squad/mapping-squad#2`; Skorpo's Detailed rebuilt and served since 2026-11-12 21:23 UTC); served as SquadCalc 45.51.0 | sections 2.4, 16.6, 16.10 |
 
-## 16. Detailed tactical map (the "Detailed" layer, build of 2026-11-09, reviewed 2026-11-10)
+## 16. Detailed tactical map (the "Detailed" layer, build of 2026-11-09, reviewed 2026-11-10, final build of 2026-11-12)
 
 The Detailed layer of SquadCalc is a topographic map of every map drawn from the game files: ground cover, relief, contours,
 water, roads, tracks, crop fields, buildings, walls, rocks, trees and roof heights, served as 256 px WebP tiles
 (`M-README`). This section records how the build of 2026-11-09 (v2) is made, how close it is to the game, and what it costs,
 against the build that was live until then (v1, 2026-10-29). Sources: Squad dedicated server build 26005357 (ground, physical
 materials, collision, splines, ocean actors) and Squad game client build 26234431 (the visible LOD 0 meshes, materials, foliage,
-landscape weightmaps, lakes). Every figure below was produced by the commands of section 16.9 on the tiles that are served; the
-label is VERIFIED unless stated otherwise.
+landscape weightmaps, lakes). Sections 16.1 to 16.9 describe v2, the build served from 2026-11-09 to 2026-11-12, whose tiles are kept,
+and their figures were produced by the commands of section 16.9 on it; section 16.10 gives the revision of the symbols of 2026-11-10
+and the final build that carries it, one build of all 25 maps served since 2026-11-12 as SquadCalc 45.51.0, measured against v2 map
+by map. The label is VERIFIED unless stated otherwise.
 
 ### 16.1 What changed from v1 to v2
 
@@ -1093,21 +1106,23 @@ layer's texture cannot be placed: its correlation peak is 2.5 standard deviation
 is 0.027), so its F1 is at an unmeasured shift and says nothing.
 
 **Intervals.** The table above has none: its zone comes from the scene raster, which a build deletes once the tiles are drawn. The same
-evaluator was therefore run again on a zone taken from the old collision raster alone, which the prepared data keep (structures 3 m and
-taller in `obj_h2`, grown by 4 m; `outline_revised.py`, kept with the report's generators), scoring v1, v2, the revision and HD on one
-zone with a bootstrap over squares of 64 texture pixels (2 000 draws, seed 0, the same squares for every picture, so the differences
-are paired; the edges are chosen once on the whole zone, as the evaluator does). A shift marked * is not measured and its F1 says nothing.
+evaluator was therefore run again on a zone taken from the old collision raster alone (structures 3 m and taller in `obj_h2`, grown by
+4 m; `outline_revised.py`, kept with the report's generators), from the final build's prepared data: the build drops that raster once a
+map is rendered, so `prep.py` of the build's tools wrote it again for the six maps, with the build's ground to the bit. It scores v1, v2,
+the final build and the Standard HD served with v2 (the reference of 16.3) on one zone with a bootstrap over squares of 64 texture
+pixels (2 000 draws, seed 0, the same squares for every picture, so the differences are paired; the edges are chosen once on the whole
+zone, as the evaluator does). A shift marked * is not measured and its F1 says nothing.
 
-| Minimap pair | Zone px / squares | Shift (m) | F1 at 1 px (95 % interval): v1 | v2 | revised | Standard HD | v2 − v1 | revised − v2 |
+| Minimap pair | Zone px / squares | Shift (m) | F1 at 1 px (95 % interval): v1 | v2 | final build | Standard HD | v2 − v1 | final − v2 |
 |---|---|---|---|---|---|---|---|---|
-| blackcoast_seed | 69873 / 81 | 0.00, 0.00 * | 0.388 (0.357 … 0.419) | 0.372 (0.344 … 0.402) | 0.372 (0.343 … 0.402) | 0.360 (0.316 … 0.399) | -0.016 (-0.035 … 0.003) | 0.000 (-0.008 … 0.007) |
-| goosebay_seed | 162617 / 132 | 0.00, 0.00 | 0.726 (0.704 … 0.747) | 0.754 (0.730 … 0.776) | 0.769 (0.746 … 0.791) | 0.819 (0.802 … 0.833) | 0.028 (0.017 … 0.038) | 0.015 (0.010 … 0.022) |
-| manicouagan_seed | 155618 / 172 | 0.00, 0.00 | 0.592 (0.562 … 0.619) | 0.611 (0.578 … 0.642) | 0.611 (0.579 … 0.639) | 0.685 (0.650 … 0.720) | 0.019 (0.001 … 0.037) | 0.000 (-0.003 … 0.003) |
+| blackcoast_seed | 68677 / 79 | 0.00, 0.00 * | 0.386 (0.354 … 0.416) | 0.370 (0.339 … 0.397) | 0.372 (0.341 … 0.399) | 0.360 (0.317 … 0.398) | -0.016 (-0.035 … 0.002) | 0.002 (-0.004 … 0.008) |
+| goosebay_seed | 162596 / 132 | 0.00, 0.00 | 0.726 (0.704 … 0.747) | 0.754 (0.730 … 0.776) | 0.767 (0.743 … 0.789) | 0.819 (0.802 … 0.833) | 0.028 (0.017 … 0.038) | 0.013 (0.007 … 0.020) |
+| manicouagan_seed | 155618 / 172 | 0.00, 0.00 | 0.592 (0.562 … 0.619) | 0.611 (0.578 … 0.642) | 0.610 (0.579 … 0.639) | 0.685 (0.650 … 0.720) | 0.019 (0.001 … 0.037) | -0.001 (-0.004 … 0.003) |
 | mutaha_seed | 490125 / 279 | 0.00, 0.00 | 0.546 (0.533 … 0.557) | 0.632 (0.620 … 0.644) | 0.636 (0.625 … 0.648) | 0.622 (0.607 … 0.637) | 0.086 (0.074 … 0.097) | 0.004 (0.003 … 0.006) |
-| skorpo_skirmish | 75213 / 149 | 0.00, 0.00 | 0.833 (0.820 … 0.845) | 0.850 (0.836 … 0.863) | PENDING (rebuild running) | 0.854 (0.836 … 0.868) | 0.017 (0.007 … 0.027) | – |
-| tallil_seed | 221171 / 156 | 0.00, 0.00 | 0.836 (0.825 … 0.846) | 0.852 (0.843 … 0.860) | PENDING (rebuild running) | 0.825 (0.815 … 0.834) | 0.016 (0.005 … 0.027) | – |
+| skorpo_skirmish | 69252 / 147 | 0.00, 0.00 | 0.828 (0.814 … 0.841) | 0.844 (0.829 … 0.857) | 0.845 (0.832 … 0.858) | 0.851 (0.833 … 0.866) | 0.016 (0.005 … 0.026) | 0.001 (-0.004 … 0.007) |
+| tallil_seed | 223608 / 152 | 0.00, 0.00 | 0.831 (0.820 … 0.840) | 0.835 (0.826 … 0.845) | 0.831 (0.821 … 0.840) | 0.808 (0.797 … 0.818) | 0.004 (-0.003 … 0.012) | -0.004 (-0.007 … -0.003) |
 
-Over the 5 pairs whose shift is measured, v2's F1 at 1 px on the collision zone differs from its F1 on the scene's zone of 16.3.3 by at most 0.010 (the same tiles, the zone alone), and the two zones put v1, v2 and HD in the same order on 5 of 5. v2 is above v1 with an interval of the difference above zero on 5 of 5 (goosebay_seed, manicouagan_seed, mutaha_seed, skorpo_skirmish, tallil_seed). The revision is above v2 with an interval above zero on 2 of 3 pairs measured so far (goosebay_seed 0.015 (0.010 … 0.022); manicouagan_seed 0.000 (-0.003 … 0.003); mutaha_seed 0.004 (0.003 … 0.006)). HD is above v2 on 3 of 5; v2 is above HD on mutaha_seed, tallil_seed, as in 16.3.3. Black Coast's shift is not measured (*), so its row says nothing; the pairs of maps still being rebuilt are PENDING.
+Over the 5 pairs whose shift is measured, v2's F1 at 1 px on the collision zone differs from its F1 on the scene's zone of 16.3.3 by at most 0.007 (the same tiles, the zone alone), and the two zones put v1, v2 and HD in the same order on 5 of 5. v2 is above v1 with an interval of the difference above zero on 4 of 5 (goosebay_seed, manicouagan_seed, mutaha_seed, skorpo_skirmish). The final build against v2: goosebay_seed 0.013 (0.007 … 0.020); manicouagan_seed -0.001 (-0.004 … 0.003); mutaha_seed 0.004 (0.003 … 0.006); skorpo_skirmish 0.001 (-0.004 … 0.007); tallil_seed -0.004 (-0.007 … -0.003); above v2 with an interval above zero on 2 of 5, below it with an interval below zero on tallil_seed. HD is above v2 on 3 of 5; v2 is above HD on mutaha_seed, tallil_seed, as in 16.3.3. The final build drew Standard HD again; its F1 against that of the HD served with v2: goosebay_seed 0.026 (0.019 … 0.034); manicouagan_seed 0.057 (0.045 … 0.068); mutaha_seed 0.003 (-0.005 … 0.012); skorpo_skirmish -0.004 (-0.009 … 0.003); tallil_seed -0.031 (-0.037 … -0.025). Black Coast's shift is not measured (*), so its row says nothing.
 
 #### 16.3.4 Road width against Standard HD (two maps, first measurement)
 
@@ -1199,7 +1214,7 @@ the tiles'.
 | logar | 0.43 | 0.2 | 0.358 | 0.328 | 0.995 / 0.995 | 1.0 / 2.5 | 0.9 / 1.8 |
 | sumari | 0.64 | – | – | – | – / – | – / – | – / – |
 
-23 maps have water to compare; for v2's tiles, each against its own HD reference, the median IoU is 0.84 (range 0.03 to 0.99). The columns of the table score v2's tiles and the revision against one HD reference per map (learned from the union of the two). "Revised" is the water the renderer draws with the two fixes of 16.6, taken as a mask at zoom 4: it has no bridges, piers, boats or crowns over the water, which HD and the tiles have, so its IoU is not like for like with the tiles'. The share of HD's water that is covered is: it rises on 20 of 20 maps (median 0.974 → 0.996; lowest after the fixes 0.847, kokan). IoU rises by more than 0.02 on 5 maps, most on anvil 0.10 → 0.79, kokan 0.42 → 0.71, blackcoast 0.68 → 0.92, mestia 0.04 → 0.13, chora 0.65 → 0.72. It falls by more than 0.02 on lashkar 0.86 → 0.76, mutaha 0.93 → 0.86, kamdesh 0.22 → 0.16, narva 0.96 → 0.93, albasrah 0.91 → 0.88, logar 0.36 → 0.33, goosebay 0.96 → 0.94, foolsroad 0.57 → 0.55, manicouagan 0.94 → 0.92: maps with objects on open water, or with so little water that the learned reference is unstable. The like-for-like figures, tiles against tiles, are those of the rendered maps in 16.10.
+23 maps have water to compare; for v2's tiles, each against its own HD reference, the median IoU is 0.84 (range 0.03 to 0.99). The columns of the table score v2's tiles and the revision against one HD reference per map (learned from the union of the two). "Revised" is the water the renderer draws with the two fixes of 16.6, taken as a mask at zoom 4: it has no bridges, piers, boats or crowns over the water, which HD and the tiles have, so its IoU is not like for like with the tiles'. The share of HD's water that is covered is: it rises on 20 of 20 maps (median 0.974 → 0.996; lowest after the fixes 0.847, kokan). IoU rises by more than 0.02 on 5 maps, most on anvil 0.10 → 0.79, kokan 0.42 → 0.71, blackcoast 0.68 → 0.92, mestia 0.04 → 0.13, chora 0.65 → 0.72. It falls by more than 0.02 on lashkar 0.86 → 0.76, mutaha 0.93 → 0.86, kamdesh 0.22 → 0.16, narva 0.96 → 0.93, albasrah 0.91 → 0.88, logar 0.36 → 0.33, goosebay 0.96 → 0.94, foolsroad 0.57 → 0.55, manicouagan 0.94 → 0.92: maps with objects on open water, or with so little water that the learned reference is unstable. The tiles of the final build are measured against HD on all 25 maps in 16.10.
 
 #### 16.3.8 Tree crowns
 
@@ -1371,11 +1386,11 @@ the previous map renders (6 workers, 9 GB), so the wall time of the 25 maps is a
 
 | Map | Tiles | MB (v1 → v2) | Covered 0.1 m cells | GPU raster (s) | scene_prep (s) | Render (s) |
 |---|---|---|---|---|---|---|
-| skorpo | 87 381 | 179.1 → 590.6 | 19 383 995 | 589 | 1183 | 2295 |
-| yehorivka | 87 381 | 202.8 → 705.0 | 12 571 775 | 411 | 631 | 4384 |
+| skorpo | 87 381 | 179.1 → 590.3 | 19 383 995 | 589 | 1183 | 2295 |
+| yehorivka | 87 381 | 202.8 → 704.9 | 12 571 775 | 411 | 631 | 4384 |
 | tallil | 87 381 | 38.3 → 431.3 | 35 313 930 | 801 | 767 | 3045 |
 | kohat | 87 381 | 62.5 → 673.5 | 6 844 452 | 357 | 669 | 3519 |
-| sanxian | 87 381 | 44.2 → 509.1 | 80 807 710 | 256 | 188 | 3299 |
+| sanxian | 87 381 | 44.2 → 509.0 | 80 807 710 | 256 | 188 | 3299 |
 | blackcoast | 87 381 | 61.0 → 635.9 | 22 318 065 | 267 | 310 | 3223 |
 | lashkar | 87 381 | 94.7 → 991.4 | 18 311 907 | 381 | 562 | 4616 |
 | gorodok | 21 845 | 70.4 → 251.7 | 11 094 512 | 350 | 290 | 2143 |
@@ -1395,7 +1410,7 @@ the previous map renders (6 workers, 9 GB), so the wall time of the 25 maps is a
 | mestia | 21 845 | 16.4 → 158.9 | 37 803 519 | 236 | 134 | 1249 |
 | foolsroad | 5 461 | 18.7 → 58.9 | 2 512 426 | 116 | 72 | 288 |
 | logar | 5 461 | 18.0 → 60.6 | 8 656 009 | 94 | 87 | 245 |
-| sumari | 5 461 | 4.1 → 40.6 | 7 658 743 | 65 | 71 | 212 |
+| sumari | 5 461 | 4.1 → 40.5 | 7 658 743 | 65 | 71 | 212 |
 | **25 maps** | 955 725 | 1395 → 7329 |  | 8400 (2.3 h) | 9094 (2.5 h) | 42616 (11.8 h) |
 
 The tiles grow 5.3 times: the finest zoom is one to two levels deeper (0.066-0.124 m/px against 0.17-0.32). Open-sea blocks are hard
@@ -1418,14 +1433,16 @@ links to one tile (Skorpo 20 400 tiles, Sanxian 13 072, Pacific 11 360, Black Co
 | Lakes and reservoirs missing | Manicouagan's reservoir dry after the sea fix | the lake material's path names its level `WL_<map>_Water`, read as a hidden water surface; the server has no body for the planes | lakes as water planes (`scene_objects.water_planes`) |
 | Engine placeholder textures in Standard HD | the grid and cross patterns of `BlendFunc_DefBase` and `BlendFunc_DefBlend` on 20 landscape layers of 8 maps; the HD gate could not measure Kokan, Fools Road and Sumari | a layer without a texture of its own took the texture nearest its colour, engine ones included | engine textures never a layer's texture (`maprender` `ground_fit.layer_details`, AGL `1027d79`); the 8 maps re-rendered, all pass the gate |
 | HD gate windows over the map's edge | Gorodok passed on its median, but 5 of its 8 windows were centred 0.5 m from the edge (the walls along the border are its largest "roofs"), half of each beyond the map, off by up to 1.8 m | the windows were chosen by roof size alone | only windows wholly inside the map (`check_alignment.hd_window_centres`, `test_scene.HdWindows`); all 25 maps checked again |
-| False water along streams (v1 and v2; found 2026-11-10 by 16.3.7) | Goose Bay's 3 m streams 35 to 45 m wide, a pond 60 m wide on Mestia's 6 m stream | the "static water planes" of the server were water meshes laid along splines (`SplineMeshComponent`), taken at the bounds of the undeformed mesh, 30 x 30 m: all 381 planes of Goose Bay, 818 of Chora, 670 of Skorpo | spline meshes are no planes (`features.water_planes`, `test_cartography.WaterPlanes`); FIXED in the pipeline, PENDING in the served tiles until the rebuild |
-| Rivers drawn dry (v1 and v2; found 2026-11-10 by 16.3.7) | Anvil's river, 131 000 m² in HD, 12 000 m² of water in the tiles | the water of a river spline was drawn below the height of the spline's centre line; the river's surface is its mesh's, which lies up to 0.5 m above that line (median 0.16 m on Anvil) | the top of the scene's river and pond meshes on the 1 m grid is the surface (`scene_prep.river_surface`, `test_cartography.RiverMeshes`); FIXED in the pipeline, PENDING in the served tiles |
-| Power plant drawn as vegetation, decks as buildings (v2; found 2026-11-10 by the audit) | Sanxian's silos and cooling towers green; Black Coast's road bridge a dark bar, Sanxian's quay a house 18 m tall | the class rule matched "plant" in "PowerPlant" (73 mesh names of the 5 143 in the 25 scenes); pavement, road line and dock meshes had no class and were structures (164 names) | `features.object_class` (`test_cartography.ObjectClasses`, every changed name listed by the test's source); FIXED in the pipeline, PENDING in the served tiles (the class is written by the scene step) |
+| False water along streams (v1 and v2; found 2026-11-10 by 16.3.7) | Goose Bay's 3 m streams 35 to 45 m wide, a pond 60 m wide on Mestia's 6 m stream | the "static water planes" of the server were water meshes laid along splines (`SplineMeshComponent`), taken at the bounds of the undeformed mesh, 30 x 30 m: all 381 planes of Goose Bay, 818 of Chora, 670 of Skorpo | spline meshes are no planes (`features.water_planes`, `test_cartography.WaterPlanes`); fixed; in the served tiles since the final build (SquadCalc 45.51.0, 16.10) |
+| Rivers drawn dry (v1 and v2; found 2026-11-10 by 16.3.7) | Anvil's river, 131 000 m² in HD, 12 000 m² of water in the tiles | the water of a river spline was drawn below the height of the spline's centre line; the river's surface is its mesh's, which lies up to 0.5 m above that line (median 0.16 m on Anvil) | the top of the scene's river and pond meshes on the 1 m grid is the surface (`scene_prep.river_surface`, `test_cartography.RiverMeshes`); fixed; in the served tiles since the final build (16.10) |
+| Power plant drawn as vegetation, decks as buildings (v2; found 2026-11-10 by the audit) | Sanxian's silos and cooling towers green; Black Coast's road bridge a dark bar, Sanxian's quay a house 18 m tall | the class rule matched "plant" in "PowerPlant" (73 mesh names of the 5 143 in the 25 scenes); pavement, road line and dock meshes had no class and were structures (164 names) | `features.object_class` (`test_cartography.ObjectClasses`, every changed name listed by the test's source); fixed; in the served tiles since the final build (16.10) |
 | The table of 16.4 gave v2's size as v1's | "590.3 → 590.6 MB" beside "the tiles grow 5.3 times" | the collector read v1's size from the folder that by then held v2 | the size of the kept v1 tiles (`collect_v3.py`); table and sentence agree |
 | A claim of "under 1 cm" for the heightmap gate | the windows scatter by pixels | 1 m samples at the nearest node | the README states decimetres |
-| Spline meshes on their side in Standard HD (found 2026-11-10) | Manicouagan's double pipeline, crash barriers, railway tracks and fences drawn as thin lines beside their splines; with the roll, 20 maps draw spline meshes more than 0.3 m differently (Jensen, Kohat, Kokan, Lashkar and Pacific do not) | `maprender` bent a spline mesh without the component's roll: a mesh that runs along its Y axis, which the landscape splines stand up by a roll of −90°, lay on its side and off its line | one deformation for both layers, `AGL:tools/heightmaps/py/spline_mesh.py` (`test_spline_mesh`, `test_maprender.SplineBendTest`): with the roll, 9 943 of the 10 419 rolled components of the 25 maps lie within 2 cm of the server's cooked collision box on the median of their mesh, without it up to 103 m off; fixed in the renderer, PENDING in the served HD tiles, which 16.3 measured against |
+| Spline meshes on their side in Standard HD (found 2026-11-10) | Manicouagan's double pipeline, crash barriers, railway tracks and fences drawn as thin lines beside their splines; with the roll, 20 maps draw spline meshes more than 0.3 m differently (Jensen, Kohat, Kokan, Lashkar and Pacific do not) | `maprender` bent a spline mesh without the component's roll: a mesh that runs along its Y axis, which the landscape splines stand up by a roll of −90°, lay on its side and off its line | one deformation for both layers, `AGL:tools/heightmaps/py/spline_mesh.py` (`test_spline_mesh`, `test_maprender.SplineBendTest`): with the roll, 9 943 of the 10 419 rolled components of the 25 maps lie within 2 cm of the server's cooked collision box on the median of their mesh, without it up to 103 m off; fixed; in the served HD tiles since the final build (16.3 measured against the HD served with v2) |
 | Road width across the wrong axis of a rolled mesh (found 2026-11-10) | none in the tiles | `road_width.py` took the side axis of the unrolled bend, which for a mesh rolled by −90° is its height | the axis the roll lays level and the side it turns it to (`spline_mesh.axis_across`, `test_scene.RoadWidth`); 474 of the 102 115 road components of the 25 maps (10 maps) are such meshes, all opaque over their whole width, so no segment changes (0 segments, 0.0 m) |
-| Collision without a mesh kept from the old raster (found 2026-11-10) | Manicouagan's dam a block 2 to 3 m above the reservoir where the game shows water (275 m²); Kamdesh's background mountains as blocks along the map's edge | the old-raster rule of 16.2 kept every run of the server's collision 2 m from the scene's objects, the collision of meshes the game shows as something else or not at all (river and lake planes, terrain meshes, road meshes, the gap of a ruined wall) included | a run stays only where the scene shows an object in at least half of its metres (`scene_prep.shown_runs`, `test_scene.OldRasterMerge`); on the 25 maps, of 1 542 runs (29 690 m²) the 1 423 that stay (25 159 m²) are shown in 75 % or more of their metres, the 119 that go (4 531 m² on 13 maps: Kamdesh 1 905, Anvil 1 143, Chora 510, Manicouagan 507 m²) in 10 % or less; fixed in the pipeline, PENDING in the served tiles |
+| Collision without a mesh kept from the old raster (found 2026-11-10) | Manicouagan's dam a block 2 to 3 m above the reservoir where the game shows water (275 m²); Kamdesh's background mountains as blocks along the map's edge | the old-raster rule of 16.2 kept every run of the server's collision 2 m from the scene's objects, the collision of meshes the game shows as something else or not at all (river and lake planes, terrain meshes, road meshes, the gap of a ruined wall) included | a run stays only where the scene shows an object in at least half of its metres (`scene_prep.shown_runs`, `test_scene.OldRasterMerge`); on the 25 maps, of 1 542 runs (29 690 m²) the 1 423 that stay (25 159 m²) are shown in 75 % or more of their metres, the 119 that go (4 531 m² on 13 maps: Kamdesh 1 905, Anvil 1 143, Chora 510, Manicouagan 507 m²) in 10 % or less; fixed; in the served tiles since the final build (16.10) |
+| Sky dome over Standard HD (final build; found 2026-11-12 by the gate) | the gate of Black Coast and Yehorivka measured no window: their HD tiles were one flat colour | since the depth range follows the scene (`2cfc6ac`), the lighting's sky sphere, a mesh of the scene kilometres across, set the range and covered the whole render from above; one material was calibrated and drawn everywhere | the sky dome is left out of the HD scene (`maprender` `scene_render.is_skipped`, `test_maprender.SkippedPlacementTest`; `e5541cb`, merged into `dev` as `f9f8382`); the two maps rendered again with `f9f8382` pass the gate with 6 of 6 and 8 of 8 windows within 0.1 m |
+| Skorpo's ground beyond the landscape drawn as sea (final build; found 2026-11-12 by 16.10) | the background mountains south of the play area and the island in the north-east corner deep water: 49.2 % of the map water against v2's 37.4 % | `scene_prep.scenery_ground` takes as void the ground outside the landscape under an absolute 0.01 m, SquadHeight's floor taken to lie on the heightmap's minimum; on the landscape's vertices Skorpo's minimum is 4.06 cm lower (`z_min_m` −360.7578 against −360.7172 m), so no void is found, no scenery is taken in (0 m² against 7 095 495 m² in the v2 build, scene logs of 2026-11-07 to 2026-11-09) and the ground lies 67 m under the sea level; the other 24 maps' floors lie within 0.0025 m of their minimum | the scenery fill measures the floor outside the landscape on each map: ground less than 0.01 m above the lowest ground outside the landscape is the void (`scene_prep.scenery_ground`, `test_scene.py`; `efb521b`, merged into `dev` as `9c2920f`, `deadline-squad/mapping-squad#2`); Skorpo's prep, scene, render, gate and measures again with `9c2920f` (scene log: 7 095 495 m² of ground beyond the landscape taken in, 0 m² on it): water 37.4 % of the map, IoU 0.980 against HD (before 0.925); fixed; in the served tiles since 2026-11-12 21:23 UTC |
 
 ### 16.7 Figures
 
@@ -1465,27 +1482,27 @@ Every panel carries a scale bar and a north arrow (north is up: the tile frame's
 
 ![Figure 16.9](figures/detailed/v3_gorodok_800m.jpg)
 
-*Figure 16.9.* Gorodok, 800 m at the railway junction (1418, 218): v2, the revision, Standard HD. Slate buildings, a railway with ties, cased dirt roads, summits with their height, lighter rocks.
+*Figure 16.9.* Gorodok, 800 m at the railway junction (1418, 218): v2, the final build, Standard HD. Slate buildings, a railway with ties, cased dirt roads, summits with their height, lighter rocks.
 
 ![Figure 16.10](figures/detailed/v3_mestia_800m.jpg)
 
-*Figure 16.10.* Mestia, 800 m (-700, 60): the 60 m pond and the wide streams of v2 are the spline meshes' bounds; the revision draws the streams at their meshes' width; the ground beyond the landscape is quiet.
+*Figure 16.10.* Mestia, 800 m (-700, 60): the 60 m pond and the wide streams of v2 are the spline meshes' bounds; the final build draws the streams at their meshes' width; the ground beyond the landscape is quiet.
 
 ![Figure 16.11](figures/detailed/v3_albasrah_800m.jpg)
 
-*Figure 16.11.* Al Basrah, 800 m at the refinery (490, -84): structures against sand and the river's depth.
+*Figure 16.11.* Al Basrah, 800 m at the refinery (490, -84): v2, the final build, Standard HD; structures against sand and the river's depth.
 
 ![Figure 16.12](figures/detailed/v3_manicouagan_800m.jpg)
 
-*Figure 16.12.* Manicouagan, 800 m at the dam (-352, -1240): no contour labels on the reservoir, summits on the land.
+*Figure 16.12.* Manicouagan, 800 m at the dam (-352, -1240): v2, the final build, Standard HD; no contour labels on the reservoir, summits on the land.
 
 ![Figure 16.13](figures/detailed/v3_cvd_gorodok.jpg)
 
-*Figure 16.13.* Gorodok, 400 m, v2 (top) and the revision (bottom) under normal vision, protanopia, deuteranopia and tritanopia (Machado et al. 2009): the buildings stay apart from the crowns, the dirt roads keep their casing.
+*Figure 16.13.* Gorodok, 400 m, v2 (top) and the final build (bottom) under normal vision, protanopia, deuteranopia and tritanopia (Machado et al. 2009): the buildings stay apart from the crowns, the dirt roads keep their casing.
 
 ![Figure 16.14](figures/detailed/v3_anvil_water.jpg)
 
-*Figure 16.14.* Anvil, 700 m of the river (660, -390): v2, the revision (tiles of the rebuild of the other maps), Standard HD. v2 draws the river dry; the revision draws it up to its mesh's surface.
+*Figure 16.14.* Anvil, 700 m of the river (660, -390): v2, the final build, Standard HD. v2 draws the river dry; the final build draws it up to its mesh's surface.
 
 ![Figure 16.15](figures/detailed/v3_classes_sanxian.jpg)
 
@@ -1493,7 +1510,11 @@ Every panel carries a scale bar and a north arrow (north is up: the tile frame's
 
 ![Figure 16.16](figures/detailed/v3_legend.png)
 
-*Figure 16.16.* The legend the revised tiles carry in their meta.json, as the page shows it.
+*Figure 16.16.* The legend the final build's tiles carry in their meta.json, as the page shows it.
+
+![Figure 16.17](figures/detailed/v3_skorpo.jpg)
+
+*Figure 16.17.* Skorpo, the whole map: v2, the final build as served (rebuilt on 2026-11-12 with the fix of 16.6) and Standard HD. The first tiles of the final build drew the mountains south of the play area and the island in the north-east corner as sea; the rebuild draws them as ground, as v2 does.
 
 ### 16.8 Limitations
 
@@ -1514,9 +1535,8 @@ Every panel carries a scale bar and a north arrow (north is up: the tile frame's
   another build and another tool (the served heightmap).
 * Legibility is argued from an audit by eye of 336 comparison pictures and from colour differences computed for simulated colour vision
   (16.10); no reader with a colour vision deficiency and no player was tested. UNVERIFIED as a usability result.
-* The revision of 16.10 is rendered and measured on 17 of the 25 maps in this text; the rows marked PENDING are the maps whose
-  rebuild had not finished. The served tiles are still v2 and keep the faults of 16.6 marked PENDING until the rebuilt tiles are deployed;
-  the figures of 16.3 describe v2 unless they say "revised".
+* The figures of 16.1 to 16.9 describe v2, served from 2026-11-09 to 2026-11-12; 16.10 measures the final build, served since then
+  (SquadCalc 45.51.0), against v2 on all 25 maps.
 * The intervals of the outline F1 (16.3.3) are on the collision raster's zone; the scene's zone of the table of 16.3.3 would need the scene
   rasters kept after a build.
 * A class is the mesh's, not its use: a retaining wall laid as a jetty (Manicouagan, `SM_Foundations_RetainingWall_01` at about
@@ -1539,7 +1559,7 @@ random choice (stations, trees, windows, bootstrap draws) uses a fixed seed, so 
 | Tests | `docker run ... squadcalc-maptiles-py python -m unittest discover -p 'test_*.py'` in `tools/maptiles/py` (`M-README`, the list of files); `test_scene_gpu.py` on the host |
 | Standard HD | `tools/maprender` (`AGL:tools/maprender/README.md`) |
 
-### 16.10 Revision of the symbols (2026-11-10)
+### 16.10 Revision of the symbols (2026-11-10) and the final build (2026-11-12)
 
 **Audit.** Every map was looked at in 336 pictures: the whole map, and windows of 800 m, 120 m and 36 m at its buildings, a
 shore, its strongest relief, its roads and a forest edge, each beside Standard HD and the game's own minimap. The audit recorded 399 defects, 44 of them of the kind that misleads a player or hides something a player needs; the complete table is with the report's sources. The ones the revision answers are in the table of changes; the ones it does not are in 16.8.
@@ -1600,75 +1620,78 @@ covers, of the pairs of classes that meet on the map and of each class against i
 The fills of ground-like classes (rock on asphalt, a paved road on gravel, a bridge deck) stay under 10 by design: their rim or casing
 carries them. Every label is above the WCAG 2.1 text contrast of 4.5 on its halo (contour 6.8, roof 14.3, summit 9.8).
 
-**Revised tiles.** Complete tiles were rebuilt with the revised pipeline, merged with the fix of the spline meshes' roll and of the kept legacy objects: the scene raster on the GPU, the scene step and the render, from the prepared data of prep.py with the corrected water planes. Six maps were rendered by this revision; the other 19 by a rebuild with a frozen copy of the same tools, of which 11 had finished when this text was built. 17 of 25 maps are measured; 17 of them pass the placement gate, the largest median offset is 0.067 m. The rows marked PENDING are filled by rerunning the generators once the rebuild has finished (16.11).
+**Final build.** One build of all 25 maps carries the revision into the served layers. It ran from agl `dev` `d0ae886` from 2026-11-11 05:18 to 2026-11-12 17:25 UTC (every step with its exit code in the build's log): the heightmaps on the landscape's vertices with their terrain raster and volume layer (sections 2 to 4), the Detailed tiles (prep.py, the scene raster on the GPU, the scene step, the render), the Detailed tiles in the game's colours of the three maps that have a fitted style (albasrah, fallujah, gorodok), Standard HD and the relief, then the gate and the measures. The gate failed on Black Coast and Yehorivka with no window measured: their Standard HD was one flat colour, the lighting's sky dome drawn over the whole map (16.6). Their HD was rendered again with `f9f8382`, which leaves the dome out, and checked and measured again (18:57 UTC). The build was deployed on 2026-11-12 as SquadCalc 45.51.0; the tiles and heightmaps it replaced are kept beside the served folder (`maptiles.bak.20261112-1857-final-build`, `heightmaps.bak.20261112-1857-final-build`). Its measures showed Skorpo's ground beyond the landscape drawn as sea (16.6, `deadline-squad/mapping-squad#2`): Skorpo's Detailed was built again with `9c2920f` (prep, scene, render, gate and measures, `skorpo_fix.sh`; its Standard HD and heightmaps did not change) and replaced the served tiles on 2026-11-12 at 21:23 UTC; the tiles drawn as sea are kept as `maptiles-skorpo.bak.20261112-2123-sea`. Skorpo's gate, size, render time and measures below are the rebuild's. 25 of 25 maps pass the placement gate; the largest median offset is 0.054 m and the largest deviation of a window from its map's median 0.132 m. Over the 189 measured windows (177 within 0.1 m) the offset is -0.006 m in x (95 % interval of the mean -0.012 to 0.000) and -0.009 m in y (-0.014 to -0.003); the radial offset has a median of 0.045 m (interval 0.041 to 0.048) and a 95th percentile of 0.119 m. The height reference passes on 25 of 25 maps (largest median difference 0.0025 m). The heightmap gate fails on 6 maps, by 0.13 to 0.38 m on the larger axis (skorpo, yehorivka, tallil, sanxian, blackcoast, foolsroad; v2 failed it on 4: yehorivka 0.13 m, gorodok 0.04 m, manicouagan 0.21 m, foolsroad 0.12 m): it compares the outlines in the finest tiles, 0.07 to 0.12 m per pixel, with 1 m samples of the heightmap taken at the nearest node, so a map that lies right reads pixels off (here up to 3.6 px, 16.3.1); `check_alignment.py` makes it the gate only where a map has no Standard HD, and every map has one. The final build's render times are those of steps that shared the machine with two or three other lanes (`build_rest.sh`: prep and scene beside render, colour render and HD), so they say nothing of the renderer's speed against v2. The slowest step is the render in the game's colours: gorodok 73 847 s (20.5 h), albasrah 16 956 s (4.7 h), fallujah 9 542 s (2.7 h), where Gorodok's Detailed render took 2 395 s (`deadline-squad/mapping-squad#1`).
 
-| Map | Gate, v2: median x, y (m) | Gate, revised: median x, y (m); windows / within 0.1 m | Tiles MB, v2 → revised | Render (s) | Rendered by |
+| Map | Gate, v2: median x, y (m) | Gate, final: median x, y (m); windows / within 0.1 m | Heightmap gate, final: median x, y (m) | Tiles MB, v2 → final | Render, v2 → final (s) |
 |---|---|---|---|---|---|
-| skorpo | 0.002, -0.032 | PENDING (rebuild running) | – | – | – |
-| yehorivka | 0.011, -0.014 | PENDING (rebuild running) | – | – | – |
-| tallil | -0.034, -0.010 | PENDING (rebuild running) | – | – | – |
-| kohat | -0.017, -0.033 | -0.027, -0.037; 8 / 7 | 673.5 → 653.5 | 4145 | the rebuild of the other maps |
-| sanxian | 0.019, 0.012 | PENDING (rebuild running) | – | – | – |
-| blackcoast | 0.012, -0.031 | -0.007, -0.046; 6 / 4 | 635.9 → 625.5 | 4876 | the rebuild of the other maps |
-| lashkar | 0.008, -0.067 | PENDING (rebuild running) | – | – | – |
-| gorodok | 0.001, -0.008 | 0.000, -0.004; 7 / 7 | 251.7 → 251.8 | 3430 | this revision |
-| chora | -0.037, -0.020 | -0.036, -0.018; 8 / 8 | 155.2 → 127.3 | 1163 | the rebuild of the other maps |
-| pacific | 0.007, 0.015 | PENDING (rebuild running) | – | – | – |
-| harju | -0.013, -0.027 | -0.017, -0.021; 8 / 8 | 216.9 → 218.9 | 1762 | this revision |
-| manicouagan | -0.014, -0.039 | -0.021, -0.045; 8 / 7 | 256.0 → 257.9 | 1662 | this revision |
-| goosebay | -0.007, -0.020 | -0.007, -0.021; 8 / 7 | 207.6 → 207.9 | 2258 | this revision |
-| jensen | -0.016, -0.017 | -0.013, -0.022; 6 / 4 | 109.3 → 109.8 | 645 | the rebuild of the other maps |
-| albasrah | -0.013, 0.016 | -0.040, 0.002; 8 / 6 | 190.9 → 192.7 | 2095 | this revision |
-| kamdesh | 0.016, -0.003 | 0.012, -0.002; 8 / 8 | 219.4 → 217.4 | 1087 | the rebuild of the other maps |
-| anvil | -0.012, 0.017 | -0.021, 0.017; 8 / 8 | 203.8 → 204.3 | 1761 | the rebuild of the other maps |
-| fallujah | -0.003, 0.011 | -0.002, 0.001; 8 / 8 | 162.9 → 165.0 | 1528 | the rebuild of the other maps |
-| narva | -0.022, -0.005 | PENDING (rebuild running) | – | – | – |
-| mutaha | -0.003, -0.037 | -0.006, -0.038; 8 / 8 | 154.6 → 154.8 | 1942 | the rebuild of the other maps |
-| kokan | 0.005, 0.002 | 0.005, 0.004; 8 / 8 | 153.1 → 153.6 | 1311 | the rebuild of the other maps |
-| mestia | 0.006, -0.003 | 0.002, -0.000; 8 / 7 | 158.9 → 153.6 | 2114 | this revision |
-| foolsroad | -0.006, -0.007 | -0.005, -0.006; 7 / 7 | 58.9 → 59.2 | 397 | the rebuild of the other maps |
-| logar | -0.056, -0.052 | -0.067, -0.047; 8 / 4 | 60.6 → 60.8 | 404 | the rebuild of the other maps |
-| sumari | -0.001, 0.002 | PENDING (rebuild running) | – | – | – |
+| skorpo | 0.002, -0.032 | -0.004, -0.019; 8 / 8 | 0.125, 0.379 (fails) | 590.3 → 555.2 | 2295 → 2392 |
+| yehorivka | 0.011, -0.014 | 0.014, -0.009; 8 / 8 | -0.094, 0.134 (fails) | 704.9 → 704.5 | 4384 → 7554 |
+| tallil | -0.034, -0.010 | -0.015, -0.013; 8 / 6 | 0.038, 0.132 (fails) | 431.3 → 435.7 | 3045 → 5885 |
+| kohat | -0.017, -0.033 | -0.012, -0.026; 8 / 8 | -0.030, -0.015 | 673.5 → 653.5 | 3519 → 6340 |
+| sanxian | 0.019, 0.012 | 0.010, -0.014; 7 / 6 | 0.099, 0.129 (fails) | 509.0 → 509.0 | 3299 → 8417 |
+| blackcoast | 0.012, -0.031 | 0.003, -0.014; 6 / 6 | -0.048, -0.138 (fails) | 635.9 → 627.6 | 3223 → 5013 |
+| lashkar | 0.008, -0.067 | 0.012, -0.054; 6 / 5 | -0.000, 0.008 | 991.4 → 973.5 | 4616 → 8261 |
+| gorodok | 0.001, -0.008 | -0.012, -0.001; 8 / 8 | -0.008, -0.021 | 251.7 → 251.7 | 2143 → 2395 |
+| chora | -0.037, -0.020 | -0.036, -0.018; 8 / 8 | 0.002, 0.022 | 155.2 → 127.3 | 943 → 770 |
+| pacific | 0.007, 0.015 | 0.027, 0.034; 7 / 7 | -0.049, 0.022 | 64.6 → 64.8 | 815 → 970 |
+| harju | -0.013, -0.027 | -0.016, -0.021; 8 / 8 | -0.001, -0.037 | 216.9 → 218.9 | 1556 → 2288 |
+| manicouagan | -0.014, -0.039 | -0.017, -0.042; 8 / 8 | 0.108, -0.048 | 256.0 → 259.8 | 1547 → 2896 |
+| goosebay | -0.007, -0.020 | -0.006, -0.032; 8 / 7 | -0.072, 0.100 | 207.6 → 210.1 | 1051 → 2296 |
+| jensen | -0.016, -0.017 | 0.004, -0.008; 6 / 5 | -0.115, 0.078 | 109.3 → 109.7 | 638 → 1146 |
+| albasrah | -0.013, 0.016 | -0.022, 0.007; 8 / 7 | -0.002, -0.044 | 190.9 → 195.7 | 1359 → 1424 |
+| kamdesh | 0.016, -0.003 | 0.003, -0.008; 8 / 8 | 0.012, -0.063 | 219.4 → 217.3 | 1087 → 2098 |
+| anvil | -0.012, 0.017 | -0.021, 0.015; 8 / 8 | -0.025, -0.008 | 203.8 → 205.1 | 1243 → 1701 |
+| fallujah | -0.003, 0.011 | 0.004, -0.008; 8 / 7 | 0.005, 0.016 | 162.9 → 165.0 | 1144 → 1004 |
+| narva | -0.022, -0.005 | -0.026, 0.002; 8 / 7 | -0.071, -0.041 | 127.5 → 129.6 | 1156 → 2134 |
+| mutaha | -0.003, -0.037 | -0.010, -0.031; 8 / 8 | 0.018, -0.030 | 154.6 → 154.8 | 800 → 2442 |
+| kokan | 0.005, 0.002 | 0.006, 0.004; 8 / 8 | 0.000, -0.016 | 153.1 → 153.6 | 759 → 1498 |
+| mestia | 0.006, -0.003 | 0.007, -0.001; 8 / 7 | -0.047, 0.004 | 158.9 → 153.5 | 1249 → 2443 |
+| foolsroad | -0.006, -0.007 | -0.004, -0.007; 7 / 6 | 0.054, 0.236 (fails) | 58.9 → 59.4 | 288 → 599 |
+| logar | -0.056, -0.052 | -0.032, -0.024; 8 / 7 | -0.037, -0.045 | 60.6 → 61.6 | 245 → 655 |
+| sumari | -0.001, 0.002 | -0.002, 0.000; 6 / 6 | -0.011, 0.008 | 40.5 → 39.4 | 212 → 519 |
 
-**Measures on the revised tiles.** Each cell is v2 → revised, both measured by 16.3.6 to 16.3.10 against the same references. Over the 17 measured maps the largest median offset of the revision's road centreline from HD's is 0.081 m (blackcoast); the median difference of the roof labels is unchanged on 17 of 17 maps and the median distance of the contours on 10 of 17 (the largest change is 0.05 px); every lone tree is drawn on 16 of 16 maps with trees. Water IoU rises by more than 0.02 on 3 of 14 maps with water in both builds (anvil 0.06 → 0.79, chora 0.61 → 0.67, kamdesh 0.05 → 0.10). On mestia (0.03) the water of v2 was mostly false (the share of v2's water that is water in HD in brackets) and the revision's is under the 0.05 % of the map the measure needs.
+**Measures on the final build.** Each cell is v2 → final build. Both builds' tiles are measured by 16.3.6 to 16.3.10 against the final build's references (its prepared data, its Standard HD and the heightmaps on the landscape's vertices), so a change is the tiles' own; v2's cells therefore differ from 16.3, which measured v2 against the references served with it. Two columns give each build against the heightmap served with it (v2's are those of 16.3.9 and 16.3.10): the roof labels, which are not read from the tiles' pixels, and the contours, whose heights count from the heightmap's lowest point; the final build's heightmaps moved that point by up to 6.20 m (albasrah), so v2's contours read on them measure the move, not the drawing (albasrah: 612 px). Over the 25 maps the largest median offset of the final build's road centreline from HD's is 0.094 m (blackcoast); the median difference of the roof labels stays within 0.05 m of v2's on 21 of 25 maps (the others: skorpo 0.24 → 0.38, blackcoast 0.19 → 0.33, manicouagan 0.08 → 0.14, foolsroad 0.21 → 0.30); the median distance of the contours at the finest zoom stays within 0.02 px on 19 of 25 maps (the largest changes: sumari 0.66 → 0.88, lashkar 0.44 → 0.53, yehorivka 0.22 → 0.27, mutaha 0.22 → 0.27); every lone tree is drawn on 24 of 24 maps with trees. Water IoU rises by more than 0.02 on 5 of 22 maps with water in both builds (anvil 0.06 → 0.79, yehorivka 0.65 → 0.83, kamdesh 0.07 → 0.18, chora 0.61 → 0.68, kohat 0.49 → 0.51); it falls by more than 0.02 on tallil 0.84 → 0.80, mutaha 0.91 → 0.89, sumari 0.41 → 0.39. On mestia (0.02) the water of v2 was mostly false (the share of v2's water that is water in HD in brackets) and the final build's is under the 0.05 % of the map the measure needs. The tiles Skorpo's Detailed first had in the final build drew the ground beyond the landscape as sea (water 49.2 % of the map, IoU 0.925 against HD; 16.6); the rebuilt tiles that are served have 37.4 % (37.4 % in v2) and an IoU of 0.980 (v2 0.978).
 
 | Map | Road centre, larger axis (m) | Road width, tiles / HD | Water IoU | Water, share of the map (%) | Roof label − heightmap (m) | Contours, finest zoom (px) | Lone trees drawn |
 |---|---|---|---|---|---|---|---|
-| skorpo | PENDING (rebuild running) | – | – | – | – | – | – |
-| yehorivka | PENDING (rebuild running) | – | – | – | – | – | – |
-| tallil | PENDING (rebuild running) | – | – | – | – | – | – |
-| kohat | 0.002 → 0.001 | 1.20 → 1.24 | 0.545 → 0.557 | 0.684 → 0.678 | 0.07 → 0.07 | 0.40 → 0.43 | 300 → 300 / 300 |
-| sanxian | PENDING (rebuild running) | – | – | – | – | – | – |
-| blackcoast | 0.092 → 0.081 | 1.32 → 1.22 | 0.964 → 0.960 | 21.468 → 21.605 | 0.19 → 0.19 | 0.54 → 0.55 | 300 → 300 / 300 |
-| lashkar | PENDING (rebuild running) | – | – | – | – | – | – |
-| gorodok | 0.002 → 0.006 | 1.06 → 1.11 | 0.865 → 0.871 | 3.729 → 3.857 | 0.18 → 0.18 | 0.21 → 0.21 | 300 → 300 / 300 |
-| chora | 0.002 → 0.002 | 1.04 → 1.10 | 0.614 → 0.670 | 0.998 → 0.970 | 0.11 → 0.11 | 0.22 → 0.26 | 298 → 300 / 300 |
-| pacific | PENDING (rebuild running) | – | – | – | – | – | – |
-| harju | 0.017 → 0.017 | 0.78 → 0.75 | 0.984 → 0.981 | 34.164 → 34.311 | 0.14 → 0.14 | 0.21 → 0.21 | 300 → 300 / 300 |
-| manicouagan | 0.003 → 0.003 | 0.76 → 0.76 | 0.934 → 0.947 | 8.722 → 8.907 | 0.08 → 0.08 | 0.21 → 0.21 | 300 → 300 / 300 |
-| goosebay | 0.100 → 0.043 | 0.86 → 0.87 | 0.964 → 0.972 | 15.472 → 15.349 | 0.12 → 0.12 | 0.26 → 0.26 | 300 → 300 / 300 |
-| jensen | 0.029 → 0.021 | 1.20 → 1.51 | – → – | 0.000 → 0.000 | 0.08 → 0.08 | 0.22 → 0.22 | 0 → 0 / 0 |
-| albasrah | 0.000 → 0.000 | 0.99 → 1.00 | 0.907 → 0.901 | 10.516 → 10.830 | 0.12 → 0.12 | 0.20 → 0.20 | 235 → 235 / 235 |
-| kamdesh | 0.045 → 0.045 | 0.48 → 0.48 | 0.053 → 0.101 | 0.101 → 0.120 | 0.01 → 0.01 | 0.21 → 0.21 | 300 → 300 / 300 |
-| anvil | 0.000 → 0.001 | 1.00 → 1.03 | 0.062 → 0.791 | 0.124 → 1.245 | 0.08 → 0.08 | 0.21 → 0.22 | 300 → 300 / 300 |
-| fallujah | 0.007 → 0.006 | 2.22 → 2.22 | 0.762 → 0.772 | 3.917 → 4.009 | 0.08 → 0.08 | 0.20 → 0.20 | 300 → 300 / 300 |
-| narva | PENDING (rebuild running) | – | – | – | – | – | – |
-| mutaha | 0.000 → 0.000 | 0.92 → 0.95 | 0.921 → 0.910 | 2.029 → 2.119 | 0.05 → 0.05 | 0.22 → 0.27 | 300 → 300 / 300 |
-| kokan | 0.006 → 0.021 | 1.26 → 1.22 | 0.289 → 0.287 | 7.970 → 8.087 | 0.07 → 0.07 | 0.51 → 0.52 | 300 → 300 / 300 |
-| mestia | 0.000 → 0.002 | 1.68 → 1.07 | 0.032 → – | 0.229 → 0.034 | 0.15 → 0.15 | 0.45 → 0.45 | 300 → 300 / 300 |
-| foolsroad | 0.043 → 0.047 | 0.89 → 0.87 | 0.329 → 0.342 | 1.133 → 1.205 | 0.21 → 0.21 | 0.21 → 0.21 | 300 → 300 / 300 |
-| logar | 0.002 → 0.044 | 1.41 → 1.39 | – → – | 0.050 → 0.042 | 0.07 → 0.07 | 0.21 → 0.22 | 300 → 300 / 300 |
-| sumari | PENDING (rebuild running) | – | – | – | – | – | – |
+| skorpo | 0.012 → 0.010 | 0.80 → 0.76 | 0.978 → 0.980 | 37.383 → 37.399 | 0.24 → 0.38 | 0.24 → 0.24 | 300 → 300 / 300 |
+| yehorivka | 0.001 → 0.000 | 1.18 → 1.08 | 0.653 → 0.832 | 0.529 → 0.711 | 0.20 → 0.22 | 0.22 → 0.27 | 300 → 300 / 300 |
+| tallil | 0.004 → 0.008 | 1.06 → 1.08 | 0.837 → 0.801 | 0.478 → 0.503 | 0.05 → 0.08 | 0.67 → 0.70 | 300 → 300 / 300 |
+| kohat | 0.003 → 0.006 | 1.22 → 1.26 | 0.487 → 0.509 | 0.684 → 0.678 | 0.07 → 0.08 | 0.40 → 0.40 | 300 → 300 / 300 |
+| sanxian | 0.006 → 0.004 | 0.84 → 0.84 | 0.992 → 0.989 | 46.477 → 46.676 | 0.08 → 0.08 | 0.62 → 0.61 | 300 → 300 / 300 |
+| blackcoast | 0.083 → 0.094 | 1.27 → 1.22 | 0.967 → 0.962 | 21.468 → 21.605 | 0.19 → 0.33 | 0.54 → 0.54 | 300 → 300 / 300 |
+| lashkar | 0.008 → 0.003 | 2.13 → 2.11 | 0.810 → 0.812 | 1.265 → 1.337 | 0.03 → 0.03 | 0.44 → 0.53 | 300 → 300 / 300 |
+| gorodok | 0.003 → 0.006 | 1.06 → 1.12 | 0.864 → 0.878 | 3.729 → 3.857 | 0.18 → 0.19 | 0.21 → 0.21 | 300 → 300 / 300 |
+| chora | 0.001 → 0.002 | 1.04 → 1.10 | 0.605 → 0.677 | 0.998 → 0.972 | 0.11 → 0.11 | 0.22 → 0.26 | 298 → 300 / 300 |
+| pacific | 0.005 → 0.024 | 1.05 → 1.11 | 0.989 → 0.989 | 90.496 → 90.560 | 0.11 → 0.11 | 0.21 → 0.21 | 167 → 167 / 167 |
+| harju | 0.016 → 0.017 | 0.78 → 0.75 | 0.984 → 0.981 | 34.164 → 34.312 | 0.14 → 0.15 | 0.21 → 0.20 | 300 → 300 / 300 |
+| manicouagan | 0.007 → 0.014 | 0.75 → 0.76 | 0.931 → 0.944 | 8.722 → 8.915 | 0.08 → 0.14 | 0.21 → 0.21 | 300 → 300 / 300 |
+| goosebay | 0.069 → 0.062 | 0.86 → 0.88 | 0.963 → 0.972 | 15.472 → 15.348 | 0.12 → 0.17 | 0.26 → 0.25 | 300 → 300 / 300 |
+| jensen | 0.068 → 0.080 | 1.26 → 1.37 | – → – | 0.000 → 0.000 | 0.08 → 0.05 | 0.22 → 0.22 | 0 → 0 / 0 |
+| albasrah | 0.000 → 0.000 | 1.01 → 1.01 | 0.909 → 0.905 | 10.516 → 10.810 | 0.12 → 0.13 | 0.20 → 0.21 | 235 → 235 / 235 |
+| kamdesh | 0.061 → 0.061 | 0.48 → 0.48 | 0.069 → 0.175 | 0.101 → 0.120 | 0.01 → 0.01 | 0.21 → 0.21 | 300 → 300 / 300 |
+| anvil | 0.000 → 0.000 | 1.00 → 1.03 | 0.056 → 0.787 | 0.124 → 1.246 | 0.08 → 0.08 | 0.21 → 0.22 | 300 → 300 / 300 |
+| fallujah | 0.018 → 0.010 | 2.23 → 2.19 | 0.768 → 0.775 | 3.917 → 4.009 | 0.08 → 0.08 | 0.20 → 0.20 | 300 → 300 / 300 |
+| narva | 0.002 → 0.001 | 0.82 → 0.81 | 0.957 → 0.946 | 9.138 → 9.278 | 0.17 → 0.17 | 0.23 → 0.23 | 300 → 300 / 300 |
+| mutaha | 0.001 → 0.001 | 0.96 → 0.96 | 0.913 → 0.885 | 2.029 → 2.119 | 0.05 → 0.06 | 0.22 → 0.27 | 300 → 300 / 300 |
+| kokan | 0.011 → 0.019 | 1.25 → 1.22 | 0.289 → 0.287 | 7.970 → 8.087 | 0.07 → 0.07 | 0.51 → 0.52 | 300 → 300 / 300 |
+| mestia | 0.000 → 0.002 | 1.68 → 1.07 | 0.024 → – | 0.229 → 0.034 | 0.15 → 0.15 | 0.45 → 0.45 | 300 → 300 / 300 |
+| foolsroad | 0.036 → 0.054 | 0.89 → 0.88 | 0.337 → 0.356 | 1.133 → 1.205 | 0.21 → 0.30 | 0.21 → 0.21 | 300 → 300 / 300 |
+| logar | 0.004 → 0.001 | 1.44 → 1.39 | – → – | 0.050 → 0.041 | 0.07 → 0.10 | 0.21 → 0.22 | 300 → 300 / 300 |
+| sumari | 0.040 → 0.070 | 1.70 → 1.43 | 0.406 → 0.386 | 0.905 → 0.954 | 0.06 → 0.06 | 0.66 → 0.88 | 101 → 101 / 101 |
 
-### 16.11 Reproducibility of the revision
+### 16.11 Reproducibility of the revision and the final build
 
 | Result | Command |
 |---|---|
 | Measures of 16.3.6 to 16.3.10 | `tools/maptiles/maptiles.sh measure [map ...]` → `$WORK/check/<map>_{roads,water,crowns,heights,contours}.json`; the Python image of `maptiles.sh setup` (numpy 2.5.4, scipy 1.18.1, Pillow 13.0.0), bootstrap seed 0 |
-| Pooled statistics of the gate, tables of 16.3 and 16.10 | `collect_v3.py <work dir>` then `assemble16.py <parity json> <out dir>` (the generators kept with the report's sources) |
+| The final build | `build_all.sh` and `build_rest.sh` (kept with the report's sources) on agl `d0ae886`: `tools/heightmaps/heightmaps.sh build`, then per map `tools/maptiles/maptiles.sh prep`, `scene`, `render`, `colour-render` and `tools/maprender/maprender.sh render`, then `maptiles.sh relief`, `check` and `measure`; `hd_fix.sh` and `check_fix.sh` the Standard HD, gate and measures of blackcoast and yehorivka on `f9f8382`; `skorpo_fix.sh` Skorpo's prep, scene, render, gate and measures on `9c2920f`; every step's exit code in the build's `build.log` |
+| v2 against the final build's references (16.10) | `measure_accuracy.py` in the container of `maptiles.sh measure`, `/tiles` the v2 tiles, `/hd`, `/heightmaps` and `/prep` the final build's (`run_jobs.sh`, with the report's generators); Skorpo's five measures of v2 rerun on the references of the rebuild (`skorpo_v2_rebuild.sh`, the same container and mounts, `/prep` and `/hd` as served) give files byte-identical to the first run's (`cmp`) |
+| Skorpo's tiles drawn as sea (16.6, 16.10) | the water measure on them: `measure_accuracy.py water skorpo` in that container with `/tiles/skorpo` the kept `maptiles-skorpo.bak.20261112-2123-sea` → `skorpo_water.json` in a work folder of its own, which `collect_v3.py` reads (with the report's generators) |
+| Pooled statistics of the gate, tables of 16.3 and 16.10 | `collect_v3.py <evaluation dir> <generators dir>`, `assemble16.py <parity json> <out dir>`, `insert16.py <docs dir>` (the generators kept with the report's sources) |
 | Palette contrast | `tools/maptiles/maptiles.sh palette` |
 | Water of v2 and of the revision against HD | `water_eval.py` (with the report's generators): `render.draw_water` on the prepared ground, zoom 4 |
 | Tests and take-backs | `python -m unittest test_scene test_cartography test_layer_minimaps` in the Python image; `mutation_check.py` |
 | Legend in the page | `SC`: `npm test` (`tests/detailedLegend.test.mjs`), `detailed_legend_check.mjs <site URL>` |
-| Outline F1 with intervals (16.3.3) | `outline_revised.sh` (with the report's generators): `outline_revised.py <map> <pair> <out json> v1=<tiles> v2=<tiles> revised=<tiles> hd=<tiles>` → `check_new/outline/<pair>.json` |
-| Rows marked PENDING | once the rebuild of the other maps has finished: `outline_revised.sh`, `collect_v3.py`, `assemble16.py`, `insert16.py`; the collector takes every map whose rebuild has written its gate and measures |
+| Outline F1 with intervals (16.3.3) | `run_jobs.sh` (with the report's generators): `prep.py <map>` of the build's tools for the six maps into a folder of its own, then `outline_revised.sh`: `outline_revised.py <map> <pair> <out json> v1=<tiles> v2=<tiles> revised=<final tiles> hd=<HD served with v2> hd_final=<final HD>` → `check_new/outline/<pair>.json` |
+| Figures 16.9 to 16.17 | `make_figures.sh` (with the report's generators): `fig_v3.py triptych`, `cvd`, `legend`, `classes` with `V2` the v2 tiles, `NEW` the final build's, `HD` its Standard HD |
