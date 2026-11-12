@@ -640,10 +640,30 @@ class SplineBendTest(unittest.TestCase):
         np.testing.assert_allclose(bent[:, 3:6], np.tile((0.0, 1.0, 0.0), (8, 1)), atol=1e-6)
 
 
+class SkippedPlacementTest(unittest.TestCase):
+    @staticmethod
+    def placement(name, level="/Game/Maps/Test/L_Test.umap", hidden=False):
+        return {"level": level, "name": name, "hidden": hidden}
+
+    def test_the_sky_domes_of_both_lighting_blueprints_are_left_out(self):
+        self.assertTrue(scene_render.is_skipped(self.placement("SkySphere")))
+        self.assertTrue(scene_render.is_skipped(self.placement("Sky_Sphere_Mesh")))
+
+    def test_a_building_named_after_the_sky_stays(self):
+        self.assertFalse(scene_render.is_skipped(self.placement("Skyscraper_Roof")))
+        self.assertFalse(scene_render.is_skipped(self.placement("StaticMeshComponent0")))
+
+    def test_hidden_placements_and_skipped_levels_are_left_out(self):
+        self.assertTrue(scene_render.is_skipped(self.placement("Wall", hidden=True)))
+        self.assertTrue(scene_render.is_skipped(self.placement("Mountain", level="/Game/Maps/Test/L_Test_Vista.umap")))
+
+
 class DepthRangeTest(unittest.TestCase):
-    """A scene far from sea level, written to a temporary folder and drawn on the GPU (skipped without an EGL context)."""
+    """A scene far from sea level under the lighting's sky dome, written to a temporary folder and drawn on the GPU (skipped without an
+    EGL context)."""
 
     ROOF = "/Game/Maps/Test/Roof.Roof"
+    SKY = "/Game/Maps/Test/Sky.Sky"
 
     @classmethod
     def setUpClass(cls):
@@ -653,13 +673,22 @@ class DepthRangeTest(unittest.TestCase):
         corners = [(-2000.0, -2000.0), (2000.0, -2000.0), (2000.0, 2000.0), (-2000.0, 2000.0)]
         vertices = np.array([[x, y, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0] for x, y in corners], np.float32)
         Path(directory, "meshes").mkdir()
-        Path(directory, "meshes", "roof.bin").write_bytes(vertices.tobytes() + np.array([0, 1, 2, 0, 2, 3], np.uint32).tobytes())
-        Path(directory, "meshes.json").write_text(json.dumps({"/Game/Roof.Roof": {"id": "roof", "vertices": 4, "materials": [cls.ROOF], "sections": [{"material": 0, "first": 0, "triangles": 2}]}}))
+        square = vertices.tobytes() + np.array([0, 1, 2, 0, 2, 3], np.uint32).tobytes()
+        Path(directory, "meshes", "roof.bin").write_bytes(square)
+        Path(directory, "meshes", "sky.bin").write_bytes(square)
+        section = [{"material": 0, "first": 0, "triangles": 2}]
+        Path(directory, "meshes.json").write_text(json.dumps({"/Game/Roof.Roof": {"id": "roof", "vertices": 4, "materials": [cls.ROOF], "sections": section},
+                                                              "/Game/Sky.Sky": {"id": "sky", "vertices": 4, "materials": [cls.SKY], "sections": section}}))
         Path(directory, "materials.json").write_text("{}")
         Path(directory, "textures.json").write_text("{}")
         link = {"l": {"X": 0.0, "Y": 0.0, "Z": -77000.0}, "r": {"Pitch": 0.0, "Yaw": 0.0, "Roll": 0.0}, "s": {"X": 1.0, "Y": 1.0, "Z": 1.0}}
-        Path(directory, "instances.ndjson").write_text(json.dumps({"level": "L", "name": "Roof", "type": "StaticMeshComponent", "owner": "A", "mesh": "roof", "hidden": False,
-                                                                   "cull": None, "overrides": None, "chain": [link], "instances": None, "spline": None}) + "\n")
+        # The sky dome: a square of 400 km, 20 km above, over everything
+        sky = {"l": {"X": 0.0, "Y": 0.0, "Z": 2000000.0}, "r": {"Pitch": 0.0, "Yaw": 0.0, "Roll": 0.0}, "s": {"X": 100.0, "Y": 100.0, "Z": 1.0}}
+        placements = [{"level": "L", "name": "Roof", "type": "StaticMeshComponent", "owner": "A", "mesh": "roof", "hidden": False, "cull": None,
+                       "overrides": None, "chain": [link], "instances": None, "spline": None},
+                      {"level": "LL_Lighting", "name": "SkySphere", "type": "StaticMeshComponent", "owner": "BPA_Standard_Lighting_C", "mesh": "sky",
+                       "hidden": False, "cull": None, "overrides": None, "chain": [sky], "instances": None, "spline": None}]
+        Path(directory, "instances.ndjson").write_text("".join(json.dumps(p) + "\n" for p in placements))
         try:
             cls.scene = scene_render.Scene(directory)
         except Exception as error:
@@ -678,10 +707,11 @@ class DepthRangeTest(unittest.TestCase):
         self.assertLess(low, -77000.0)
         self.assertEqual(high, scene_render.DEFAULT_DEPTH_CM[1])
 
-    def test_a_roof_far_below_sea_level_is_drawn(self):
+    def test_a_roof_far_below_sea_level_is_drawn_and_the_sky_dome_is_not(self):
         ids = {}
         material = self.scene.render_ids(-16.0, -16.0, 16.0, 16.0, 32, 32, ids)
         self.assertEqual(ids[self.ROOF], 1)
+        self.assertNotIn(self.SKY, ids)
         self.assertTrue((material == 1).all())
 
 
