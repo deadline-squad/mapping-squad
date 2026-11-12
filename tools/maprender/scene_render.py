@@ -25,6 +25,9 @@ import spline_mesh
 # "_Vista": the scenery beyond the map, whose mountains would lie over the edge of the landscape
 SKIPPED_LEVEL_PARTS = ("/Coop/", "/Tutorials/", "/Sound_Layers/", "Profiling", "Navmesh", "_Vista", "_Editor_Only")
 SKIPPED_BLENDS = ("BLEND_Additive", "BLEND_Modulate")
+# The lighting's sky dome (SkySphere of BPA_Standard_Lighting, Sky_Sphere_Mesh of the Ultra Dynamic Sky): a sphere kilometres across around the
+# map, which a top-down pass sees from inside over everything once the depth range reaches it (Black Coast, Yehorivka)
+SKY_COMPONENT = re.compile(r"^sky_?sphere", re.IGNORECASE)
 # Level designers' volumes and the engine's default materials: zone boxes in translucent colours and walls around the map, up to 3 km long.
 # The rest of the Blockout folder is real art: vehicles, containers and bridges use it.
 DEVELOPER_MATERIAL = re.compile(r"/Engine/BasicShapes/|/Engine/EngineMaterials/WorldGridMaterial|/GameModes/TC/HexGrid/|/Blockout/MI_\w*Transparent|/Tools/POI_Reference_Marker/|/Gameplay/GameplayBorder/")
@@ -308,6 +311,11 @@ def crown_dome(lo, hi, seed, rings=7, segments=28):
     return np.array(vertices, np.float32), np.array(indices, np.uint32)
 
 
+def is_skipped(item):
+    """True for a placement a map seen from above does not show: hidden, in a level of SKIPPED_LEVEL_PARTS or the sky dome (SKY_COMPONENT)."""
+    return item["hidden"] or any(part in item["level"] for part in SKIPPED_LEVEL_PARTS) or bool(SKY_COMPONENT.search(item["name"]))
+
+
 def bend_along_spline(vertices, spline, bounds):
     """Vertices [n, 8] of a mesh deformed along its spline (USplineMeshComponent): positions and normals in component space, bent
     with the spline's scale, offset and roll (spline_mesh.bend_along_spline of tools/heightmaps, shared with tools/maptiles)."""
@@ -365,7 +373,7 @@ class Scene:
         overrides_of = {}
         for line in Path(self.directory, "instances.ndjson").read_text().splitlines():
             item = json.loads(line)
-            if item["hidden"] or any(part in item["level"] for part in SKIPPED_LEVEL_PARTS):
+            if is_skipped(item):
                 continue
             if item["type"] == "FoliageInstancedStaticMeshComponent" and item["mesh"] in self.hidden_foliage:
                 continue
