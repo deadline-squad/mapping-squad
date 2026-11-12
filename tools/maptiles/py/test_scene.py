@@ -1073,6 +1073,14 @@ class TerrainAndWaterMeshes(unittest.TestCase):
         self.assertEqual(float(filled[30, 50]), 25.0)
         self.assertEqual(count, 61 * 21)
 
+    def test_a_void_above_the_heightmaps_minimum_takes_the_scenery(self):
+        # The heightmap on the landscape's vertices has its minimum at a vertex below SquadHeight's floor (Skorpo: 0.0406 m)
+        self.ground[self.cover == features.NO_COVER] += 0.0406
+        top = sp.surface_top(self.scene, self.land, self.ground.shape, BOUNDS)
+        filled, count, _ = sp.scenery_ground(self.ground, self.cover, top, 0.0, self.no_terrain)
+        self.assertEqual(float(filled[30, 50]), 25.0)
+        self.assertEqual(count, 61 * 21)
+
     def test_a_void_without_scenery_keeps_its_floor(self):
         top = sp.surface_top(self.scene, self.land, self.ground.shape, BOUNDS)
         filled, _, _ = sp.scenery_ground(self.ground, self.cover, top, 0.0, self.no_terrain)
