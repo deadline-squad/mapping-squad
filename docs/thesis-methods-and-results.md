@@ -31,6 +31,9 @@ outline F1 with intervals), 16.6 has the two faults it showed (the sky dome over
 landscape drawn as sea, `deadline-squad/mapping-squad#2`; both fixed, Skorpo's in the served tiles since 2026-11-12 21:23 UTC, agl
 `efb521b` merged as `9c2920f`), and the heightmaps on the landscape's vertices of section 2 are the served
 ones (2.4); a row in section 15.
+Updated 2026-11-13: section 1.2 says which shots the closed form solves and which the numerical search does, with the constants of
+the search, and no longer calls the Rust solver a function-for-function port (it lacks the JavaScript filter of 45.40.0, the warm
+start and `trajectory().above`); the Rust parity test is described with its grid and its result (SC 45.51.0); a row in section 15.
 
 ## 0. How to read this report
 
@@ -96,14 +99,69 @@ not claim it for all weapons: a motor along the barrel axis is two parabolas (cl
 cap has a closed form for the path angle, and a motor that pushes along the path or a launch above the cap has none and
 is flown with the game's 20 ms substeps (`SB:ballistics.py` docstring, VERIFIED).
 
-### 1.2 Closed-form solver
+### 1.2 Solver
 
-For a target at horizontal distance `d` and height `h` above the barrel pivot, speed `v` and gravity `g`, the two
-elevations are `theta = atan((v^2 -/+ sqrt(v^4 - g (g d^2 + 2 h v^2))) / (g d))` (low and high arc; `SB:README.md`,
-section "How it works"). It is implemented twice, independently of the data: in JavaScript
-(`SC:src/js/squadBallistics.js`, `squadFiringSolution.js`) and in Rust (`SC:engine`, `flight`, `weapon`), the latter as a
-function-for-function port whose parity test runs the real JS classes (`E-README`, intro and "Building and testing").
-The number of cases of the Rust parity test is not recorded in the documents: UNVERIFIED.
+Read at SquadCalc `dev` `9664362c9`, version 45.51.0 (not at the revision of the source key). For a target at horizontal
+distance `d` and height `h` above the barrel pivot, speed `v` and gravity `g`, the two elevations of a plain parabola (low and
+high arc) are `theta = atan((v^2 -/+ sqrt(v^4 - g (g d^2 + 2 h v^2))) / (g d))` (`SB:README.md`, section "How it works").
+SquadCalc takes this closed form only for a plain parabola that the speed cap does not clamp: `isParabola(shot) && g > 0 &&
+!clampsBefore(shot, height)`, that is no motor, no muzzle offset that moves with the elevation, no launch above the cap, and
+no fall faster than the cap before the target (`SC:src/js/squadBallistics.js`, `solveElevation`, lines 1047-1056, `isParabola`
+line 181, `clampsBefore` line 194; Rust `SC:engine/src/flight.rs`, `solve_elevation`, lines 752-763). VERIFIED (code reading).
+The mortar, whose muzzle moves with the elevation, a shot with a rocket motor, and a launch or a coast at the speed cap are
+not solved by the formula.
+
+Every other shot is solved numerically (`solveElevation` lines 1058-1069; `solve_elevation` lines 765-775), in two steps:
+
+1. The elevation that sends the projectile highest at the distance, `peakAngle` (line 931): a golden-section search over
+   plus and minus `ELEVATION_LIMIT` (pi/2 - 1e-6 rad, line 58), stopped when the bracket is narrower than `ANGLE_TOLERANCE`
+   = 1e-10 rad (line 61, loop at line 939) or after `MAX_ITERATIONS` = 200 (line 74). A target above the projectile's
+   height at that elevation is out of range: both arcs NaN.
+2. Each arc, `findRoot` (line 969): a bracket from the peak, opened by `BRACKET_STEP` = 0.02 rad (line 67) and doubled until
+   it holds the root, then narrowed by the Illinois variant of regula falsi on `heightAt(shot, angle, distance) - height`,
+   stopped when the height error is at most `HEIGHT_TOLERANCE` = 1e-9 m (line 64) or the bracket is narrower than
+   `ANGLE_TOLERANCE` (loop at line 1007), at most `MAX_ITERATIONS` iterations.
+
+The Rust solver has the same constants (`flight.rs` lines 24 to 32) and the same two steps (`peak_angle` line 665,
+`find_root` line 695). The function the searches evaluate, `heightAt` (line 534), is closed form for a coasting shell and for
+a shell coasting at its speed cap (`coastHeight`, line 454, called at line 592) and for a motor along the barrel's axis
+(line 572), and it flies the first substep of a launch above the cap exactly before it coasts (line 586). Only a motor that
+pushes along the path, or an axis motor that the cap could clamp, is read from a table of flights of the game's 20 ms
+substeps over the elevation (`fliesBoostInSteps`, line 144; `BoostTable`, line 290: nodes every `BOOST_NODE_SPACING` = 1
+degree, line 82, four-point Lagrange interpolation, line 543). This is the division that the last paragraph of section 1.1
+gives, except that a launch above the cap is one exact substep followed by the closed-form coast. VERIFIED (code reading).
+
+The solver exists twice in SquadCalc: in JavaScript (`SC:src/js/squadBallistics.js`, `squadFiringSolution.js`) and in Rust
+(`SC:engine`, `flight`, `weapon`). The Rust one follows the JavaScript one, with the same model, constants and search, but it
+is not a function-for-function port, and the two differ in three places (VERIFIED, code reading, at `9664362c9`):
+
+* Since SquadCalc 45.40.0 (`04cf787e1`, `SC:CHANGELOG.md`) the JavaScript `solveElevation` returns NaN for a root whose
+  launch point is not short of the target (`pastMuzzle`, line 1065). `solve_elevation` has no such filter (it returns both
+  roots as found, lines 771 to 775), so for a target nearer than the muzzle stands ahead of the pivot (0.6 m on a tripod MK19,
+  1.6 m on a mortar, 5.1 m on a tank gun, per the changelog entry) the two answer differently. Example, Mortar, default
+  shell (`velocity` 110 m/s, `gravity` 9.8 m/s^2, `pivotHeight` 0.0245 m, `muzzleForward` 1.569 m, `muzzleUp` 0.002 m;
+  `SC:src/data/weapons.js`), target 0.5 m away and 1 m up: the JavaScript `solveElevation(shot, 0.5, 1)` gives low NaN and high
+  89.988 degrees, the Rust `Flight::new(shot).solve_elevation(0.5, 1.0)` gives low 62.760 degrees and the same high arc.
+  Read from a run of the author of 2026-11-13; no committed test or tool covers it: UNVERIFIED in the sense of section 0.
+  The Mortar's own minimum distance is 51.8 m (`SC:src/data/weapons.js`, line 47).
+* The JavaScript solver takes a warm start (`guess`, `WARM_STEP` line 71, `findRoot` line 969) and a precomputed peak
+  (`peak`); the Rust `solve_elevation(distance, height)` takes neither. The JavaScript header says the warm start gives the
+  same root to the search tolerances (lines 50 to 53).
+* `trajectory().above` (lines 598 and 653), the profile test that the fire coverage uses, has no Rust counterpart in
+  `SC:engine/src`; `weapon.rs` says of itself "without the UI and spread parts" (module documentation, first lines).
+
+`E-README` (intro) and the module documentation of `flight.rs` call the Rust solver a function-for-function port; this
+report does not repeat that wording, for the reasons above.
+
+The parity test of the Rust solver, `SC:engine/tests/parity.rs`, runs `engine/tools/js/reference.mjs` under Node (the real
+`Weapon` and `SquadFiringSolution`) over every shell that has a `ballistics` name: 15 distances (0.5, 5, 15, 51, 150, 340,
+450, 700, 1000, 1236, 1500, 2060, 2500, 5000 and 8000 m) x 9 target heights (-300, -100, -40, -10, 0, 10, 25, 100 and 200 m),
+and for a weapon with gravity 18 cases around its maximum range (0.5, 0.9, 0.99, 0.999, 1.001 and 1.01 of it, at -40, 0 and
++25 m). It compares both arcs, the sight angle, both times of flight, the hold time and the maximum range, to 1e-9 degree and
+1e-9 s (3e-10 relative above 10 s). At `9664362c9`: 155 shells, 23 697 cases, 142 337 values, 0 mismatches
+(`cargo test --release --test parity -- --nocapture` in `SC:engine`, re-run 2026-11-13; VERIFIED†). The grid has the
+distances 0.5, 5 and 15 m only at the heights above (not at +0.5 or +1 m), and the example above is not on it: the test does
+not exercise the region where the two solvers differ, and says nothing about it.
 
 ### 1.3 Parity of the two implementations
 
@@ -929,6 +987,7 @@ image, as in `tools/heightmaps/heightmaps.sh`. Game data: the dedicated server, 
 | Map pictures on the world (2026-11-10) | the client's pixels registered every picture on the world: Black Coast Seed v1 showed another part of the island (490.5 to 862 m), five Skirmish layers the whole-map picture where the game shows its own, Skorpo's basemap lay 19.5 m short in the east, the terrain and topographic maps' relief up to 43 m off; the relief layer's south-east offset is its shading, not its frame | section 2.5; SC 45.50.0 |
 | Heights on the landscape's vertices, the WebP at the PNG's step, the detail where objects stand, no 8-bit fallback (2026-11-11) | the accuracy research found the heightmap's grid off the vertices on 18 maps (Skorpo turned, Anvil 0.75 m), the WebP rounded to 1 cm, the 1 m grid metres off next to objects and Black Coast's 8-bit fallback 5.7 m off at the median; the 25 maps are rebuilt on the vertices with a detail of half the spacing where objects stand, and SquadCalc 45.51.0 reads them without a fallback | sections 2.1, 2.2, 2.4 and 3; `H-README`, "Grid", "Detail where objects stand"; SC 45.51.0 |
 | Final build of every map layer (2026-11-12) | one build of the 25 maps from agl `d0ae886` (heightmaps on the landscape's vertices, volume layer, Detailed, Detailed in the game's colours, Standard HD, relief) replaces v2 and the heightmaps of 2026-10-30; its gate found the sky dome over Black Coast's and Yehorivka's Standard HD (fixed, `f9f8382`), its measures Skorpo's ground beyond the landscape drawn as sea (fixed in `efb521b`, merged as `9c2920f`, `deadline-squad/mapping-squad#2`; Skorpo's Detailed rebuilt and served since 2026-11-12 21:23 UTC); served as SquadCalc 45.51.0 | sections 2.4, 16.6, 16.10 |
+| Solver wording corrected (2026-11-13) | the audit of 2026-11-13 found that 1.2 gave the closed form as the solver, although the code takes it only for a plain parabola and searches numerically for every other shot, and called the Rust solver a function-for-function port, although it lacks the JavaScript filter of 45.40.0 (a root whose muzzle is past the target), the warm start and `trajectory().above`; the parity test's grid does not reach the region where the two differ | section 1.2; SC `9664362c9` (45.51.0), `04cf787e1` |
 
 ## 16. Detailed tactical map (the "Detailed" layer, build of 2026-11-09, reviewed 2026-11-10, final build of 2026-11-12)
 
