@@ -334,6 +334,8 @@ const GAME_ROCKETS = {
     DF_2A28_Grom_BMD_1M_HEAT: SPG_9_HEAT,
     DF_2A28_Grom_BMP_1_BMD_1_FRAG: GROM_FRAG,
     DF_2A28_Grom_BMD_1M_FRAG: GROM_FRAG,
+    DF_2A28_Grom_BMP_1_technical_HEAT: SPG_9_HEAT,
+    DF_2A28_Grom_BMP_1_technical_FRAG: GROM_FRAG,
 };
 
 sections.B7 = async () => {
