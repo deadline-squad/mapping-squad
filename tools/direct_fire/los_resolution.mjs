@@ -3,7 +3,8 @@
 //     node --import ./register.mjs los_resolution.mjs <SquadCalc checkout> <grid dir> [pairs] [seed]
 //
 // <grid dir> is written by tools/heightmaps/py/compare_resolution.py: grid_<step>.u16/.json for 1, 0.5 and
-// 0.25 m of one window (terrain + static meshes). Each grid is loaded into a SquadHeightmap, weapons and
+// 0.25 m of one window (terrain + static meshes). Each grid is loaded into a SquadHeightmap (read by the checkout's
+// engine core: `npm run build:engine` first), weapons and
 // targets are drawn at random on the window's open ground 80-400 m apart, and SquadFiringSolution.getObstacle
 // (the first point where the trajectory passes under the heightmap) decides for the fastest direct-fire weapon
 // (low trajectory) and the mortar (high lob). The 0.25 m grid is the reference; for each coarser grid the
@@ -11,6 +12,7 @@
 // the elevation to the target differs by more than 1 mil (the target's own height).
 import { readFileSync } from "node:fs";
 import { App } from "./stub-app.mjs";
+import { blankHeightmap } from "./stub-heightmap.mjs";
 
 const [root, dir, pairsArg = "4000", seedArg = "1"] = process.argv.slice(2);
 if (!root || !dir) {
@@ -39,22 +41,19 @@ const fastest = WEAPONS.filter((weapon) => weapon.type === "directFire")
 const cases = [[fastest, true], ["Mortar", false]];
 
 /** A SquadHeightmap over grid_<step>, in a map of 1 unit = 1 m (lat = -south, lng = east from the window's corner) */
-function heightmapOf(step) {
+async function heightmapOf(step) {
     const meta = JSON.parse(readFileSync(`${dir}/grid_${step}.json`));
     const bytes = readFileSync(`${dir}/grid_${step}.u16`);
     const levels = new Uint16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2).slice();
-    const heightmap = Object.create(SquadHeightmap.prototype);
-    heightmap.jsonPng = [];
-    heightmap.worker = null;
     const size = (meta.width - 1) * meta.step;
-    heightmap.map = { pixelSize: size, heightmap };
-    heightmap.receive({ levels, width: meta.width, height: meta.height, step: meta.z_step, url: "synthetic",
+    const heightmap = blankHeightmap(SquadHeightmap, { pixelSize: size });
+    await heightmap.receive({ levels, width: meta.width, height: meta.height, step: meta.z_step, url: "synthetic",
         lattice: { originX: 0, originY: 0, resolution: Number(step), yawDeg: 0 }, bounds: { min_x: 0, max_x: size, min_y: 0, max_y: size } });
     // receive() ignores z_min: all grids share it, so it cancels in every height difference
     return { heightmap, size, step };
 }
 
-const grids = Object.fromEntries(["1.0", "0.5", "0.25"].map((step) => [step, heightmapOf(step)]));
+const grids = Object.fromEntries(await Promise.all(["1.0", "0.5", "0.25"].map(async (step) => [step, await heightmapOf(step)])));
 const size = grids["0.25"].size;
 const toMeters = (origin, ll) => ({ east: ll.lng - origin.lng, north: ll.lat - origin.lat });
 

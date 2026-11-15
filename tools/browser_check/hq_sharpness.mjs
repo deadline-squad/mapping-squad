@@ -13,7 +13,7 @@
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
 const { mkdirSync } = await import("node:fs");
 
-const base = process.argv[2];
+const base = process.argv[2]?.replace(/\/+$/, "");
 if (!base) {
     console.error("usage: node hq_sharpness.mjs <site URL> [--shots <dir>]");
     process.exit(2);

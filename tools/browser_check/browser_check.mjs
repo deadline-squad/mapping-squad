@@ -11,6 +11,9 @@
 // window.squadBallistics, by its name. Environment: PLAYWRIGHT_CORE = path of the playwright-core package
 // if it is not
 // resolvable from here, CHROME = Chromium executable if Playwright's own is not installed.
+// A request to another origin than <site URL> (the page posts the targets it places to the third-party
+// https://squadcalc.app/api/post/targets) is not the site's: when it fails, the run prints one WARN line with the
+// status and the URL and no check fails; every failed request to the site's own origin does fail the checks.
 // The checks run in groups, each on a page of its own (`group`): a page that does not open is one FAIL and the
 // other groups still run. The last line gives the totals. Exits with 1 on any failure.
 //
@@ -18,7 +21,7 @@
 // bundle in transit (the served files are not changed).
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
 
-const base = process.argv[2];
+const base = process.argv[2]?.replace(/\/+$/, "");
 if (!base) {
     console.error("usage: node browser_check.mjs <site URL> [--maps] [--ballistics <weapons.json>]");
     process.exit(2);
@@ -34,6 +37,11 @@ function check(label, ok, detail) {
     checks++;
     if (!ok) failures++;
 }
+
+// Failed requests to other origins than the site's, as "HTTP <status>: <url>" or "<error>: <url>"
+const upstreamFailures = new Set();
+const siteOrigin = new URL(base).origin;
+const isUpstream = (url) => /^https?:/.test(url) && new URL(url).origin !== siteOrigin;
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined });
 
@@ -81,16 +89,25 @@ async function open(contextOptions = { viewport: { width: 1600, height: 1000 } }
     const problems = [];
     page.on("console", (message) => {
         // Headless Chromium's software GL reports its own stalls
-        if (["error", "warning"].includes(message.type()) && !/GL Driver Message|GPU stall/.test(message.text())) problems.push(`${message.type()}: ${message.text()}`);
+        if (!["error", "warning"].includes(message.type()) || /GL Driver Message|GPU stall/.test(message.text())) return;
+        // Chromium's own line for a failed request carries the URL only in its location: the failure is listed in upstreamFailures
+        if (/^Failed to load resource/.test(message.text()) && isUpstream(message.location().url)) return;
+        problems.push(`${message.type()}: ${message.text()}`);
     });
     page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
-    page.on("response", (response) => { if (response.status() >= 400) problems.push(`HTTP ${response.status()}: ${response.url()}`); });
+    page.on("response", (response) => {
+        if (response.status() < 400) return;
+        const failure = `HTTP ${response.status()}: ${response.url()}`;
+        if (isUpstream(response.url())) upstreamFailures.add(failure);
+        else problems.push(failure);
+    });
     const unanswered = new Set();
     page.on("request", (request) => unanswered.add(request));
     page.on("requestfinished", (request) => unanswered.delete(request));
     page.on("requestfailed", (request) => {
         unanswered.delete(request);
         if (request.failure()?.errorText === NETWORK_CHANGED) networkChanges++;
+        if (isUpstream(request.url())) upstreamFailures.add(`${request.failure()?.errorText}: ${request.url()}`);
     });
     // A step of the opening that failed says what the page still waited for: the spinner's count and the requests
     // without an answer
@@ -830,15 +847,21 @@ await group("mobile", async () => {
         viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3,
         userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     });
-    // The map fades in after the heightmap; taps before that are lost
+    // The map fades in after the heightmap and loads its tiles after the view moved: a tap before that can be lost, and
+    // is repeated until the marker is there
     await page.waitForTimeout(1000);
     await page.evaluate(() => { const map = window.__App.minimap; map.setView([-map.pixelSize / 2, map.pixelSize / 2], 4, { animate: false }); });
     const center = await page.evaluate(() => { const box = window.__App.minimap.getContainer().getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2 }; });
-    await page.touchscreen.tap(center.x, center.y + 120);
-    await page.waitForFunction(() => window.__App.minimap.activeWeaponsMarkers.getLayers().length === 1, null, { timeout: 5000 }).catch(() => {});
+    const tapUntilPlaced = async (x, y, markers) => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+            await page.touchscreen.tap(x, y);
+            const placed = await page.waitForFunction((markers) => window.__App.minimap[markers].getLayers().length === 1, markers, { timeout: 5000 }).then(() => true, () => false);
+            if (placed) return;
+        }
+    };
+    await tapUntilPlaced(center.x, center.y + 120, "activeWeaponsMarkers");
     await page.waitForTimeout(2000);
-    await page.touchscreen.tap(center.x, center.y - 100);
-    await page.waitForFunction(() => window.__App.minimap.activeTargetsMarkers.getLayers().length === 1, null, { timeout: 5000 }).catch(() => {});
+    await tapUntilPlaced(center.x, center.y - 100, "activeTargetsMarkers");
     await page.waitForTimeout(500);
     const mobile = await page.evaluate((popupSource) => {
         const popup = new Function(`return ${popupSource}`)();
@@ -865,6 +888,7 @@ await group("stale device link storage", async () => {
 });
 
 await browser.close();
+if (upstreamFailures.size) console.log(`WARN requests to other origins than the site's failed, not counted: ${[...upstreamFailures].join(" | ")}`);
 if (networkChanges) console.log(`${networkChanges} request(s) were dropped by a change of the host's network (${NETWORK_CHANGED}): a check that lists that error or lost a request to it says nothing about the site, run it again`);
 console.log(failures ? `${failures} of ${checks} browser checks failed` : `all ${checks} browser checks passed`);
 process.exit(failures ? 1 : 0);

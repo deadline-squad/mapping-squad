@@ -106,7 +106,9 @@ a target there reads a height in between, metres off. Next to the heightmap, `he
 holds, in the quads where it matters, the nodes of the lattice subdivided by 2 (0.5 m apart on most maps, 0.375 m on Anvil,
 0.6 m on Skorpo, 0.25 m on Chora and Kokan), fused like the heightmap from the same sources (`py/build_detail.py`:
 `build_all.fuse_on` on the subdivided lattice, in bands of whole quad rows). SquadCalc reads such a quad as its 2 x 2
-smaller quads, with the same triangle rule (`heightmapDetail.js`), and every other quad as before.
+smaller quads, with the same triangle rule (the engine's `Heightmap`, `engine/src/heightmap/detail.rs` of SquadCalc), and
+every other quad as before, except that a plain quad beside one with detail takes the nodes of their shared edge from it, so the
+surface has no jump.
 
 The file is the gzip of (little endian) the magic `HMD1`, uint32 factor, unit, quad columns, quad rows and quad count; the
 bitset of the quads with detail; then per quad, in the bitset's order, the 5 nodes of its sub-grid that are not its

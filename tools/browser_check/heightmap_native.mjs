@@ -5,9 +5,10 @@
 // For each map the page loads the heightmap through its own worker and the check reports the grid it got
 // (samples, the lattice of meta.json: origin, resolution, yaw; step), the time from the worker's start to its result (`--runs`
 // times: the first is cold, the rest read the browser cache, i.e. the decoding) and the bytes of the heavy file transferred,
-// and the quads of its detail where objects stand, which must be meta.json's `detail.quads` (none without the entry).
+// and the quads of its detail where objects stand (the count in the header of the `HMD1` bytes the worker hands the engine), which must be meta.json's `detail.quads` (none without the entry).
 // With --points (compare_native_vertices.py --points-out: {"<map>": [[x, y, z], ...]}, world metres and the game's
-// collision: landscape vertices and points inside quads, where the file holds the bare landscape) the page's own getHeight
+// collision: landscape vertices and points inside quads, where the file holds the bare landscape) the page's own getHeight (read
+// by the engine's core)
 // (height above the map's lowest point, meta.json z_min_m) is read at each point on the map and must be within half the
 // heightmap's step of z, plus 0.5 mm. With --detail (heightmap_detail.py of tools/heightmaps: points in quads with detail,
 // z the height its reader gives from the served files) the page must read z within 0.1 mm. Exits with 1 on any failure.
@@ -75,7 +76,7 @@ for (const slug of slugs) {
                 const ms = performance.now() - start;
                 worker.terminate();
                 resolve(data.error ? { error: data.error } : { ms, width: data.width, height: data.height, step: data.step, lattice: data.lattice, url: data.url,
-                    detailQuads: data.detail ? data.detail.nodes.length / data.detail.inner : null, detailError: data.detailError });
+                    detailQuads: data.detail ? new DataView(data.detail.buffer, data.detail.byteOffset).getUint32(20, true) : null, detailError: data.detailError });
             };
             worker.postMessage({ base: `${origin}/heightmaps/${slug}/` });
         }), { slug, origin: new URL(base).origin });
@@ -114,7 +115,9 @@ async function pageErrors(slug, vertices) {
         const meta = await (await fetch(`/heightmaps/${slug}/meta.json`)).json();
         const { min_x: minX, max_x: maxX, min_y: minY, max_y: maxY } = meta.bounds_m;
         const errors = vertices.map(([x, y, z]) => map.heightmap.getHeight({ lat: -(y - minY) / (maxY - minY) * map.pixelSize, lng: (x - minX) / (maxX - minX) * map.pixelSize }) + meta.z_min_m - z);
-        return { name: map.activeMap.name, resolution: map.heightmap.resolution, step: map.heightmap.step, errors, ready: map.heightmap.ready };
+        // The step of z the worker took for the page: the WebP's when meta.json announces one, else the PNG's
+        const step = meta.webp?.file ? meta.webp.z_step_m : meta.z_step_m;
+        return { name: map.activeMap.name, resolution: map.heightmap.resolution, step, errors, ready: map.heightmap.ready };
     }, { slug, vertices });
 }
 

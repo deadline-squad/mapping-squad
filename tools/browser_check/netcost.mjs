@@ -23,7 +23,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const base = process.argv[2];
+const base = process.argv[2]?.replace(/\/+$/, "");
 if (!base) {
     console.error("usage: node netcost.mjs <site URL> [--json <file>] [--cold-only]");
     process.exit(2);

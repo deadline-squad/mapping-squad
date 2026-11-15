@@ -19,7 +19,7 @@ import { resolve } from "node:path";
 
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
 
-const base = process.argv[2];
+const base = process.argv[2]?.replace(/\/+$/, "");
 if (!base) {
     console.error("usage: node coords_check.mjs <site URL> [--shots <dir>]");
     process.exit(2);

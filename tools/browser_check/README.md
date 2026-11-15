@@ -10,7 +10,9 @@ export CHROME=~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome
 
 `<site URL>` is a served build with the precise heightmaps under `/heightmaps/`: the live site, or
 Caddy over a local `npm run build` (one `handle /heightmaps/*` rooted at `~/apps/squadcalc/dist`, the
-rest at the build's `dist`).
+rest at the build's `dist`). `<site URL>` is given with or without a trailing slash. The build needs `npm run build:engine` first (and an engine in `dist/engine/`): since 45.52.0
+the page reads its heights through the engine's WebAssembly core, and the scripts read them through
+`window.__App.minimap.heightmap` (`ready`, `failed`, `detailFailed`, `resolution`, `getHeight`), not through rows of levels.
 
 ## browser_check.mjs: pass/fail checks
 
@@ -168,7 +170,8 @@ node volume_check.mjs <site URL>
 ```
 
 A build with `npm run build:engine` done and the maps' `volume.vcol` / `terrain.bin` under `/heightmaps/`. Nothing of the layer is
-requested before the setting is on; then the engine, the voxel file and the landscape file load, six walls block and six
+requested before the setting is on (its voxel and landscape files; the page loads the engine itself at start, for the heights);
+then the layer's worker loads the engine, the voxel file and the landscape file, six walls block and six
 openings pass (`volume_cases.json`, Jensen and Kokan, from the engine's parity data), the layer's landscape equals the
 heightmap's on open ground, the line of fire and the fire coverage use it, the nine largest volume files (Fallujah, Goose Bay, Kamdesh,
 Skorpo, Black Coast, Chora, Gorodok, Harju, Yehorivka) load and finish a coverage (reported: the load time from the setting to
@@ -205,10 +208,14 @@ module on demand, the region is fetched and used (legend: *Exact triangles withi
 *Voxels only*, and hiding, dragging, deleting the target and turning the volume layer off remove the image. The page's own run
 with the validation's parameters gives the validation's clear, blocked and out positions (at most 0.05 % flip on the last bit of a
 float) and, against the exact triangle tracer's output, no worse than the validation's own run (no false clear and no false blocked
-position for the window of the sample-lattice file). `--height` (default `window:1`) names the height the reference holds: the
-exact-voxeliser `volume.vcol` closes the windows of that building (the dialog offers `Roof +6.3m` only), so after it is published
-use `--height roof:0 --reference <heat-val-exact>`, a reference written by `heatmap_validate.mjs --height roof:0,ground` on the new
-file; its 8 false blocked positions are all beyond 100 m from the target, outside the 56 m the region covers. The damage zone of the same
+position for the window). `--height` (default `window:0`, the only window of the building at (131, -199), 1.6 m over the landscape,
+which the exact-voxeliser `volume.vcol` keeps) names the height the reference holds: for the roof (the dialog's `Roof +6.3m`)
+use `--height roof:0 --reference <heat-val-exact>`, a reference written by `heatmap_validate.mjs --height roof:0,ground`;
+its 8 false blocked positions are all beyond 100 m from the target, outside the 56 m the region covers. A reference is written for the files
+the site serves and is stale once the Jensen heightmap, its detail, `volume.vcol`, `terrain.bin` or the region is republished (the
+check then fails, comparing the page's run with an older file): write it again with the command of SquadCalc's `engine/README.md`
+("Against the exact triangles") for the target (131, -199), `--height window:0`, `--range 200` against the served files. tk104 keeps the
+reference for the files of 2026-11-11 (SquadCalc 45.52.0) in `~/work/ui-shots/heat-val-45.52.0`. The damage zone of the same
 target is computed by the layer's worker with the voxels as cover and differs from the heightmap's. Screenshots (the dialog button,
 the heatmap of the window, of a target on open ground, the damage zone) go to `--shots`. Exits with 1 on any failure.
 
@@ -296,10 +303,10 @@ The heightmaps lie on the landscape's own vertices (`tools/heightmaps`, "Grid"):
 by -2.006 degrees on Skorpo, 0.5 m on Chora and Kokan. For each map the site's worker loads the heightmap `--runs` times and
 the script checks its grid against meta.json (samples, `origin_m`, `resolution_m`, `yaw_deg`) and prints the worker's time
 (the first run is cold, the rest read the browser cache, so they are the decoding). `--points` is a file written by
-`tools/heightmaps/py/compare_native_vertices.py --points-out`: the page's own `getHeight` is read at landscape vertices and
+`tools/heightmaps/py/compare_native_vertices.py --points-out`: the page's own `getHeight` (the engine's core) is read at landscape vertices and
 at points inside quads, where the heightmap holds the bare landscape, and must agree with the game's collision to half the
-height step (plus 0.5 mm). The worker's detail where objects stand (`heightmap.detail.bin`) must hold as many quads as
-meta.json's `detail.quads`, none without the entry; `--detail` is a file written by `tools/heightmaps/py/heightmap_detail.py`
+height step (plus 0.5 mm). The worker's detail where objects stand (`heightmap.detail.bin`, the bytes it hands the engine) must hold as many quads as
+meta.json's `detail.quads` (read from the header of the `HMD1` file), none without the entry; `--detail` is a file written by `tools/heightmaps/py/heightmap_detail.py`
 (points in quads with detail and the height its reader gives there from the same files), which the page must read within
 0.1 mm. Exits with 1 on a failure.
 
@@ -325,7 +332,7 @@ node sb_bridge_races.mjs <site URL> [/tmp/sb_scripts.json]
 
 A model of SB's map host (known revision, last targets, last weapon) polls with SB's real poll script after every kind of
 change (target added, moved, deleted; weapon marker moved, raised, removed; weapon and shell switched; heights loading
-late; two quick map switches) and must end each step with the page's newest target, profile and weapon. Every name of
+late (`heightmap.ready`); two quick map switches, after which the heights must be those of the last map) and must end each step with the page's newest target, profile and weapon. Every name of
 `RENAMED_WEAPONS` must also select its current weapon through `selectWeapon`.
 
 ## sw_upgrade_check.mjs: the service worker across a deploy

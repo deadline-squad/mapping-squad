@@ -121,7 +121,7 @@ const layer = new SquadVolume({ volume, terrain, origin: { x: 0, y: 0 }, zOffset
 function solve(weaponName, from, to, { volumeOn = true, heightmapTop = 0 } = {}) {
     App.activeWeapon = load(weaponName);
     const heightmap = {
-        jsonPng: [[0]], resolution: 1, getHeight: ({ lng }) => (lng > 49 && lng < 51 ? 10 : lng > 69 && lng < 71 ? 10 : heightmapTop),
+        resolution: 1, getHeight: ({ lng }) => (lng > 49 && lng < 51 ? 10 : lng > 69 && lng < 71 ? 10 : heightmapTop),
         activeVolume: volumeOn ? layer : null, gridMeters: ({ lat, lng }) => ({ x: lng, y: -lat }),
     };
     const map = { mapToGameScale: 1, mapToGameScaleY: 1, toMeters, heightmap };

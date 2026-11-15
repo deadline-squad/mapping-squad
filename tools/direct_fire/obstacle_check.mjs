@@ -24,7 +24,7 @@ const toMeters = (origin, ll) => ({ east: ll.lng - origin.lng, north: ll.lat - o
 function solve(weaponName, distance, wall, resolution = 1) {
     App.activeWeapon = load(weaponName);
     const getHeight = (ll) => (wall && ll.lng >= wall.from && ll.lng < wall.from + (wall.width ?? 2) ? wall.height : 0);
-    const map = { mapToGameScale: 1, mapToGameScaleY: 1, toMeters, heightmap: { jsonPng: [[0]], resolution, getHeight } };
+    const map = { mapToGameScale: 1, mapToGameScaleY: 1, toMeters, heightmap: { resolution, getHeight } };
     return new SquadFiringSolution({ lat: 0, lng: 0 }, { lat: 0, lng: distance }, map, 0);
 }
 
@@ -58,7 +58,7 @@ expect("Mortar 400 m, 60 m wall 5 m in front: high lob blocked", solve("Mortar",
     (o) => o !== null && o.distance >= 5 && o.distance < 7);
 expect("Mortar 400 m, no heightmap loaded: no obstacle", (() => {
     App.activeWeapon = load("Mortar");
-    const map = { mapToGameScale: 1, mapToGameScaleY: 1, toMeters, heightmap: { jsonPng: [], getHeight: () => 1000 } };
+    const map = { mapToGameScale: 1, mapToGameScaleY: 1, toMeters, heightmap: { getHeight: () => NaN } };
     return new SquadFiringSolution({ lat: 0, lng: 0 }, { lat: 0, lng: 400 }, map, 0).obstacle.high;
 })(), (o) => o === null);
 

@@ -75,7 +75,7 @@ function solve(name, distance, shellIndex = 0) {
         mapToGameScale: 1,
         mapToGameScaleY: 1,
         toMeters: (origin, ll) => ({ east: ll.lng - origin.lng, north: ll.lat - origin.lat }),
-        heightmap: { jsonPng: [[0]], getHeight: () => 0 },
+        heightmap: { getHeight: () => 0 },
     };
     const solution = new SquadFiringSolution({ lat: 0, lng: 0 }, { lat: 0, lng: distance }, map, 0);
     return { weapon, shell, solution };

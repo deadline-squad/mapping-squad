@@ -22,6 +22,7 @@ const grid = Array.from({ length: rows }, (_, y) => Uint16Array.from(data.subarr
 
 // The heights of the served heightmap as a stand-in for SquadHeightmap.getHeight (bilinear, row = -lat, col = lng,
 // one sample per map unit): the bench times the solutions and compares two checkouts on the same heights
+// (jsonPng: the heightmap's own rows, which checkouts before 45.52.0 read to know the heights loaded)
 const heightmap = {
     jsonPng: grid,
     failed: false,

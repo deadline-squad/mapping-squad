@@ -211,8 +211,8 @@ const otherMap = await page.evaluate(() => {
 });
 await page.evaluate((value) => window.__App.MAP_SELECTOR.val(value).trigger("change"), otherMap);
 await page.waitForTimeout(300);
-const during = await page.evaluate(() => ({ jsonPng: window.__App.minimap.heightmap.jsonPng.length, targets: window.squadBallistics.targets().length }));
-check("map switched, heightmap pending", during.jsonPng === 0 && during.targets === 0, JSON.stringify(during));
+const during = await page.evaluate(() => ({ ready: window.__App.minimap.heightmap.ready, targets: window.squadBallistics.targets().length }));
+check("map switched, heightmap pending", during.ready === false && during.targets === 0, JSON.stringify(during));
 const centre2 = await view();
 await page.evaluate(() => { const map = window.__App.minimap; map.createWeapon({ lat: -map.pixelSize / 2, lng: map.pixelSize / 2 }); });
 await page.mouse.dblclick(centre2.x - 100, centre2.y - 140);
@@ -222,7 +222,7 @@ const early = await page.evaluate(() => window.squadBallistics.lastTarget());
 check("  heightDiff and profile are unknown while the heights load", early && early.heightDiff === null && early.profile === null, JSON.stringify(early && { heightDiff: early.heightDiff, profile: early.profile }));
 const revEarly = await revision();
 release();
-await page.waitForFunction(() => window.__App.minimap.heightmap.jsonPng.length > 0, null, { timeout: 120000 });
+await page.waitForFunction(() => window.__App.minimap.heightmap.ready, null, { timeout: 120000 });
 await page.waitForTimeout(500);
 check("the heights arriving move the revision", (await revision()) > revEarly, `revision ${revEarly} -> ${await revision()}`);
 await compare("heights loaded: the host holds the profile");
@@ -243,10 +243,10 @@ const [first, second] = third.options.filter((value) => value !== third.current)
 await page.evaluate(([a, b]) => { const select = window.__App.MAP_SELECTOR; select.val(a).trigger("change"); select.val(b).trigger("change"); }, [first, second]);
 const nameNow = await page.evaluate(() => window.__App.minimap.activeMap.name);
 release2();
-await page.waitForFunction(() => window.__App.minimap.heightmap.jsonPng.length > 0, null, { timeout: 120000 });
+await page.waitForFunction(() => window.__App.minimap.heightmap.ready, null, { timeout: 120000 });
 await page.waitForTimeout(500);
-const settled = await page.evaluate(() => ({ map: window.__App.minimap.activeMap.name, width: window.__App.minimap.heightmap.jsonPng[0].length, colsPerUnit: window.__App.minimap.heightmap.colsPerUnit }));
-check("two quick map switches: the heights are those of the last map", settled.map === nameNow && settled.width > 100, JSON.stringify(settled));
+const settled = await page.evaluate(() => ({ map: window.__App.minimap.activeMap.name, resolution: window.__App.minimap.heightmap.resolution, height: window.__App.minimap.heightmap.getHeight({ lat: -128, lng: 128 }) }));
+check("two quick map switches: the heights are those of the last map", settled.map === nameNow && settled.resolution > 0 && Number.isFinite(settled.height), JSON.stringify(settled));
 holdMeta = null;
 
 // Weapon names: every old name of Squad Ballistics' RENAMED_WEAPONS (exported in the scripts file) must select

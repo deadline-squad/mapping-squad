@@ -34,8 +34,17 @@ const cacheNames = (page) => page.evaluate(() => caches.keys());
 let context = await launch();
 let page = await context.newPage();
 const problems = [];
+// Chromium's warnings about the self-hosted fonts' <link rel="preload"> when the service worker answers the first
+// request of a page: the preload is not used ("cross-world service worker resource mismatch") and then reported unused
+const FONT_PRELOAD = /^A preload for '[^']+\.woff2' is found, but is not used because it is a cross-world service worker resource mismatch|^The resource \S+\.woff2 was preloaded using link preload but not used within a few seconds/;
+// The service worker keeps no map tiles, and the map image of the basemap comes from another host (squadcalc.app):
+// with the network gone the page says so and shows the map of the layer below
+const OFFLINE_MAP_IMAGE = /^\[MAP\] No .+, showing the (?:detailed map|basemap)$|^Error loading \S+\/maps\/\S+\.webp$/;
+let offlineNow = false;
 page.on("console", (message) => {
-    if (["error", "warning"].includes(message.type()) && !/GL Driver|GPU stall|ERR_INTERNET_DISCONNECTED|Failed to load resource|Not connected to SquadCalc API/.test(message.text())) problems.push(`${message.type()}: ${message.text().slice(0, 120)}`);
+    const text = message.text();
+    if (!["error", "warning"].includes(message.type()) || FONT_PRELOAD.test(text) || (offlineNow && OFFLINE_MAP_IMAGE.test(text))) return;
+    if (!/GL Driver|GPU stall|ERR_INTERNET_DISCONNECTED|Failed to load resource|Not connected to SquadCalc API/.test(text)) problems.push(`${message.type()}: ${text.slice(0, 120)}`);
 });
 await page.goto(base, { waitUntil: "load" });
 await page.evaluate(() => navigator.serviceWorker.ready);
@@ -47,7 +56,9 @@ await page.waitForFunction(async () => {
 await page.reload({ waitUntil: "load" });
 await page.waitForFunction(() => document.body.style.visibility !== "hidden" && document.querySelector("[data-i18n]")?.textContent.trim(), null, { timeout: 60000 });
 await page.waitForTimeout(8000);
-const online = await page.evaluate(() => ({ text: document.body.innerText.replace(/\s+/g, " ").slice(0, 200), fonts: [...document.fonts].filter((f) => f.status === "loaded").map((f) => f.family) }));
+// The text compared is the map list's: the page's text starts online with the home servers block, which the feed
+// /live/servers.json gives and which is absent offline
+const online = await page.evaluate(() => ({ mapList: document.querySelector("#mapSelector").innerText.replace(/\s+/g, " ").slice(0, 60), fonts: [...document.fonts].filter((f) => f.status === "loaded").map((f) => f.family) }));
 // A build with self-hosted fonts never asks Google: its fonts are in the precache and the Google caches stay unused
 const asksGoogle = await page.evaluate(() => performance.getEntriesByType("resource").some((entry) => entry.name.startsWith("https://fonts.googleapis.com/")));
 if (fonts && !asksGoogle) {
@@ -60,12 +71,13 @@ for (const name of ["pages", "locales", "heightmap-meta", "precise-heightmaps", 
 }
 
 await context.setOffline(true);
+offlineNow = true;
 await page.reload({ waitUntil: "load", timeout: 30000 }).catch((error) => check("offline reload", false, error.message.split("\n")[0]));
 const ready = await page.waitForFunction(() => document.querySelector("select.dropbtn") && window.getComputedStyle(document.body).visibility !== "hidden", null, { timeout: 30000 }).then(() => true).catch(() => false);
 check("offline reload opens the page", ready, ready ? "page visible" : "page stays hidden");
-const offline = await page.evaluate(() => ({ text: document.body.innerText.replace(/\s+/g, " ").slice(0, 200), keys: [...document.body.innerText.matchAll(/\b(?:common|tooltips|settings|maps|weapons):[\w.]+/g)].length }));
+const offline = await page.evaluate(() => ({ text: document.body.innerText.replace(/\s+/g, " ").slice(0, 200), mapList: document.querySelector("#mapSelector").innerText.replace(/\s+/g, " ").slice(0, 60), keys: [...document.body.innerText.matchAll(/\b(?:common|tooltips|settings|maps|weapons):[\w.]+/g)].length }));
 check("translations offline are text, not keys", offline.keys === 0 && offline.text.length > 20, `${offline.keys} untranslated keys; "${offline.text.slice(0, 80)}"`);
-check("the page text offline is that of the online page", offline.text.slice(0, 60) === online.text.slice(0, 60), `"${offline.text.slice(0, 60)}"`);
+check("the map list offline is that of the online page", offline.mapList.length > 20 && offline.mapList === online.mapList, `"${offline.mapList}"`);
 
 if (!ready) {
     console.log(`${failures} FAILED (the page did not open, the remaining checks need it)`);
