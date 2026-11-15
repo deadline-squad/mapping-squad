@@ -201,6 +201,7 @@ def snap_effective(entry):
     if boost <= 0 or not acc:
         acc, boost = 0.0, 0.0
     return {"velocity": v0, "gravity": gravity, "acceleration": acc, "acceleration_time": None if math.isinf(boost) else boost,
+            "whole_flight": bool(acc) and timeout <= 0,
             "max_speed": cap, "rotation_follows_velocity": entry["rotation_follows_velocity"] if acc else None,
             "lifespan_s": entry.get("lifespan") or None}
 
@@ -300,8 +301,10 @@ def flight_rows(data, rows, app, weapon, shell, used, game_eff, found, source, s
              "projectile ProjectileGravityScale" + (" (native default 1.0)" if gravity_default else ""),
              "INFERRED" if gravity_default else "VERIFIED", ok)
     game_time = game_eff["acceleration_time"]
-    ok = close(used["acceleration"], game_eff["acceleration"]) and (
-        not game_eff["acceleration"] or (game_time is not None and close(used["acceleration_time"], game_time, 5e-3)))
+    # A motor that never stops in the game (NLAW) is held by the cap: the entry's burn must reach the cap
+    time_ok = (gamecheck.burn_time(used["acceleration_time"]) >= game_time - 1e-9 if game_eff["whole_flight"]
+               else game_time is not None and close(used["acceleration_time"], game_time, 5e-3))
+    ok = close(used["acceleration"], game_eff["acceleration"]) and (not game_eff["acceleration"] or time_ok)
     motor_set = "ConstantAcceleration" in movement
     rows.add(app, weapon, shell, "motor",
              f"{num(used['acceleration'])} m/s2 for {num(used['acceleration_time'])} s" if used["acceleration"] else "none",

@@ -22,8 +22,9 @@ Every weapon is also checked on its maximum range. A projectile that the game de
 
 The grid (documented here, so that a regression in any corner shows up):
 
-* distances (m): DISTANCES, 15 values from 0.5 m (closer than any minimum distance) to 8000 m
-  (past every maximum range), with 51 m and 340 m just inside the minimum of the mortars (51.8 m)
+* distances (m): DISTANCES, 19 values from 0.5 m (closer than any minimum distance) to 8000 m
+  (past every maximum range), with 1 to 4 m between 0.5 and 5 m (targets a muzzle ahead of the pivot may have
+  already passed), with 51 m and 340 m just inside the minimum of the mortars (51.8 m)
   and of the M1064 (358 m);
 * heights of the target above the weapon's ground (m): HEIGHTS, 9 values from -300 to +200;
 * inside the barrel's length: solve.mjs adds, for every weapon whose muzzle is ahead of its pivot (a tank
@@ -47,7 +48,7 @@ sys.path.insert(0, sys.argv[1])
 from ballistics import load_weapons, solve
 weapons = load_weapons(sys.argv[1] + "/weapons.json")
 
-DISTANCES = (0.5, 5, 15, 51, 150, 340, 450, 700, 1000, 1236, 1500, 2060, 2500, 5000, 8000)
+DISTANCES = (0.5, 1, 2, 3, 4, 5, 15, 51, 150, 340, 450, 700, 1000, 1236, 1500, 2060, 2500, 5000, 8000)
 HEIGHTS = (-300, -100, -40, -10, 0, 10, 25, 100, 200)
 TOLERANCE = 1e-6
 
