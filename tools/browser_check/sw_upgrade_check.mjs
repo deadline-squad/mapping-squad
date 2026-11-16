@@ -7,9 +7,12 @@
 //
 // The server is any static server whose document root (and /heightmaps/ root, with --hm-link) is a symlink this
 // script re-points, e.g. Caddy over `root * /tmp/swprobe/current`. <old dist> and <new dist> are `npm run build`
-// outputs of two checkouts (the old one can be an earlier tag). Environment: PLAYWRIGHT_CORE, CHROME as in
-// browser_check.mjs. Checks that pass or fail exit with 1 on a failure; "known" lines are shortcomings that are
-// reported with their evidence and do not fail the run.
+// outputs of two checkouts (the old one can be an earlier tag). Serve them with the site block of deploy/Caddyfile
+// (its Cache-Control rules, with the roots re-pointed and /live/* and /maptiles/* proxied to the live site), or the
+// run is not a deployment's: without `/engine/*` among the no-cache entries a returning browser pairs a new
+// engine/index.mjs with an old glue from its HTTP cache and the heightmap fails. Environment: PLAYWRIGHT_CORE,
+// CHROME as in browser_check.mjs. Checks that pass or fail exit with 1 on a failure; "known" lines are
+// shortcomings that are reported with their evidence and do not fail the run.
 //
 // 1. Upgrade (old to new) and rollback (new to old): the precache holds exactly the new bundle once the service
 //    worker has activated, the page runs the new main script, loads without a failed request, and opens offline

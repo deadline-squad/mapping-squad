@@ -63,7 +63,15 @@ check("precache has no vehicle image but the placeholder, no README screenshot",
     `${precached.length} entries, vehicles ${JSON.stringify(vehicleEntries)}`);
 
 for (const name of shown) await loads(page, name);
-const cached = await page.evaluate(async () => (await (await caches.open("vehicle-images")).keys()).map((request) => decodeURIComponent(new URL(request.url).pathname.split("/").pop())));
+/** The names in the service worker's vehicle-images cache */
+const cachedNames = () => page.evaluate(async () => (await (await caches.open("vehicle-images")).keys()).map((request) => decodeURIComponent(new URL(request.url).pathname.split("/").pop())));
+// The service worker writes a response after the image's onload, so wait (bounded) for the names instead of reading once
+const deadline = Date.now() + 5000;
+let cached = await cachedNames();
+while (!shown.every((name) => cached.includes(name)) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    cached = await cachedNames();
+}
 check("vehicle images shown once are cached by the service worker", shown.every((name) => cached.includes(name)), `${cached.length} cached: ${cached.join(", ")}`);
 
 await context.setOffline(true);
