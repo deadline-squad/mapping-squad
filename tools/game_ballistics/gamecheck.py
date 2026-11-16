@@ -7,17 +7,20 @@ movement merged along the Blueprint inheritance chain) and writes:
                      weapon, spread, explosion and lifespan of SquadCalc's own weapons.
 
 Effective model (the game's projectile movement as Squad Ballistics and SquadCalc fly it:
-20 ms substeps, deadline-squad/squad-ballistics#4):
+steps of the server's frame, 1/49.87 s, deadline-squad/squad-ballistics#4 and
+deadline-squad/deadline-squadcalc#49):
     v0       WeaponConfig.MuzzleVelocity (the launch speed: MK19 fires its 76 m/s UGL shell at
              230 m/s, the range everybody uses; InitializeComponent does not clamp it);
-    cap      ProjectileComp.MaxSpeed when > 0 (max_speed), applied on every substep, the first one
+    cap      ProjectileComp.MaxSpeed when > 0 (max_speed), applied on every step, the first one
              too: a weapon that fires faster than its projectile's cap (tank HEAT/HE 1100 m/s, cap
              850) is slowed to it at once (UProjectileMovementComponent::ComputeVelocity 0x7cf08a0);
     boost    ProjectileComp.ConstantAcceleration.X during ConstantAccelerationTimeout
              (acceleration_time), along the projectile's rotation, which follows the velocity unless
              bRotationFollowsVelocity is false (rotation_follows_velocity; ASQProjectile sets it,
-             the S-5 clears it). A timeout of 0 is the whole flight; such a motor is compared as
-             the time it takes to reach the cap, after which the cap holds the speed (NLAW);
+             the S-5 clears it). The motor acts on ceil(T / dt) - 1 steps, so a calculator's time
+             T burns BURN_STEPS(T) * dt seconds. A timeout of 0 is the whole flight; such a motor
+             is compared as the time it takes to reach the cap, after which the cap holds the
+             speed (NLAW): the calculator's burn must cover it;
     gravity  ProjectileGravityScale, 0 while bIgnoreGravityDuringConstantAcceleration boosts for
              the whole flight (NLAW).
 Units: game cm -> m.
@@ -138,6 +141,15 @@ SQUADCALC = {
 }
 
 
+# The server's frame, seconds: the projectile's step (squad-ballistics ballistics.FRAME_TIME)
+FRAME_TIME = 1 / 49.87
+
+
+def burn_time(acceleration_time):
+    """Seconds a calculator's motor of `acceleration_time` s acts: ceil(T / dt) - 1 whole steps."""
+    return max(0, math.ceil(acceleration_time / FRAME_TIME - 1e-9) - 1) * FRAME_TIME
+
+
 def effective(weapon):
     """Model values of one resolved weapon, see the module docstring."""
     config = weapon["config"]
@@ -163,6 +175,7 @@ def effective(weapon):
         "gravity": gravity,
         "acceleration": round(accel, 3),
         "acceleration_time": round(boost_time, 4) if math.isfinite(boost_time) else None,
+        "whole_flight": bool(accel) and timeout <= 0,
         "max_speed": round(max_speed, 3),
         # Only a motor turns with the projectile: compared for boosted ones
         "rotation_follows_velocity": bool(follows) if accel else None,
@@ -330,6 +343,9 @@ def main(resolved_path, sb_path, squadcalc_path, out_json, out_md):
             s = sb_vals.get(field) if old else "—"
             c = sc_vals.get(field, "—") if sc else "—"
             same = lambda x: x != "—" and x is not None and isinstance(g, (int, float)) and abs(float(x) - g) <= max(1e-3, abs(g) * 1e-3)
+            if field == "acceleration_time" and game["whole_flight"]:
+                # The game's motor never stops: the entry's burn must reach the cap, whatever its time
+                same = lambda x, g=g: x != "—" and x is not None and burn_time(float(x)) >= g - 1e-9
             if same(s) and (c == "—" or same(c)):
                 continue
             if not old and field != "velocity" and g in (0, 0.0):

@@ -8,7 +8,7 @@
 //       each quad splits along the diagonal from (row, col) to (row + 1, col + 1), not bilinear (synthetic saddles),
 //       and samples on the landscape's vertices (0.5 m, off the minimap's corner, 1.2 m and turned)
 //   B6  UB-32 equivalent velocity below the end of its deceleration (Squad Ballistics' time_to model)
-//   B7  rockets: the elevation lands on the target, to 0.5 m, in a simulation of the game's 20 ms substeps
+//   B7  rockets: the elevation lands on the target, to 0.5 m, in a simulation of the game's steps (1/49.87 s)
 //       with the game's values (GAME_ROCKETS): the S-5's boost along the launch axis, the other rockets'
 //       along the velocity (bRotationFollowsVelocity), speed capped at MaxSpeed
 //   MUZZLE  gravity 9.80 and the launch point moving with the elevation (mortar, Hell Cannon, UB-32): the
@@ -196,13 +196,15 @@ sections.B11 = async () => {
 const GRAZING = 0.02;
 
 /**
- * Independent simulation of a shot in the game's own steps: the dedicated server moves a projectile in
- * substeps of 20 ms (UProjectileMovementComponent::TickComponent, 50 Hz tick; deadline-squad/squad-ballistics#4),
- * written here from that description and not from squadBallistics.js. Per substep, with v the velocity,
+ * Independent simulation of a shot in the game's own steps: the dedicated server moves a projectile once per
+ * frame, in steps of 1/49.87 s (UProjectileMovementComponent::TickComponent; the median of its logged tick
+ * rate, deadline-squad/squad-ballistics#4, deadline-squad/deadline-squadcalc#49), written here from that
+ * description and not from squadBallistics.js. Per step, with v the velocity,
  * R the projectile's rotation and V(R) = (v + (A(R) + g) dt) capped at `maxSpeed`:
  * move p += v dt + (V(R) - v) dt / 2, then R = direction of v when `steered`, then v = V(R). A(R) is the
- * motor: `acceleration` along R in every substep that starts before `boostTime` (R is the launch axis at
- * `angle` until the first turn). The path between two substeps is a straight segment.
+ * motor: `acceleration` along R in the first ceil(`boostTime` / dt) - 1 steps (the server's thrust is strict:
+ * the k-th movement tick, k dt after the spawn, thrusts while k dt < `boostTime`; R is the launch axis at
+ * `angle` until the first turn). The path between two steps is a straight segment.
  * The projectile starts at the muzzle (`launch`, meters from the pivot's foot, the weapon's ground).
  * @returns {number} - miss in meters: the crossing of the target height closest to `distance` minus
  *   `distance` (NaN if the trajectory never crosses that height); where the path at the target is flatter
@@ -210,8 +212,8 @@ const GRAZING = 0.02;
  *   height of the path at `distance` minus `height`
  */
 function simulateMiss({ velocity, gravity, acceleration, boostTime, steered = false, maxSpeed = 0, launch }, angle, distance, height) {
-    const dt = 0.02;
-    const boostSteps = acceleration ? Math.ceil(boostTime / dt - 1e-9) : 0;
+    const dt = 1 / 49.87;
+    const boostSteps = acceleration ? Math.max(0, Math.ceil(boostTime / dt - 1e-9) - 1) : 0;
     const capped = (vx, vy) => {
         const speed = Math.hypot(vx, vy);
         return maxSpeed > 0 && speed > maxSpeed ? [vx * maxSpeed / speed, vy * maxSpeed / speed] : [vx, vy];
@@ -425,9 +427,10 @@ sections.B9 = () => {
 };
 
 sections.B6 = async () => {
-    // Squad Ballistics' Weapon.time_to: 300 m/s, -50 m/s² for 2 s (the boost covers 500 m)
+    // Squad Ballistics' Weapon.time_to: 300 m/s, -50 m/s² for 2 s, which the motor burns as ceil(2 / dt) - 1 = 99
+    // steps of the server's frame dt = 1/49.87 s (the boost covers 497.03 m)
     const timeTo = (d) => {
-        const v0 = 300, a = -50, boostTime = 2;
+        const v0 = 300, a = -50, boostTime = 99 / 49.87;
         const boostDistance = v0 * boostTime + 0.5 * a * boostTime ** 2;
         if (d <= boostDistance) return (Math.sqrt(v0 ** 2 + 2 * a * d) - v0) / a;
         return boostTime + (d - boostDistance) / (v0 + a * boostTime);

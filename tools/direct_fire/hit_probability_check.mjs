@@ -13,7 +13,7 @@
 //   so Phi is uniform on [0, h) (acos(2v - 1) is spread over [0, pi], the remainder by a tiny h is flat):
 //   the miss RADIUS is uniform, the density is 1/r, not uniform over the area. Theta is uniform.
 //
-// Direct-fire weapons (deadline-squad/deadline-squadcalc#8) are flown in the game's 20 ms substeps (motor along the
+// Direct-fire weapons (deadline-squad/deadline-squadcalc#8) are flown in the game's steps of 1/49.87 s (motor along the
 // path or the barrel, speed cap, as squadBallistics.js documents): the shot of each cone direction is flown from the
 // real muzzle, so the closed-form spread of getSpreadParameter, which assumes a constant speed, is not part of the
 // oracle (SquadCalc's hit probability uses firingSolution.getHitSpread for those shots).
@@ -109,14 +109,14 @@ function gameImpacts(weapon, moa, elevation, distance, random) {
     return impacts;
 }
 
-const SUBSTEP = 0.02;
+const STEP = 1 / 49.87;
 
 /**
- * Horizontal distance a shot flies, in the game's substeps (Velocity Verlet, motor along R for boostTime, speed
- * cap on every substep, R following the velocity unless the projectile keeps the barrel's axis), until it comes
+ * Horizontal distance a shot flies, in the game's steps (Velocity Verlet, motor along R for the first
+ * ceil(boostTime / dt) - 1 steps, speed cap on every step, R following the velocity unless the projectile keeps the barrel's axis), until it comes
  * down to the ground, from its start point.
  */
-function flySubsteps(shot, elevation, startX, startZ) {
+function flySteps(shot, elevation, startX, startZ) {
     let x = startX;
     let z = startZ;
     let vx = shot.velocity * Math.cos(elevation);
@@ -124,8 +124,8 @@ function flySubsteps(shot, elevation, startX, startZ) {
     let axis = [Math.cos(elevation), Math.sin(elevation)];
     const next = (axisNow, time) => {
         const push = shot.boostTime > 0 && time < shot.boostTime - 1e-12 ? shot.acceleration : 0;
-        let nx = vx + push * axisNow[0] * SUBSTEP;
-        let nz = vz + (push * axisNow[1] - shot.gravity) * SUBSTEP;
+        let nx = vx + push * axisNow[0] * STEP;
+        let nz = vz + (push * axisNow[1] - shot.gravity) * STEP;
         const speed = Math.hypot(nx, nz);
         if (shot.maxSpeed && speed > shot.maxSpeed) {
             nx *= shot.maxSpeed / speed;
@@ -133,10 +133,11 @@ function flySubsteps(shot, elevation, startX, startZ) {
         }
         return [nx, nz];
     };
-    for (let step = 0, time = 0; step < 20000; step++, time += SUBSTEP) {
+    // `time` is the time since the spawn at the end of the step: the strict thrust acts while it is under boostTime
+    for (let step = 0, time = STEP; step < 20000; step++, time += STEP) {
         const before = next(axis, time);
-        const nextX = x + vx * SUBSTEP + (before[0] - vx) * SUBSTEP / 2;
-        const nextZ = z + vz * SUBSTEP + (before[1] - vz) * SUBSTEP / 2;
+        const nextX = x + vx * STEP + (before[0] - vx) * STEP / 2;
+        const nextZ = z + vz * STEP + (before[1] - vz) * STEP / 2;
         if (nextZ <= 0 && step > 0) return x + (nextX - x) * z / (z - nextZ);
         x = nextX;
         z = nextZ;
@@ -147,7 +148,7 @@ function flySubsteps(shot, elevation, startX, startZ) {
 }
 
 /** The game's shots at the aim point for a weapon that does not fly a plain parabola (rockets, capped shells) */
-function substepImpacts(weapon, moa, elevation, distance, random, shots) {
+function stepImpacts(weapon, moa, elevation, distance, random, shots) {
     const shot = weapon.getShot();
     const halfAngle = (moa / 60) * 0.5 * Math.PI / 180;
     const sinE = Math.sin(elevation);
@@ -162,7 +163,7 @@ function substepImpacts(weapon, moa, elevation, distance, random, shots) {
         const upwards = Math.sin(phi) * Math.sin(theta);
         const forward = Math.cos(phi) * cosE - upwards * sinE;
         const up = Math.cos(phi) * sinE + upwards * cosE;
-        const range = flySubsteps(shot, Math.atan2(up, Math.hypot(forward, sideways)), x0, z0) - x0;
+        const range = flySteps(shot, Math.atan2(up, Math.hypot(forward, sideways)), x0, z0) - x0;
         const azimuth = Math.atan2(sideways, forward);
         impacts[i] = { east: x0 + range * Math.cos(azimuth) - distance, north: range * Math.sin(azimuth) };
     }
@@ -267,10 +268,10 @@ for (const { name, shell: shellIndex, distances, tolerance = {} } of directCases
         const label = `${name}/${shell.name} ${distance} m`;
         const shot = weapon.getShot();
         const start = { x: shot.muzzleForward * Math.cos(elevation) - shot.muzzleUp * Math.sin(elevation), z: shot.pivotHeight + shot.muzzleForward * Math.sin(elevation) + shot.muzzleUp * Math.cos(elevation) };
-        const landed = flySubsteps(shot, elevation, start.x, start.z);
+        const landed = flySteps(shot, elevation, start.x, start.z);
         check(`${label}: the nominal shot lands on the target`, Math.abs(landed - distance) <= 1, `${(landed - distance).toFixed(2)} m off`);
 
-        const game = gameProbabilities(substepImpacts(weapon, shell.moa, elevation, distance, seeded(distance + shellIndex), DIRECT_SHOTS), explosion);
+        const game = gameProbabilities(stepImpacts(weapon, shell.moa, elevation, distance, seeded(distance + shellIndex), DIRECT_SHOTS), explosion);
         const { lateral, along } = solution.getHitSpread("low");
         const squadcalc = hitProbability(flat, explosion, lateral, along, 90);
         check(`${label}: kill`, Math.abs(squadcalc.kill - game.kill) <= (tolerance[distance] ?? TOLERANCE), `${squadcalc.kill.toFixed(3)} vs game ${game.kill.toFixed(3)}`);
