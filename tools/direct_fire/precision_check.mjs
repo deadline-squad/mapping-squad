@@ -18,6 +18,7 @@
 //
 // Without SECTION every section runs. Prints one line per check; exits with 1 on any failure.
 import { App } from "./stub-app.mjs";
+import { blankHeightmap } from "./stub-heightmap.mjs";
 
 const root = process.argv[2];
 const only = process.argv.slice(3);
@@ -54,7 +55,7 @@ function axisMap(sizeX, sizeY, getHeight = () => 0) {
         pixelSize: 256,
         mapToGameScale: scaleX,
         mapToGameScaleY: scaleY,
-        heightmap: { jsonPng: [[0]], getHeight },
+        heightmap: { getHeight },
         toMeters: (origin, latlng) => ({ east: (latlng.lng - origin.lng) * scaleX, north: (latlng.lat - origin.lat) * scaleY }),
         fromMeters: (origin, east, north) => ({ lat: origin.lat + north / scaleY, lng: origin.lng + east / scaleX }),
     };
@@ -85,12 +86,9 @@ sections.B2 = async () => {
     globalThis.document ??= {};
     globalThis.$ ??= () => ({ trigger() {}, show() {}, hide() {}, text() {}, html() {}, attr() {} });
     /** A SquadHeightmap of the worker's result (heightmapWorker.js) on a 256-unit map of `bounds` */
-    const loaded = (levels, width, height, step, lattice, bounds) => {
-        const heightmap = Object.create(SquadHeightmap.prototype);
-        heightmap.jsonPng = [];
-        heightmap.worker = null;
-        heightmap.map = { pixelSize: 256, heightmap };
-        heightmap.receive({ levels, width, height, step, lattice, bounds, url: "synthetic" });
+    const loaded = async (levels, width, height, step, lattice, bounds) => {
+        const heightmap = blankHeightmap(SquadHeightmap, { pixelSize: 256 });
+        await heightmap.receive({ levels, width, height, step, lattice, bounds, url: "synthetic" });
         return heightmap;
     };
     /** Levels of the plane 3 per sample column + 7 per sample row */
@@ -106,7 +104,7 @@ sections.B2 = async () => {
     // A plane on a 100 x 120 m map: one sample per meter, corners included (101 x 121 samples), 1 cm per level. Both
     // bilinear and triangle interpolation are exact on a plane.
     const step = 0.01;
-    const heightmap = loaded(plane(101, 121), 101, 121, step, unturned(0, 0, 1), bounds);
+    const heightmap = await loaded(plane(101, 121), 101, 121, step, unturned(0, 0, 1), bounds);
     for (const [east, south] of points) {
         const got = heightmap.getHeight(at(east, south));
         const expected = (3 * east + 7 * south) * step;
@@ -119,7 +117,7 @@ sections.B2 = async () => {
     // (0, 0) has the peak at that far corner, so its surface is min(east, south); quad (0, 1) has it at its
     // (row + 1, col) corner, off the diagonal: 0 where east - 1 >= south and south - (east - 1) above it.
     // Bilinear interpolation gives east * south and (1 - fx) * fy there.
-    const peak = loaded(Uint16Array.from([0, 0, 0, 0, 100, 0, 0, 0, 0]), 3, 3, 0.01, unturned(0, 0, 1), { min_x: 0, max_x: 2, min_y: 0, max_y: 2 });
+    const peak = await loaded(Uint16Array.from([0, 0, 0, 0, 100, 0, 0, 0, 0]), 3, 3, 0.01, unturned(0, 0, 1), { min_x: 0, max_x: 2, min_y: 0, max_y: 2 });
     const triangles = [
         [0.5, 0.5, 0.5], [0.75, 0.25, 0.25], [0.25, 0.75, 0.25], [0.5, 0.25, 0.25], [0.25, 0.5, 0.25], [1, 1, 1],
         [1.5, 0.5, 0], [1.75, 0.25, 0], [1.25, 0.75, 0.5],
@@ -140,7 +138,7 @@ sections.B2 = async () => {
         ["1.2 m turned (Skorpo)", { originX: -6, originY: -1.5, resolution: 1.2, yawDeg: -2.006195 }, 90, 108],
     ];
     for (const [label, lattice, width, height] of lattices) {
-        const grid = loaded(plane(width, height), width, height, step, lattice, bounds);
+        const grid = await loaded(plane(width, height), width, height, step, lattice, bounds);
         check(`${label} heightmap: resolution kept`, grid.resolution === lattice.resolution, String(grid.resolution));
         const theta = lattice.yawDeg ? yaw : 0;
         for (const [east, south] of points) {
@@ -173,11 +171,8 @@ sections.B11 = async () => {
     App.openToast = (type, title, text) => toasts.push([type, title, text]);
     const originalError = console.error;
     console.error = () => {};
-    const heightmap = Object.create(SquadHeightmap.prototype);
-    heightmap.jsonPng = [];
-    heightmap.worker = null;
-    heightmap.map = { pixelSize: 256, heightmap };
-    heightmap.receive({ error: "TypeError: Failed to fetch", url: "heightmap.png" });
+    const heightmap = blankHeightmap(SquadHeightmap, { pixelSize: 256 });
+    await heightmap.receive({ error: "TypeError: Failed to fetch", url: "heightmap.png" });
     console.error = originalError;
     check("failed load: error toast", toasts.length === 1 && toasts[0][0] === "error" && toasts[0][1] === "heightmapFailed",
         JSON.stringify(toasts));

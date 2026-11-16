@@ -6,7 +6,8 @@
 // Environment as browser_check.mjs. SHOT_DIR=<dir> also saves a screenshot per map at the finest zoom. Exits with 1 on any failure.
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
 
-const [base, ...only] = process.argv.slice(2);
+const [site, ...only] = process.argv.slice(2);
+const base = site?.replace(/\/+$/, "");
 if (!base) {
     console.error("usage: node standard_hd_check.mjs <site URL> [map ...]");
     process.exit(2);

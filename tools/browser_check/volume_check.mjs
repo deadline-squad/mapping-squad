@@ -74,18 +74,24 @@ function browserRssMb() {
     return rows.filter(([pid]) => family.has(pid) && pid !== process.pid).reduce((sum, row) => sum + row[2], 0) / 1024;
 }
 
-const volumeRequests = (requests) => requests.filter((request) => /volume\.vcol|terrain\.bin|\/engine\//.test(request.url));
+/**
+ * The requests of the volume layer: its two files, and the engine the layer's worker loads once the setting is on. The
+ * page itself loads the engine at start for the heights (since 45.52.0), from the same URLs, so the engine requests
+ * before `turnedOnAt` (an index into `requests`) are not the layer's.
+ */
+const volumeRequests = (requests, turnedOnAt) => requests.filter((request, index) => /volume\.vcol|terrain\.bin/.test(request.url) || (index >= turnedOnAt && /\/engine\//.test(request.url)));
 
 for (const [slug, mapName] of [["jensen", "Jensen"], ["kokan", "Kokan"]]) {
     const { context, page, problems, requests } = await open(mapName);
-    const before = volumeRequests(requests).length;
+    const turnedOnAt = requests.length;
+    const before = volumeRequests(requests, turnedOnAt).length;
     check(`${slug}: nothing of the layer is requested while the setting is off`, before === 0, `${before} requests`);
 
     const started = Date.now();
     await page.evaluate(() => window.__App.userSettings.set("volumeLayer", true));
     await page.waitForFunction(() => window.__App.minimap.volume.state !== "loading" && window.__App.minimap.volume.state !== "idle", null, { timeout: 120000 });
     const state = await page.evaluate(() => ({ state: window.__App.minimap.volume.state, ready: window.__App.minimap.volume.ready }));
-    const loaded = volumeRequests(requests);
+    const loaded = volumeRequests(requests, turnedOnAt);
     const sizes = loaded.map((request) => `${request.url.replace(/^.*\/(heightmaps\/|engine\/)/, "$1").replace(/\?.*/, "")} ${request.headers["content-length"] ?? "?"} B`).join(", ");
     check(`${slug}: the layer loads after the setting is turned on`, state.ready && loaded.some((request) => /volume\.vcol/.test(request.url)) && loaded.some((request) => /terrain\.bin/.test(request.url)) && loaded.some((request) => /\.wasm/.test(request.url)), `${state.state} in ${Date.now() - started} ms; ${sizes}`);
     const vcol = loaded.find((request) => /volume\.vcol/.test(request.url));
@@ -234,6 +240,7 @@ for (const mapName of ["Fallujah", "GooseBay", "Kamdesh", "Skorpo", "BlackCoast"
     const baselineMb = browserRssMb();
     let peakMb = baselineMb;
     const sampler = setInterval(() => { peakMb = Math.max(peakMb, browserRssMb()); }, 50);
+    const turnedOnAt = requests.length;
     const started = Date.now();
     await page.evaluate(() => window.__App.userSettings.set("volumeLayer", true));
     await page.waitForFunction(() => ["ready", "unavailable"].includes(window.__App.minimap.volume.state), null, { timeout: 300000 });
@@ -266,7 +273,7 @@ for (const mapName of ["Fallujah", "GooseBay", "Kamdesh", "Skorpo", "BlackCoast"
     clearInterval(sampler);
     const finalMb = browserRssMb();
     peakMb = Math.max(peakMb, finalMb);
-    const files = volumeRequests(requests).map((request) => Number(request.headers["content-length"] ?? 0));
+    const files = volumeRequests(requests, turnedOnAt).map((request) => Number(request.headers["content-length"] ?? 0));
     const memory = `browser RSS ${baselineMb.toFixed(0)} MB before, peak ${peakMb.toFixed(0)} MB, ${loadedMb.toFixed(0)} MB when ready, ${finalMb.toFixed(0)} MB after the coverage`;
     check(`${mapName}: loads, the landscape agrees with the heightmap, the coverage finishes`, result.ready && result.hits > result.points / 4 && Math.abs(result.median) < 0.1 && result.jobs >= 1,
         `${JSON.stringify(result)}; load ${loadMs} ms, ${(files.reduce((sum, size) => sum + size, 0) / 1e6).toFixed(1)} MB downloaded; ${memory}`);

@@ -107,7 +107,8 @@ const WEAPON_FROM = { x: 40, y: -200 };
 
 {
     const { context, page, problems, requests } = await open("Jensen");
-    const volumeRequests = () => requests.filter((url) => /volume\.vcol|terrain\.bin|\/engine\//.test(url)).length;
+    // The page loads the engine at start for the heights (since 45.52.0): the layer's own requests are its two files
+    const volumeRequests = () => requests.filter((url) => /volume\.vcol|terrain\.bin/.test(url)).length;
 
     const setting = await page.evaluate(() => ({ fresh: window.__App.userSettings.volumeLayer, stored: localStorage.getItem("settings-volume-layer") }));
     check("the volume setting is off by default", setting.fresh === false && setting.stored !== "1", JSON.stringify(setting));

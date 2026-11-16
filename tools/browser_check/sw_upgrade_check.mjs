@@ -21,7 +21,7 @@
 //    put back until the next service worker version (known).
 // (--hm-link points at a directory holding <map>/heightmap.png and meta.json, like the deployment's /heightmaps/)
 // 4. Heightmap formats: each build with a heightmaps directory in the old format (heightmap.png, meta.json without
-//    `format`) and the current one (WebP announced by meta.json): the precise heightmap loads in all four.
+//    `format` and `detail`) and the current one (WebP announced by meta.json): the precise heightmap loads in all four.
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
@@ -81,11 +81,15 @@ async function deploy(page, dist) {
     await page.waitForTimeout(3000);
 }
 
+// Chromium's warnings about the self-hosted fonts' <link rel="preload"> when the service worker answers the first
+// request of a page: the preload is not used ("cross-world service worker resource mismatch") and then reported unused
+const FONT_PRELOAD = /^A preload for '[^']+\.woff2' is found, but is not used because it is a cross-world service worker resource mismatch|^The resource \S+\.woff2 was preloaded using link preload but not used within a few seconds/;
+
 /** Console errors and failed requests of a page, collected from now on */
 function watch(page) {
     const problems = [];
     page.on("console", (message) => {
-        if (["error", "warning"].includes(message.type()) && !/GL Driver|GPU stall|Not connected to SquadCalc API/.test(message.text())) problems.push(`${message.type()}: ${message.text().slice(0, 100)}`);
+        if (["error", "warning"].includes(message.type()) && !FONT_PRELOAD.test(message.text()) && !/GL Driver|GPU stall|Not connected to SquadCalc API/.test(message.text())) problems.push(`${message.type()}: ${message.text().slice(0, 100)}`);
     });
     page.on("response", (response) => { if (response.status() >= 400) problems.push(`${response.status()} ${new URL(response.url()).pathname}`); });
     page.on("requestfailed", (request) => problems.push(`failed ${new URL(request.url()).pathname} ${request.failure()?.errorText}`));
@@ -177,7 +181,8 @@ if (hmLink && heightmaps) {
     mkdirSync(join(oldFormat, mapName), { recursive: true });
     symlinkSync(resolve(heightmaps, mapName, "heightmap.png"), join(oldFormat, mapName, "heightmap.png"));
     const meta = JSON.parse(readFileSync(join(heightmaps, mapName, "meta.json"), "utf8"));
-    for (const field of ["format", "generated", "webp"]) delete meta[field];
+    // The old format: the PNG alone, announced by a meta.json with none of the later `format`, `generated`, `webp` and `detail`
+    for (const field of ["format", "generated", "webp", "detail"]) delete meta[field];
     writeFileSync(join(oldFormat, mapName, "meta.json"), JSON.stringify(meta));
     const newFormat = resolve(heightmaps);
     const oldRoot = oldFormat;

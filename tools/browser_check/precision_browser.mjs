@@ -1,6 +1,6 @@
 // Precision checks of the Deadline SquadCalc in a real browser (Chromium through Playwright), against
 // oracles computed here from the raw data: the precise heightmap PNG and meta.json the site serves, a
-// fine-step simulation with the game's values. Sections are the bug numbers of the 2026-10-29 audit
+// simulation of the game's own steps (1/49.87 s). Sections are the bug numbers of the 2026-10-29 audit
 // (tools/direct_fire/precision_check.mjs holds the same checks on the modules):
 //
 //     node precision_browser.mjs <site URL>
@@ -8,7 +8,7 @@
 //   B1   Skorpo (non-square): distance and bearing between two world points, map assets on the east edge
 //   B2   heights of the page = the game's triangles on the served 16-bit heightmap at world points, on its own grid (the
 //        landscape's vertices: origin_m, resolution_m and yaw_deg of meta.json; Skorpo's are 1.2 m apart and turned)
-//   SHOT mortar and UB-32 solutions of the page land within 0.5 m in a simulation with the game's values
+//   SHOT mortar and UB-32 solutions of the page land within 0.5 m in a simulation of the server's frame
 //   B10  a session peer's height padding (sent as a string by older clients) is a number; ours is sent as one
 //   B11  with the heightmaps blocked, an error toast says so and the target popup says "no height data"
 //
@@ -164,24 +164,28 @@ function gridHeight(x, y) {
 }
 
 /**
- * Horizontal miss of a shot in a fine-step simulation (dt 0.1 ms, boost along the launch axis, gravity),
- * from the muzzle at the elevation: crossing of the target height closest to the distance, minus it
+ * Horizontal miss of a shot in a simulation of the game's own steps, written from the server's rule and not from
+ * squadBallistics.js: the dedicated server moves a projectile once per frame, 1/49.87 s (UProjectileMovementComponent
+ * ::TickComponent; the median of its logged tick rate, deadline-squad/deadline-squadcalc#49), and a strict motor thrusts
+ * on ceil(T / dt) - 1 steps. The projectile starts at the muzzle at the elevation, the boost acts along the launch axis,
+ * the path between two steps is a straight segment; the result is the crossing of the target height closest to the
+ * distance, minus the distance
  */
 function simulateMiss(game, angle, distance, height) {
-    const dt = 1e-4, cos = Math.cos(angle), sin = Math.sin(angle);
+    const dt = 1 / 49.87, cos = Math.cos(angle), sin = Math.sin(angle);
+    const boostSteps = game.a ? Math.max(0, Math.ceil(game.T / dt - 1e-9) - 1) : 0;
     let x = game.forward * cos - game.up * sin, y = game.pivot + game.forward * sin + game.up * cos;
-    let vx = game.v0 * cos, vy = game.v0 * sin, t = 0, best = NaN;
-    while (t < 120 && x < distance + 3000 && y > height - 3000) {
-        const boost = t < game.T - 1e-12 ? game.a : 0;
-        const step = boost && t + dt > game.T ? game.T - t : dt;
+    let vx = game.v0 * cos, vy = game.v0 * sin, best = NaN;
+    for (let step = 0; step < 6000 && x < distance + 3000 && y > height - 3000; step++) {
+        const boost = step < boostSteps ? game.a : 0;
         const ax = boost * cos, ay = boost * sin - game.gravity;
-        const nx = x + (vx + 0.5 * ax * step) * step, ny = y + (vy + 0.5 * ay * step) * step;
-        vx += ax * step; vy += ay * step;
+        const nx = x + (vx + 0.5 * ax * dt) * dt, ny = y + (vy + 0.5 * ay * dt) * dt;
+        vx += ax * dt; vy += ay * dt;
         if ((y - height) * (ny - height) <= 0 && ny !== y) {
             const crossing = x + (nx - x) * (height - y) / (ny - y);
             if (isNaN(best) || Math.abs(crossing - distance) < Math.abs(best - distance)) best = crossing;
         }
-        x = nx; y = ny; t += step;
+        x = nx; y = ny;
     }
     return best - distance;
 }

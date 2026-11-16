@@ -15,7 +15,7 @@
 // Exits with 1 on any failure.
 const { chromium } = await import(process.env.PLAYWRIGHT_CORE ? `${process.env.PLAYWRIGHT_CORE}/index.mjs` : "playwright-core");
 
-const base = process.argv[2];
+const base = process.argv[2]?.replace(/\/+$/, "");
 if (!base) {
     console.error("usage: node layer_minimap_check.mjs <site URL>");
     process.exit(2);
