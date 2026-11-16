@@ -30,7 +30,9 @@
 
 		# Entry points are revalidated on every load so a deploy is picked up at once;
 		# bundles carry a content hash in their name and never change.
-		@entry path / /index.html /sw.js /manifest.json /locales/*
+		# The engine (/engine/*): the bundle asks for index.mjs?v=<version>, but index.mjs imports its glue and the
+		# wasm without one, so they are revalidated (ETag) or a returning browser pairs a new index.mjs with an old glue
+		@entry path / /index.html /sw.js /manifest.json /locales/* /engine/*
 		header @entry Cache-Control "no-cache"
 		@hashed path /src/js/*
 		header @hashed Cache-Control "public, max-age=31536000, immutable"
