@@ -1,5 +1,5 @@
-// Writers of the VCOL1 and TER1 files (the format of tools/volumetric/py/codec.py and terrain_raster.py) for synthetic scenes,
-// so that the checks can feed the page's decoder (squadVolume.js) without game data.
+// Writers of the VCOL1 and TER2 files (the format of tools/volumetric/py/codec.py and terrain_raster.py) for synthetic scenes,
+// so that the checks can feed the volume layer (squadVolume.js, volumeWorker.js, volumeTerrain.js) without game data.
 import { gzipSync } from "node:zlib";
 
 const varints = (values) => {
@@ -40,8 +40,9 @@ export function writeVolume(grid, columns) {
 }
 
 /**
- * gzip'd TER1 file
+ * gzip'd TER2 file with a vertex axes aligned with the world (yaw 0)
  * @param {{minX: number, minY: number, cell: number, zMin: number, step: number, width: number, height: number}} grid
+ *   - minX, minY: world position of vertex (0, 0)
  * @param {function(number, number): number|null} heightAt - landscape height of the vertex (column, row); null: no landscape
  * @param {number[]} [holes] - vertex indices (row * width + column) of the holes
  */
@@ -69,12 +70,13 @@ export function writeTerrain(grid, heightAt, holes = []) {
             planes[count + i] = zigzag >> 8;
         }
     }
-    const head = Buffer.alloc(40);
-    head.write("TER1", 0, "latin1");
-    [grid.minX, grid.minY, grid.cell, grid.zMin, grid.step].forEach((v, i) => head.writeFloatLE(v, 8 + 4 * i));
-    head.writeUInt32LE(width, 28);
-    head.writeUInt32LE(height, 32);
-    head.writeUInt32LE(holes.length, 36);
+    const head = Buffer.alloc(56);
+    head.write("TER2", 0, "latin1");
+    [grid.minX, grid.minY, grid.cell].forEach((v, i) => head.writeDoubleLE(v, 8 + 8 * i));
+    [0, grid.zMin, grid.step].forEach((v, i) => head.writeFloatLE(v, 32 + 4 * i));
+    head.writeUInt32LE(width, 44);
+    head.writeUInt32LE(height, 48);
+    head.writeUInt32LE(holes.length, 52);
     const holeBytes = [];
     let previous = 0;
     for (const hole of [...holes].sort((a, b) => a - b)) {
